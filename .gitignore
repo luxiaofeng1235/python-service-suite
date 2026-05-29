@@ -72,4 +72,4 @@ htmlcov/
 tmp/
 temp/
 .atomcode/
-public/resource/*
+/public/resource/*
