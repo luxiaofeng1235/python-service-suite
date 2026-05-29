@@ -1,0 +1,74 @@
+[project]
+name = "fastapi-ai-service"
+version = "1.0.0"
+description = "企业级 FastAPI AI 接口服务（三层架构）"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "bcrypt==4.0.1",
+    "python-multipart>=0.0.9",
+    "python-dotenv>=1.0.0",
+    "sse-starlette>=2.0.0",
+    "aiosqlite>=0.20.0",
+    "databases>=0.9.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "aiomysql>=0.2.0",
+    "pymysql>=1.1.0",
+    "alembic>=1.13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.5.0",
+    "pre-commit>=3.0.0",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+]
+
+# ========================================
+# ruff — Python linter & formatter
+# ========================================
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = [".git", "__pycache__", "migrations/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",     # 行长规则由 formatter 处理
+    "N818",     # AppException 命名已全局使用，不改
+    "RUF001",   # 中文注释中 Unicode 字符是正常的
+    "RUF002",   # 中文文档中 Unicode 字符是正常的
+    "RUF003",   # 中文注释中 Unicode 字符是正常的
+]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# ========================================
+# pytest
+# ========================================
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
