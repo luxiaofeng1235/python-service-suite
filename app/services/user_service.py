@@ -20,6 +20,7 @@ from app.core.security import (
     get_password_hash,
     verify_password,
 )
+from app.core.redis_client import redis_client
 from app.models.user import User
 from app.models.user_token import UserToken
 from app.models.verification_code import VerificationCode
@@ -184,7 +185,9 @@ class UserService:
         expire_minutes = settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
         expires_at = datetime.now(UTC) + timedelta(minutes=expire_minutes)
 
-        # 5. 存储验证码到数据库
+        # 5. 存储验证码到 Redis；数据库保留一份记录用于审计和兜底
+        await UserService._cache_reset_code(user.email, code, expire_minutes * 60)
+
         vc = VerificationCode(
             email=user.email,
             code=code,
@@ -229,7 +232,11 @@ class UserService:
         """
         now = datetime.now(UTC)
 
-        # 1. 查找该邮箱最新的一条未使用的有效验证码
+        # 1. 优先使用 Redis 校验验证码；Redis 不可用或未命中时查数据库兜底
+        redis_code = await UserService._get_cached_reset_code(req.email)
+        if redis_code is not None and redis_code != req.code:
+            raise ValueError("验证码无效或已过期，请重新申请")
+
         stmt = (
             select(VerificationCode)
             .where(
@@ -245,11 +252,13 @@ class UserService:
         result = await db.execute(stmt)
         vc = result.scalar_one_or_none()
 
-        if not vc:
+        if redis_code is None and not vc:
             raise ValueError("验证码无效或已过期，请重新申请")
 
-        # 2. 标记验证码为已使用
-        vc.used = True
+        # 2. 标记验证码为已使用；删除 Redis 缓存，防止重复使用
+        if vc:
+            vc.used = True
+        await UserService._remove_cached_reset_code(req.email)
 
         # 3. 查找用户
         stmt = select(User).where(User.email == req.email)
@@ -263,6 +272,33 @@ class UserService:
         await db.flush()
 
         return {"message": "密码重置成功，请使用新密码登录"}
+
+    # ==================== 验证码缓存 ====================
+
+    @staticmethod
+    async def _cache_reset_code(email: str, code: str, ttl: int) -> None:
+        """缓存重置密码验证码；Redis 不可用时仅记录日志，不影响数据库兜底"""
+        try:
+            await redis_client.cache_code(email, code, ttl=ttl)
+        except Exception:
+            UserService.logger.warning("Redis 验证码缓存写入失败 email=%s", email, exc_info=True)
+
+    @staticmethod
+    async def _get_cached_reset_code(email: str) -> str | None:
+        """读取 Redis 中的重置密码验证码"""
+        try:
+            return await redis_client.get_code(email)
+        except Exception:
+            UserService.logger.warning("Redis 验证码缓存读取失败 email=%s", email, exc_info=True)
+            return None
+
+    @staticmethod
+    async def _remove_cached_reset_code(email: str) -> None:
+        """删除 Redis 中的重置密码验证码"""
+        try:
+            await redis_client.remove_code(email)
+        except Exception:
+            UserService.logger.warning("Redis 验证码缓存删除失败 email=%s", email, exc_info=True)
 
     # ==================== 用户列表 ====================
 
