@@ -1,6 +1,52 @@
-# FastAPI AI Service
+# FastAPI AI Service — 企业级 AI 接口服务脚手架
 
-企业级 FastAPI 三层架构 AI 接口服务脚手架，内置用户鉴权与 SSE 流式输出示例。
+> **不仅是一个 AI 服务框架，更是一套通用的企业级后端脚手架**。基于 FastAPI 三层架构，内置用户鉴权、SSE 流式输出、千问/DeepSeek 多模型接入、对话管理全链路。  
+> 无论是搭建 **AI 聊天助手、电商后台、内容管理系统、SaaS 平台、API 网关**，还是星座/命理等垂直领域应用，这套脚手架都能让你**半天内完成核心模块落地，专注于业务逻辑，而非基础设施**。
+
+---
+
+## 特性概览
+
+| 能力 | 说明 |
+|------|------|
+| **三层架构** | Controller → Service → Model 清晰分层，业务代码与基础设施解耦 |
+| **用户鉴权体系** | 注册/登录/Token 鉴权/管理员/密码找回，开箱即用 |
+| **AI 多模型接入** | 千问兼容模式已集成，切换模型只需改配置，支持流式/非流式 |
+| **SSE 流式输出** | 标准 Server-Sent Events，兼容旧协议，前端直接对接 |
+| **对话管理** | 完整 CRUD + 上下文清除 + 重生成，按用户隔离 |
+| **数据库迁移** | Alembic 管理表结构变更，开发用 SQLite，生产切 MySQL |
+| **Docker 一键部署** | 本地 SQLite 开发 / 生产 MySQL 集群，Makefile 一条命令搞定 |
+| **统一响应格式** | 所有接口返回统一 JSON 结构，前端对接无歧义 |
+| **请求日志/链路追踪** | 请求日志、慢请求告警、X-Trace-Id 链路追踪、敏感字段自动脱敏 |
+
+---
+
+## 快速落地一个业务模块
+
+这套脚手架的设计目标就是让你**半天内从零到一完成一个新业务模块**，无论它是 AI 接口还是传统 CRUD。
+
+```text
+1. 在 app/services/ 下新建 xxx_service.py —— 写业务逻辑
+2. 在 app/controllers/ 下新建 xxx_controller.py —— 注册路由
+3. 在 app/routes/api.py 中 include_router —— 挂接到主服务
+4. ✅ 重启服务，接口可用
+```
+
+> 鉴权、数据库、流式输出、统一响应格式、日志追踪全都不用自己写。
+
+**这套脚手架适用于以下场景：**
+
+| 业务场景 | 典型模块 | 复用能力 |
+|---------|---------|---------|
+| 🛒 **电商平台** | 商品管理、订单系统、购物车、支付回调、物流查询 | 鉴权体系、日志追踪、数据库迁移、统一响应 |
+| 📝 **内容管理 (CMS)** | 文章发布、分类管理、评论审核、标签系统、SEO 接口 | 用户权限（管理员/普通用户）、分页查询、统一响应 |
+| 💼 **SaaS 平台** | 租户管理、套餐订阅、用量统计、API Key 管理 | 多层权限（get_current_admin/get_current_user）、Token 鉴权 |
+| 🏪 **API 网关** | 第三方接入鉴权、接口限流、数据聚合、协议转换 | 中间件机制、AUTH_WHITE_LIST 免鉴白名单 |
+| 💬 **AI 应用** | 聊天助手、知识库问答、内容生成、意图识别 | SSE 流式输出、多模型切换、对话管理全链路 |
+
+无论你的业务类型是什么，新增模块只需要三刀——**Controller + Service + 路由注册**，其余基础设施全部就绪。
+
+---
 
 ## 架构分层
 
@@ -8,30 +54,65 @@
 Controller → Service → Model
 ```
 
-- **Controller**：路由、参数校验、返回响应
-- **Service**：核心业务逻辑（AI 推理、数据处理）
-- **Model**：Pydantic 数据模型（请求体、响应体）
+| 层 | 职责 | 示例 |
+|----|------|------|
+| **Controller** | 路由定义、参数校验、返回响应 | `user_controller.py`、`ai_controller.py` |
+| **Service** | 核心业务逻辑（AI 推理、数据查询、鉴权） | `user_service.py`、`ai_service.py` |
+| **Model** | Pydantic 数据模型（请求体、响应体） | `user.py`、`ai.py` |
+
+**关键约定**：业务逻辑只放在 Service 层，Controller 不做任何数据操作，Model 只定义数据结构。
+
+---
 
 ## 目录结构
 
 ```
 app/
-├── main.py              # 入口文件
-├── routes/              # 路由聚合，main.py 只注册 api_router
-├── core/                # 核心配置（config、security、dependency）
-│   ├── config.py        # 配置管理（所有配置项集中在此，从 .env 读取）
-│   ├── security.py      # JWT 令牌创建/验证
-│   ├── dependency.py    # 依赖注入（获取当前用户等）
-│   └── response.py      # 统一响应格式
-├── common/              # 公共工具（exception 处理等）
-├── utils/               # 工具模块
-│   ├── email.py         # 邮件发送工具（SMTP）
-│   └── sse.py           # SSE 流式响应工具
-├── models/              # Pydantic 数据模型（请求体、响应体）
-├── services/            # 业务逻辑层
-├── controllers/         # 路由控制器层
-└── web/                 # 预留 Web 业务模块
+├── main.py                  # 入口 — app 工厂、中间件、路由挂载
+├── routes/
+│   └── api.py               # 路由聚合入口，新增模块在此 include_router
+│
+├── core/                    # 核心基础设施（改配置就够了）
+│   ├── config.py            # 集中配置管理，从 .env 读取所有敏感项
+│   ├── security.py          # Token 签发/验证
+│   ├── dependency.py        # 依赖注入：get_current_user / get_current_admin
+│   └── response.py          # 统一响应格式 Response.success / Response.fail
+│
+├── common/
+│   └── exception.py         # 全局异常处理器
+│
+├── utils/
+│   ├── email.py             # SMTP 邮件发送（验证码、通知）
+│   └── sse.py               # SSE 流式响应工具
+│
+├── controllers/             # 路由控制器层 ← 新模块在这加
+│   ├── ai_controller.py     # AI 对话接口（流式/非流式）
+│   └── user_controller.py   # 用户注册/登录/鉴权
+│
+├── services/                # 业务逻辑层 ← 新模块在这加
+│   ├── ai_service.py        # AI 推理、千问/DeepSeek 调用
+│   └── user_service.py      # 用户注册/登录/Token 管理
+│
+├── models/                  # Pydantic 数据模型 ← 新模块在这加
+│   ├── ai.py                # AI 对话请求/响应体
+│   ├── user.py              # 用户注册/登录/密码重置请求体
+│   ├── db_user.py           # SQLAlchemy ORM 模型
+│   ├── db_ai_chat_log.py    # 对话日志 ORM 模型
+│   ├── db_user_token.py     # Token 表 ORM 模型
+│   └── db_verification_code.py  # 验证码 ORM 模型
+│
+├── web/                     # 预留 Web 业务模块
+│
+├── database.py              # 数据库会话管理（session 工厂）
+│
+└── migrations/              # Alembic 迁移脚本
+    ├── versions/
+    └── env.py
 ```
+
+**新增模块只需三步**：创建 `controller` → 创建 `service` → 在 `routes/api.py` 注册。
+
+---
 
 ## 依赖说明
 
