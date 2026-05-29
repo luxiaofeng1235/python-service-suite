@@ -71,3 +71,4 @@ htmlcov/
 # Temp
 tmp/
 temp/
+.atomcode/
