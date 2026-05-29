@@ -282,7 +282,7 @@ make clean           # 清理缓存/tmp/log
 - 深度思考片段返回 JSON 字符串：`{"type":"reasoning_content","data":"..."}`
 - `chat_id=0` 表示新建对话；传已有 `chat_id` 表示续聊
 - `restart=1` 表示重生成上一条 AI 回复
-- `model` 取值为 `0,1,2,3`，具体上游模型和 system 提示词由服务端配置
+- `model` 取值为 `1`，对应千问 qwen-max
 
 `curl` 示例：
 

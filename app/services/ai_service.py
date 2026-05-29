@@ -25,30 +25,15 @@ class AIService:
 
     # ============================================================
     # 模型配置映射表
-    # 键: 模型ID (0/1/2/3)
+    # 键: 模型ID (1)
     # 值: 上游模型名、System Prompt、是否启用搜索、是否启用深度思考
     # ============================================================
     MODEL_CONFIGS: dict[int, dict[str, Any]] = {  # noqa: RUF012
-        0: {
-            "upstream_model": "deepseek-v3",
-            "system": "你现在是FastAPI咨询专员，负责解答FastAPI项目、接口设计、后端架构、服务部署、接口联调和问题排查相关内容。请以FastAPI咨询专员的身份进行回答，全程使用简体中文，如果回答中有数学相关公式请使用双$符加换行的markdown语法",
-            "enable_search": False,
-        },
         1: {
             "upstream_model": "qwen-max",
             "deep_reflection_model": "qwen-plus",
             "system": "你现在是FastAPI咨询专员，负责为用户检索和解答FastAPI、Python后端、API接口、数据库、部署运维和服务联调相关问题。请以FastAPI咨询专员的身份回答；如果用户输入了链接，请不要声称你能直接访问网页内容。全程使用简体中文，如果回答中有数学相关公式请使用双$符加换行的markdown语法",
             "enable_search": True,
-        },
-        2: {
-            "upstream_model": "deepseek-v3",
-            "system": "你现在是FastAPI业务咨询专员，负责结合业务场景解答接口流程、数据结构、服务边界和后端实现方案。请以FastAPI业务咨询专员的身份进行回答，全程使用简体中文，如果回答中有数学相关公式请使用双$符加换行的markdown语法",
-            "enable_search": False,
-        },
-        3: {
-            "upstream_model": "deepseek-v3",
-            "system": "你现在是FastAPI技术支持专员，负责协助用户排查接口异常、流式输出、鉴权、数据库和第三方API接入问题。请以FastAPI技术支持专员的身份进行回答，全程使用简体中文，如果回答中有数学相关公式请使用双$符加换行的markdown语法",
-            "enable_search": False,
         },
     }
 

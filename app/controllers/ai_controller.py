@@ -82,7 +82,7 @@ async def chat_stream(
 @router.get("/ai/chats", summary="AI 对话列表")
 async def list_chats(
     page_params: PageParams = Depends(),
-    model_id: int | None = Query(None, ge=0, le=3, description="模型类型"),
+    model_id: int | None = Query(None, ge=1, le=1, description="模型类型：1 千问"),
     db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):

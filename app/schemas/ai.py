@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     """兼容旧链路的对话请求体"""
 
-    model: int = Field(..., ge=0, le=3, description="模型类型：0,1,2,3")
+    model: int = Field(..., ge=1, le=1, description="模型类型：1 千问")
     chat_id: int = Field(0, ge=0, description="对话ID，0 表示新建对话")
     msg: str = Field(..., min_length=1, description="用户消息")
     restart: int = Field(0, ge=0, le=1, description="是否重生成：0否 1是")
