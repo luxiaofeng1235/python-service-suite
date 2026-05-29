@@ -162,7 +162,7 @@ alembic upgrade head
 
 # 4. 启动服务
 cd /mnt/d/python_work/fastapi_server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
 ```
 
 表结构变更统一用 Alembic 管理。`AUTO_CREATE_TABLES=True` 仅建议本地临时初始化使用。
