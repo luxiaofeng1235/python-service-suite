@@ -133,6 +133,7 @@ app/
 | `databases` | 异步数据库工具集 |
 | `aiomysql` / `pymysql` | MySQL 异步驱动（生产环境） |
 | `alembic` | 数据库迁移 |
+| `ipip-ipdb` | IP 地址解析（ipip.net .ipdb 格式） |
 
 ## 环境变量配置
 
