@@ -5,8 +5,8 @@
 所有接口必须通过 Response 工具类返回数据，禁止直接 return dict。
 
 统一响应格式：
-    - 成功：{"code": 0, "msg": "ok", "data": ...}
-    - 失败（业务错误）：{"code": 1, "msg": "用户不存在"}
+    - 成功：{"code": 1, "msg": "ok", "data": ...}
+    - 失败（业务错误）：{"code": 0, "msg": "用户不存在"}
     - 错误（系统异常）：{"code": -1, "msg": "服务器内部错误"}
 
 使用方式：
@@ -36,9 +36,9 @@ class Response:
     """统一响应工具类 — 全局唯一响应出口"""
 
     # ==================== 状态码常量 ====================
-    SUCCESS_CODE: int = 0
+    SUCCESS_CODE: int = 1
     """成功状态码"""
-    FAIL_CODE: int = 1
+    FAIL_CODE: int = 0
     """业务失败状态码"""
     ERROR_CODE: int = -1
     """系统错误状态码"""
@@ -55,7 +55,7 @@ class Response:
             msg: 成功消息
 
         Returns:
-            JSONResponse: {"code": 0, "msg": "ok", "data": ...}
+            JSONResponse: {"code": 1, "msg": "ok", "data": ...}
         """
         return JSONResponse(
             content={
@@ -74,11 +74,11 @@ class Response:
 
         Args:
             msg: 失败描述
-            code: 业务错误码（默认 1）
+            code: 业务错误码（默认 0）
             data: 附加数据（可选）
 
         Returns:
-            JSONResponse: {"code": 1, "msg": "...", "data": ...}
+            JSONResponse: {"code": 0, "msg": "...", "data": ...}
         """
         return JSONResponse(
             content={

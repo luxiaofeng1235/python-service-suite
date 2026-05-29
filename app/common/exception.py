@@ -29,7 +29,7 @@ logger = logging.getLogger("app.exception")
 class AppException(Exception):
     """自定义业务异常基类"""
 
-    def __init__(self, msg: str = "业务异常", code: int = 1, data: Any | None = None):
+    def __init__(self, msg: str = "业务异常", code: int = 0, data: Any | None = None):
         self.msg = msg
         self.code = code
         self.data = data
