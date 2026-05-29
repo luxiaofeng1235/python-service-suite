@@ -1,6 +1,7 @@
 # 项目里程碑
 
 > FastAPI AI Service 开发路线图
+> 最后更新：基于当前代码实际审计
 
 ---
 
@@ -38,16 +39,18 @@
 
 ---
 
-## 📋 M3：功能增强与性能优化
+## ✅ M3：功能增强与性能优化（部分完成）
 
-| 模块 | 内容 | 优先级 |
-|------|------|--------|
-| Redis 集成 | 缓存 Token / 验证码 / 会话管理 | P0 |
-| 文件上传 | 头像上传、文件管理、云存储(OSS) | P0 |
-| Web 模块 | Web 站点管理（models/services/controllers） | P0 |
-| 多模型切换 | 接入更多 AI 模型（GPT、Claude 等） | P1 |
-| 对话导出 | 导出为 Markdown / PDF / TXT | P2 |
-| 频率限制 | 接口限流（Rate Limiter） | P1 |
+| 模块 | 内容 | 状态 |
+|------|------|------|
+| Redis 集成 | Token 缓存 / 验证码 / 会话管理 | ✅ 已完成 |
+| 文件上传 | 图片上传、视频上传、分页列表、配置化限制 | ✅ 已完成 |
+| Web 模块 | 目录结构已搭建（web/controllers/models/services） | 🚧 骨架 |
+| 多模型切换 | 仅接入通义千问 Qwen | ⏳ P1 |
+| Docker 编排 | 多阶段构建 + docker-compose（app + mysql + redis） | ✅ 已完成 |
+| MySQL 迁移 | 数据库层使用 MySQL async + 连接池 | ✅ 已完成 |
+| 对话导出 | 导出为 Markdown / PDF / TXT | ⏳ P2 |
+| 频率限制 | 接口限流（Rate Limiter） | ⏳ P1 |
 
 ---
 
@@ -66,9 +69,7 @@
 
 | 模块 | 内容 | 优先级 |
 |------|------|--------|
-| Docker 优化 | 多阶段构建 + docker-compose 编排 | P0 |
-| MySQL 迁移 | SQLite → MySQL / PostgreSQL | P0 |
-| HTTPS | 证书配置或反向代理 | P1 |
+| HTTPS | 证书配置或反向代理（Nginx） | P1 |
 | 监控告警 | Prometheus + Grafana | P1 |
 | 安全审计 | SQL注入/XSS/CSRF 防护检查 | P2 |
 
@@ -77,6 +78,6 @@
 ### 图例
 
 - `✅` 已完成
-- `🔄` 进行中
-- 空白 → 待排期
+- `🚧` 进行中 / 部分完成
+- `⏳` 待排期
 - `P0` 必须先做 ｜ `P1` 重要 ｜ `P2` 锦上添花

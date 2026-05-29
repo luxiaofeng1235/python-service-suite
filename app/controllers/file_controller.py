@@ -101,6 +101,9 @@ async def list_files(
         user_id=None,
         page_params=page_params,
     )
+    # data["items"] 是 ORM 对象列表：[ORM1, ORM2, ...]
+    # 用列表推导遍历每个 ORM 对象，逐个通过 from_orm 拼出完整 url
+    # from_orm 只处理单个对象，循环由外面的列表推导负责
     items = [
         AttachmentResponse.from_orm(item, str(request.base_url))
         for item in data["items"]
