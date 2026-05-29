@@ -33,8 +33,8 @@ class Settings(BaseSettings):
     """JWT 签名密钥（通过 .env 配置）"""
     ALGORITHM: str = "HS256"
     """JWT 加密算法"""
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
-    """Token 过期时间（分钟），默认 24 小时"""
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
+    """Token 过期时间（分钟），默认 30 天"""
 
     # ==================== 服务 ====================
     HOST: str = "0.0.0.0"
