@@ -1,6 +1,6 @@
 # FastAPI AI Service — 企业级 AI 接口服务脚手架
 
-> **不仅是一个 AI 服务框架，更是一套通用的企业级后端脚手架**。基于 FastAPI 三层架构，内置用户鉴权、SSE 流式输出、千问/DeepSeek 多模型接入、对话管理全链路。  
+> **不仅是一个 AI 服务框架，更是一套通用的企业级后端脚手架**。基于 FastAPI 三层架构，内置用户鉴权、SSE 流式输出、OpenAI 兼容接口（支持 DeepSeek / 千问 / OpenAI 等任意兼容服务）、对话管理全链路。  
 > 无论是搭建 **AI 聊天助手、电商后台、内容管理系统、SaaS 平台、API 网关**，还是星座/命理等垂直领域应用，这套脚手架都能让你**半天内完成核心模块落地，专注于业务逻辑，而非基础设施**。
 
 ---
@@ -11,7 +11,7 @@
 |------|------|
 | **三层架构** | Controller → Service → Model 清晰分层，业务代码与基础设施解耦 |
 | **用户鉴权体系** | 注册/登录/Token 鉴权/管理员/密码找回，开箱即用 |
-| **AI 多模型接入** | 千问兼容模式已集成，切换模型只需改配置，支持流式/非流式 |
+| **AI 多模型接入** | OpenAI 兼容接口，支持 DeepSeek / 千问 / OpenAI 等任意兼容服务，切换模型只需改配置 |
 | **SSE 流式输出** | 标准 Server-Sent Events，兼容旧协议，前端直接对接 |
 | **对话管理** | 完整 CRUD + 上下文清除 + 重生成，按用户隔离 |
 | **数据库迁移** | Alembic 管理表结构变更，开发用 SQLite，生产切 MySQL |
@@ -26,10 +26,11 @@
 这套脚手架的设计目标就是让你**半天内从零到一完成一个新业务模块**，无论它是 AI 接口还是传统 CRUD。
 
 ```text
-1. 在 app/services/ 下新建 xxx_service.py —— 写业务逻辑
-2. 在 app/controllers/ 下新建 xxx_controller.py —— 注册路由
-3. 在 app/routes/api.py 中 include_router —— 挂接到主服务
-4. ✅ 重启服务，接口可用
+1. 在 app/models/ 下新建 xxx.py —— 定义数据库模型（如需新表，跑 alembic 迁移）
+2. 在 app/services/ 下新建 xxx_service.py —— 写业务逻辑
+3. 在 app/controllers/ 下新建 xxx_controller.py —— 注册路由
+4. 在 app/routes/api.py 中 include_router —— 挂接到主服务
+5. ✅ 重启服务，接口可用
 ```
 
 > 鉴权、数据库、流式输出、统一响应格式、日志追踪全都不用自己写。
@@ -44,7 +45,7 @@
 | 🏪 **API 网关** | 第三方接入鉴权、接口限流、数据聚合、协议转换 | 中间件机制、AUTH_WHITE_LIST 免鉴白名单 |
 | 💬 **AI 应用** | 聊天助手、知识库问答、内容生成、意图识别 | SSE 流式输出、多模型切换、对话管理全链路 |
 
-无论你的业务类型是什么，新增模块只需要三刀——**Controller + Service + 路由注册**，其余基础设施全部就绪。
+无论你的业务类型是什么，新增模块只需要四刀——**Model + Service + Controller + 路由注册**，其余基础设施全部就绪。
 
 ---
 
@@ -110,7 +111,7 @@ app/
     └── env.py
 ```
 
-**新增模块只需三步**：创建 `controller` → 创建 `service` → 在 `routes/api.py` 注册。
+**新增模块只需四步**：创建 `model`（如需新表）→ 创建 `service` → 创建 `controller` → 在 `routes/api.py` 注册。
 
 ---
 
@@ -246,7 +247,7 @@ make clean           # 清理缓存/tmp/log
 
 ## AI 流式输出
 
-当前仓库已接入千问兼容模式，并兼容旧接口的聊天参数：
+当前仓库已接入 OpenAI 兼容接口，框架已对接 DeepSeek / 千问双模型，开箱即用：
 
 - `POST /api/ai/chat`：返回完整回复
 - `POST /api/ai/chat/send_stream_sse`：返回 SSE 流式分片
@@ -269,8 +270,8 @@ make clean           # 清理缓存/tmp/log
 
 说明：
 
-- 两个接口现已支持接入千问兼容模式接口
-- 需在 `.env` 中配置 `QWEN_API_KEY`
+- 框架使用 OpenAI 兼容协议（`/v1/chat/completions`），接入 DeepSeek / 千问 / OpenAI 等任意兼容服务均可
+- 需在 `.env` 中配置对应 API Key（默认变量名 `QWEN_API_KEY`，可自行扩展）
 - `/api/ai/chat/send_stream_sse` 返回 `text/event-stream`
 - AI 对话接口无需登录；如果携带登录 Token，会按当前用户保存和查询上下文
 - 流式输出兼容旧协议：`data:` 直接返回增量文本
