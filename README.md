@@ -43,7 +43,7 @@
 | 📝 **内容管理 (CMS)** | 文章发布、分类管理、评论审核、标签系统、SEO 接口 | 用户权限（管理员/普通用户）、分页查询、统一响应 |
 | 💼 **SaaS 平台** | 租户管理、套餐订阅、用量统计、API Key 管理 | 多层权限（get_current_admin/get_current_user）、Token 鉴权 |
 | 🏪 **API 网关** | 第三方接入鉴权、接口限流、数据聚合、协议转换 | 中间件机制、AUTH_WHITE_LIST 免鉴白名单 |
-| 💬 **AI 应用** | 聊天助手、知识库问答、内容生成、意图识别 | SSE 流式输出、多模型切换、对话管理全链路 |
+| 💬 **AI 应用** | 聊天助手、知识库问答、内容生成、意图识别 | SSE 流式输出、模型配置、对话管理全链路 |
 
 无论你的业务类型是什么，新增模块只需要四刀——**Model + Service + Controller + 路由注册**，其余基础设施全部就绪。
 
@@ -167,6 +167,10 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
 
 表结构变更统一用 Alembic 管理。`AUTO_CREATE_TABLES=True` 仅建议本地临时初始化使用。
 
+## 里程碑
+
+当前开发进度、已完成能力和后续计划统一维护在 [MILESTONE.md](/mnt/d/python_work/fastapi_server/MILESTONE.md)。
+
 ## Docker 部署
 
 项目提供 Docker 与 docker-compose 一键部署，支持本地 SQLite 开发和生产 MySQL 集群。
@@ -257,7 +261,6 @@ make clean           # 清理缓存/tmp/log
 - `GET /api/ai/chats`：对话列表（登录后按用户隔离）
 - `GET /api/ai/chats/{chat_id}`：对话详情
 - `DELETE /api/ai/chats/{chat_id}`：删除对话
-- `POST /api/ai/chats/{chat_id}/clear`：清空上下文
 
 请求体示例：
 
@@ -309,7 +312,7 @@ Controller → 业务 Service (ConstellationService 等) → LangChain Agent / L
 | **Controller** | 参数校验、认证鉴权、路由分发 |
 | **业务 Service** | 数据查询、业务规则、定价、权限校验，不拼 prompt、不调 LLM |
 | **LangChain Agent / LangGraph** | 意图识别、知识检索、工具调用编排，通过 `@tool` 装饰器对接业务 Service |
-| **AIService** | prompt 组装、上下文管理、流式输出、多模型切换 |
+| **AIService** | prompt 组装、上下文管理、流式输出、模型配置 |
 | **LLM 模型** | 语义理解、自然语言生成、推理总结，不接触价格/权限/订单 |
 
 全链路示例（星座问答）：
@@ -386,7 +389,7 @@ app/services/
 
 ```json
 {
-  "code": 0,
+  "code": 1,
   "msg": "登录成功",
   "data": {
     "access_token": "32位短Token",
@@ -406,7 +409,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:8000/api/user/me
 ### 接口说明
 
 - 注册时用户名 2-50 字符，密码 6-128 字符，邮箱、昵称可选
-- Token 有效时长由 `.env` 的 `TOKEN_EXPIRE_HOURS` 控制
+- Token 有效时长由 `.env` 的 `ACCESS_TOKEN_EXPIRE_MINUTES` 控制
 - 退出登录立即失效当前 Token，不影响其他设备
 - 忘记密码流程：`POST /api/user/forgot-password` 发邮件 → 查收 6 位验证码 → `POST /api/user/reset-password` 提交新密码
 - `GET /api/user/list` 支持 `page` 和 `size` 参数，`size` 最大 100
