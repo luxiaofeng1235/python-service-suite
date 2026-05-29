@@ -62,3 +62,18 @@ CREATE TABLE IF NOT EXISTS `user_tokens` (
     UNIQUE KEY `uk_token` (`token`),
     KEY `idx_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户登录Token';
+
+-- ==================== 附件/文件上传记录表 ====================
+CREATE TABLE IF NOT EXISTS `attachment` (
+    `id`            INT          NOT NULL AUTO_INCREMENT COMMENT '文件ID',
+    `user_id`       INT          NOT NULL COMMENT '上传用户ID',
+    `original_name` VARCHAR(255) NOT NULL COMMENT '原始文件名',
+    `stored_name`   VARCHAR(255) NOT NULL COMMENT '存储文件名',
+    `file_path`     VARCHAR(500) NOT NULL COMMENT '文件相对路径',
+    `file_size`     INT          NOT NULL COMMENT '文件大小（字节）',
+    `mime_type`     VARCHAR(100) NOT NULL COMMENT 'MIME 类型',
+    `file_type`     VARCHAR(20)  NOT NULL COMMENT '文件分类：image / video / other',
+    `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间',
+    PRIMARY KEY (`id`),
+    KEY `ix_attachment_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='附件/文件上传记录表';

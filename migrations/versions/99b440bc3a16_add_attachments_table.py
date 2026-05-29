@@ -1,4 +1,4 @@
-"""add attachments table
+"""add attachment table
 
 Revision ID: 99b440bc3a16
 Revises: 20260528_0003
@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.create_table(
-        "attachments",
+        "attachment",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False, comment="文件ID"),
         sa.Column("user_id", sa.Integer(), nullable=False, comment="上传用户ID"),
         sa.Column("original_name", sa.String(length=255), nullable=False, comment="原始文件名"),
@@ -35,9 +35,9 @@ def upgrade() -> None:
         mysql_collate="utf8mb4_unicode_ci",
         mysql_comment="附件/文件上传记录表",
     )
-    op.create_index(op.f("ix_attachments_user_id"), "attachments", ["user_id"], unique=False)
+    op.create_index(op.f("ix_attachment_user_id"), "attachment", ["user_id"], unique=False)
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_attachments_user_id"), table_name="attachments")
-    op.drop_table("attachments")
+    op.drop_index(op.f("ix_attachment_user_id"), table_name="attachment")
+    op.drop_table("attachment")
