@@ -10,3 +10,4 @@ from app.models.user import User  # noqa: F401
 from app.models.user_token import UserToken  # noqa: F401
 from app.models.verification_code import VerificationCode  # noqa: F401
 from app.models.ai_chat_log import AiChatLog  # noqa: F401
+from app.models.attachment import Attachment  # noqa: F401

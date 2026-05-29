@@ -20,6 +20,7 @@ FastAPI AI Service - 应用入口
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.common.exception import (
     AppException,
@@ -30,6 +31,7 @@ from app.common.exception import (
 )
 from app.core.config import settings
 from app.core.logging import setup_logging
+from app.core.redis_client import redis_client
 from app.middleware.request_log import RequestLogMiddleware
 
 setup_logging()
@@ -38,6 +40,7 @@ from app.database import engine, init_db  # noqa: E402
 # 导入 ORM 模型确保它们注册到 Base.metadata（用于自动建表）
 from app.models import (  # noqa: E402
     AiChatLog,  # noqa: F401
+    Attachment,  # noqa: F401
     User,  # noqa: F401
     UserToken,  # noqa: F401
     VerificationCode,  # noqa: F401
@@ -78,6 +81,13 @@ app.add_exception_handler(Exception, general_exception_handler)  # 兜底异常
 
 app.include_router(api_router)
 
+# ==================== 挂载静态文件目录 ====================
+
+import os  # noqa: E402
+
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+
 
 # ==================== 生命周期事件 ====================
 
@@ -90,6 +100,18 @@ async def startup():
         print("  ✅ 数据库表初始化完成")
     else:
         print("  数据库自动建表已关闭，请使用 Alembic 管理表结构")
+
+    # Redis 初始化（若配置了 REDIS_URL 则自动连接）
+    if settings.REDIS_URL:
+        try:
+            await redis_client.init()
+            await redis_client.client.ping()
+            print("  ✅ Redis 连接成功")
+        except Exception as e:
+            print(f"  ⚠️  Redis 连接失败: {e}（项目仍可运行，缓存功能不可用）")
+    else:
+        print("  ℹ️  未配置 REDIS_URL，跳过 Redis 连接（如需缓存请设置 REDIS_URL）")
+
     print(f"  {settings.PROJECT_NAME} v{settings.VERSION} 启动成功")
     print(f"  Swagger 文档: http://localhost:{settings.PORT}/docs")
     print(f"  ReDoc 文档:   http://localhost:{settings.PORT}/redoc")
@@ -99,6 +121,7 @@ async def startup():
 async def shutdown():
     """应用关闭时执行"""
     await engine.dispose()
+    await redis_client.close()
     print("  服务正在关闭... 数据库连接已释放")
 
 

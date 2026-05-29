@@ -16,5 +16,8 @@ aiomysql>=0.2.0
 pymysql>=1.1.0
 alembic>=1.13.0
 
+# === Redis 缓存 ===
+redis[hiredis]>=5.0.0
+
 # === IP 地址解析 ===
 ipip-ipdb>=1.6.0
