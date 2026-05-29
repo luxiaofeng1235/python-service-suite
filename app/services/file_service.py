@@ -223,6 +223,15 @@ class FileService:
         return {"items": items, "total": total, "page": page, "size": size}
 
     @staticmethod
-    def get_file_url(file_path: str) -> str:
-        """根据文件相对路径生成访问 URL"""
+    def get_file_url(file_path: str, base_url: str = "") -> str:
+        """根据文件相对路径生成完整访问 URL
+
+        Args:
+            file_path: 文件相对路径
+            base_url: 当前请求的基础 URL（例如 http://localhost:8000/），
+                      不传则返回相对路径
+        """
+        if base_url:
+            base_url = base_url.rstrip("/")
+            return f"{base_url}/uploads/{file_path}"
         return f"/uploads/{file_path}"

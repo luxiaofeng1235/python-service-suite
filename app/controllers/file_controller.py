@@ -6,7 +6,7 @@
 业务逻辑全部委托给 FileService。
 """
 
-from fastapi import APIRouter, Depends, Query, UploadFile
+from fastapi import APIRouter, Depends, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.response import Response
@@ -21,24 +21,24 @@ router = APIRouter(prefix="/api/file", tags=["文件管理"])
 # ==================== 图片上传 ====================
 
 
-@router.post("/upload/image", summary="上传图片")
+@router.post("/upload/image", summary="上传图片（无需登录）")
 async def upload_image(
     file: UploadFile,
+    request: Request,
     db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
 ):
     """
     上传图片文件
 
     - 支持格式：从配置读取
     - 最大大小：从配置读取（默认 10 MB）
-    - 需登录
+    - 无需登录
     """
     try:
         file_data = await file.read()
         attachment = await FileService.upload_image(
             db=db,
-            user_id=current_user["user_id"],
+            user_id=0,
             file_data=file_data,
             original_name=file.filename or "unknown",
             mime_type=file.content_type or "application/octet-stream",
@@ -51,7 +51,7 @@ async def upload_image(
             file_size=attachment.file_size,
             mime_type=attachment.mime_type,
             file_type=attachment.file_type,
-            url=FileService.get_file_url(attachment.file_path),
+            url=FileService.get_file_url(attachment.file_path, str(request.base_url)),
             created_at=attachment.created_at.isoformat() if attachment.created_at else None,
         )
         return Response.success(data, msg="图片上传成功")
@@ -62,24 +62,24 @@ async def upload_image(
 # ==================== 视频上传 ====================
 
 
-@router.post("/upload/video", summary="上传视频")
+@router.post("/upload/video", summary="上传视频（无需登录）")
 async def upload_video(
     file: UploadFile,
+    request: Request,
     db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
 ):
     """
     上传视频文件
 
     - 支持格式：从配置读取
     - 最大大小：从配置读取（默认 200 MB）
-    - 需登录
+    - 无需登录
     """
     try:
         file_data = await file.read()
         attachment = await FileService.upload_video(
             db=db,
-            user_id=current_user["user_id"],
+            user_id=0,
             file_data=file_data,
             original_name=file.filename or "unknown",
             mime_type=file.content_type or "application/octet-stream",
@@ -92,7 +92,7 @@ async def upload_video(
             file_size=attachment.file_size,
             mime_type=attachment.mime_type,
             file_type=attachment.file_type,
-            url=FileService.get_file_url(attachment.file_path),
+            url=FileService.get_file_url(attachment.file_path, str(request.base_url)),
             created_at=attachment.created_at.isoformat() if attachment.created_at else None,
         )
         return Response.success(data, msg="视频上传成功")
@@ -105,6 +105,7 @@ async def upload_video(
 
 @router.get("/list", summary="文件列表（分页）")
 async def list_files(
+    request: Request,
     file_type: str | None = Query(None, description="筛选文件类型：image / video"),
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(10, ge=1, le=100, description="每页条数"),
@@ -134,7 +135,7 @@ async def list_files(
             file_size=item.file_size,
             mime_type=item.mime_type,
             file_type=item.file_type,
-            url=FileService.get_file_url(item.file_path),
+            url=FileService.get_file_url(item.file_path, str(request.base_url)),
             created_at=item.created_at.isoformat() if item.created_at else None,
         )
         for item in data["items"]

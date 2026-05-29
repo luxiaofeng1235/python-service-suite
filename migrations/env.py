@@ -14,6 +14,7 @@ from app.models import (
     User,  # noqa: F401
     UserToken,  # noqa: F401
     VerificationCode,  # noqa: F401
+    Attachment,  # noqa: F401
 )
 
 config = context.config

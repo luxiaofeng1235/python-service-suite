@@ -96,7 +96,8 @@ class Settings(BaseSettings):
         "/,/docs,/redoc,/openapi.json,/favicon.ico,"
         "/api/health,/api/user/login,/api/user/register,"
         "/api/user/forgot-password,/api/user/reset-password,"
-        "/api/ai/chat,/api/ai/chat/send_stream_sse"
+        "/api/ai/chat,/api/ai/chat/send_stream_sse,"
+        "/api/file/upload/image,/api/file/upload/video"
     )
 
     model_config = {
