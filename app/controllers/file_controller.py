@@ -13,6 +13,7 @@ from app.common.response import Response
 from app.core.dependency import get_current_user
 from app.database import get_session
 from app.schemas.file import AttachmentResponse
+from app.common.pagination import PageParams
 from app.services.file_service import FileService
 
 router = APIRouter(prefix="/api/file", tags=["文件管理"])
@@ -43,17 +44,7 @@ async def upload_image(
             original_name=file.filename or "unknown",
             mime_type=file.content_type or "application/octet-stream",
         )
-        data = AttachmentResponse(
-            id=attachment.id,
-            original_name=attachment.original_name,
-            stored_name=attachment.stored_name,
-            file_path=attachment.file_path,
-            file_size=attachment.file_size,
-            mime_type=attachment.mime_type,
-            file_type=attachment.file_type,
-            url=FileService.get_file_url(attachment.file_path, str(request.base_url)),
-            created_at=attachment.created_at.isoformat() if attachment.created_at else None,
-        )
+        data = AttachmentResponse.from_orm(attachment, str(request.base_url))
         return Response.success(data, msg="图片上传成功")
     except ValueError as e:
         return Response.fail(msg=str(e))
@@ -84,17 +75,7 @@ async def upload_video(
             original_name=file.filename or "unknown",
             mime_type=file.content_type or "application/octet-stream",
         )
-        data = AttachmentResponse(
-            id=attachment.id,
-            original_name=attachment.original_name,
-            stored_name=attachment.stored_name,
-            file_path=attachment.file_path,
-            file_size=attachment.file_size,
-            mime_type=attachment.mime_type,
-            file_type=attachment.file_type,
-            url=FileService.get_file_url(attachment.file_path, str(request.base_url)),
-            created_at=attachment.created_at.isoformat() if attachment.created_at else None,
-        )
+        data = AttachmentResponse.from_orm(attachment, str(request.base_url))
         return Response.success(data, msg="视频上传成功")
     except ValueError as e:
         return Response.fail(msg=str(e))
@@ -106,38 +87,22 @@ async def upload_video(
 @router.get("/list", summary="文件列表（分页）")
 async def list_files(
     request: Request,
-    file_type: str | None = Query(None, description="筛选文件类型：image / video"),
-    page: int = Query(1, ge=1, description="页码"),
-    size: int = Query(10, ge=1, le=100, description="每页条数"),
+    page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
 ):
     """
-    获取当前用户上传的文件列表
+    获取文件列表（无需登录）
 
-    - 可选按文件类型筛选
     - 分页查询，默认每页 10 条
-    - 只能看到自己的文件
+    - 返回全部文件
     """
     data = await FileService.get_file_list(
         db,
-        user_id=current_user["user_id"],
-        file_type=file_type,
-        page=page,
-        size=size,
+        user_id=None,
+        page_params=page_params,
     )
     items = [
-        AttachmentResponse(
-            id=item.id,
-            original_name=item.original_name,
-            stored_name=item.stored_name,
-            file_path=item.file_path,
-            file_size=item.file_size,
-            mime_type=item.mime_type,
-            file_type=item.file_type,
-            url=FileService.get_file_url(item.file_path, str(request.base_url)),
-            created_at=item.created_at.isoformat() if item.created_at else None,
-        )
+        AttachmentResponse.from_orm(item, str(request.base_url))
         for item in data["items"]
     ]
     return Response.success(

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.response import Response
+from app.common.pagination import PageParams
 from app.core.dependency import get_current_admin, get_current_user
 from app.database import get_session
 from app.schemas.user import (
@@ -125,8 +126,7 @@ async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(g
 
 @router.get("/list", summary="用户列表（分页）")
 async def list_users(
-    page: int = Query(1, ge=1, description="页码"),
-    size: int = Query(10, ge=1, le=100, description="每页条数"),
+    page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):
@@ -136,7 +136,7 @@ async def list_users(
     - 分页查询
     - 默认每页 10 条
     """
-    data = await UserService.get_user_list(db, page=page, size=size)
+    data = await UserService.get_user_list(db, page_params)
     return Response.success(data)
 
 

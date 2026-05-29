@@ -14,6 +14,7 @@ from pathlib import Path
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.pagination import PageParams, paginate
 from app.core.config import settings
 from app.models.attachment import Attachment
 
@@ -184,17 +185,14 @@ class FileService:
     @staticmethod
     async def get_file_list(
         db: AsyncSession,
+        page_params: PageParams,
         user_id: int | None = None,
-        file_type: str | None = None,
-        page: int = 1,
-        size: int = 10,
     ) -> dict:
         """获取文件列表（分页）
 
         Args:
             db: 数据库会话
             user_id: 筛选上传用户（None 查全部）
-            file_type: 筛选文件类型（image/video/None 查全部）
             page: 页码
             size: 每页条数
 
@@ -207,20 +205,10 @@ class FileService:
         if user_id is not None:
             query = query.where(Attachment.user_id == user_id)
             count_query = count_query.where(Attachment.user_id == user_id)
-        if file_type:
-            query = query.where(Attachment.file_type == file_type)
-            count_query = count_query.where(Attachment.file_type == file_type)
 
         query = query.order_by(Attachment.created_at.desc())
-        query = query.offset((page - 1) * size).limit(size)
 
-        result = await db.execute(query)
-        items = result.scalars().all()
-
-        count_result = await db.execute(count_query)
-        total = count_result.scalar() or 0
-
-        return {"items": items, "total": total, "page": page, "size": size}
+        return await paginate(db, query, page_params, count_query)
 
     @staticmethod
     def get_file_url(file_path: str, base_url: str = "") -> str:

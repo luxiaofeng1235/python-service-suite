@@ -14,6 +14,7 @@ import httpx
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.pagination import PageParams, paginate
 from app.core.config import settings
 from app.schemas.ai import ChatRequest, ChatResponse, StreamChunk
 from app.models.ai_chat_log import AiChatLog
@@ -169,8 +170,7 @@ class AIService:
     async def list_chat_logs(
         db: AsyncSession,
         user_id: int,
-        page: int = 1,
-        size: int = 10,
+        page_params: PageParams,
         model_id: int | None = None,
     ) -> dict[str, Any]:
         """获取当前用户的 AI 对话列表"""
@@ -179,21 +179,20 @@ class AIService:
         if model_id is not None:
             conditions.append(AiChatLog.model_id == model_id)
 
-        # 2. 查询总数
-        total_result = await db.execute(select(func.count(AiChatLog.id)).where(*conditions))
-        total = total_result.scalar() or 0
-
-        # 3. 分页查询，按时间倒序
-        result = await db.execute(
+        # 2. 构建查询语句
+        stmt = (
             select(AiChatLog)
             .where(*conditions)
             .order_by(AiChatLog.id.desc())
-            .offset((page - 1) * size)
-            .limit(size)
         )
+        count_stmt = select(func.count(AiChatLog.id)).where(*conditions)
+
+        # 3. 分页查询
+        data = await paginate(db, stmt, page_params, count_stmt)
+
         # 4. 序列化并返回
-        items = [AIService._serialize_chat_log(item) for item in result.scalars().all()]
-        return {"items": items, "total": total, "page": page, "size": size}
+        items = [AIService._serialize_chat_log(item) for item in data["items"]]
+        return {**data, "items": items}
 
     @staticmethod
     async def get_chat_log_detail(db: AsyncSession, chat_id: int, user_id: int) -> dict[str, Any]:

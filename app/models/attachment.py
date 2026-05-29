@@ -15,7 +15,7 @@ from app.database import Base
 class Attachment(Base):
     """附件/文件上传记录表"""
 
-    __tablename__ = "attachments"
+    __tablename__ = "attachment"
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment="文件ID")
     user_id = Column(Integer, nullable=False, index=True, comment="上传用户ID")

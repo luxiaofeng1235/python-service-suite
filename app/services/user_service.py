@@ -30,6 +30,7 @@ from app.schemas.user import (
     UserRegisterRequest,
     UserResponse,
 )
+from app.common.pagination import PageParams, paginate
 from app.utils.email import EmailUtil
 
 
@@ -266,28 +267,19 @@ class UserService:
     # ==================== 用户列表 ====================
 
     @staticmethod
-    async def get_user_list(db: AsyncSession, page: int = 1, size: int = 10) -> dict:
+    async def get_user_list(db: AsyncSession, page_params: PageParams) -> dict:
         """
         获取用户列表（分页）
 
         Args:
             db: 数据库会话
-            page: 页码，从 1 开始
-            size: 每页条数
+            page_params: 分页参数
 
         Returns:
             dict: {"items": [...], "total": N, "page": P, "size": S}
         """
-        # 查询总数
-        count_stmt = select(func.count(User.id))
-        total_result = await db.execute(count_stmt)
-        total = total_result.scalar() or 0
-
-        # 分页查询
-        offset = (page - 1) * size
-        stmt = select(User).order_by(User.id).offset(offset).limit(size)
-        result = await db.execute(stmt)
-        users = result.scalars().all()
+        stmt = select(User).order_by(User.id)
+        data = await paginate(db, stmt, page_params)
 
         items = [
             UserResponse(
@@ -299,15 +291,10 @@ class UserService:
                 is_active=u.is_active,
                 created_at=u.created_at.strftime("%Y-%m-%d %H:%M:%S") if u.created_at else None,
             )
-            for u in users
+            for u in data["items"]
         ]
 
-        return {
-            "items": items,
-            "total": total,
-            "page": page,
-            "size": size,
-        }
+        return {**data, "items": items}
 
     # ==================== 获取单个用户 ====================
 

@@ -8,6 +8,7 @@ AI 接口控制器层
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.dependency import get_current_user
 from app.database import get_session
@@ -80,8 +81,7 @@ async def chat_stream(
 
 @router.get("/ai/chats", summary="AI 对话列表")
 async def list_chats(
-    page: int = Query(1, ge=1, description="页码"),
-    size: int = Query(10, ge=1, le=100, description="每页条数"),
+    page_params: PageParams = Depends(),
     model_id: int | None = Query(None, ge=0, le=3, description="模型类型"),
     db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
@@ -91,8 +91,7 @@ async def list_chats(
         data = await AIService.list_chat_logs(
             db,
             user_id=current_user.get("user_id") or 0,
-            page=page,
-            size=size,
+            page_params=page_params,
             model_id=model_id,
         )
         return Response.success(data=data)
