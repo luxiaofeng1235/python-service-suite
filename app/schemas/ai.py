@@ -21,6 +21,7 @@ class ChatRequest(BaseModel):
     restart: int = Field(0, ge=0, le=1, description="是否重生成：0否 1是")
     is_deep_reflection: int = Field(0, ge=0, le=1, description="是否深度思考")
 
+    # ========== json_schema_extra 仅用于 Swagger 文档生成示例，不影响接口逻辑 ==========
     model_config = {
         "json_schema_extra": {
             "examples": [

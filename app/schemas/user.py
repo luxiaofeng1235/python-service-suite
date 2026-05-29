@@ -19,6 +19,7 @@ class UserRegisterRequest(BaseModel):
     email: EmailStr | None = Field(None, description="电子邮箱")
     nickname: str | None = Field(None, max_length=50, description="昵称")
 
+    # ========== json_schema_extra 仅用于 Swagger 文档生成示例，不影响接口逻辑 ==========
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -39,6 +40,7 @@ class UserLoginRequest(BaseModel):
     username: str = Field(..., description="用户名")
     password: str = Field(..., description="密码")
 
+    # ========== json_schema_extra 仅用于 Swagger 文档生成示例，不影响接口逻辑 ==========
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -56,6 +58,7 @@ class ForgotPasswordRequest(BaseModel):
 
     email: str = Field(..., description="注册时使用的邮箱地址")
 
+    # ========== json_schema_extra 仅用于 Swagger 文档生成示例，不影响接口逻辑 ==========
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -74,6 +77,7 @@ class ResetPasswordRequest(BaseModel):
     code: str = Field(..., min_length=6, max_length=6, description="邮件中收到的 6 位验证码")
     password: str = Field(..., min_length=6, max_length=128, description="新密码，6-128字符")
 
+    # ========== json_schema_extra 仅用于 Swagger 文档生成示例，不影响接口逻辑 ==========
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -101,6 +105,7 @@ class UserResponse(BaseModel):
     is_active: bool = Field(True, description="是否启用")
     created_at: str | None = Field(None, description="创建时间")
 
+    # from_attributes=True 允许直接用 ORM 对象构造，自动按字段名映射为 JSON
     model_config = {"from_attributes": True}
 
 
