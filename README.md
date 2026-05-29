@@ -1,6 +1,6 @@
 # FastAPI AI Service — 企业级 AI 接口服务脚手架
 
-> **不仅是一个 AI 服务框架，更是一套通用的企业级后端脚手架**。基于 FastAPI 三层架构，内置用户鉴权、SSE 流式输出、OpenAI 兼容接口（支持 DeepSeek / 千问 / OpenAI 等任意兼容服务）、对话管理全链路。  
+> **不仅是一个 AI 服务框架，更是一套通用的企业级后端脚手架**。基于 FastAPI 三层架构，内置用户鉴权、SSE 流式输出、OpenAI 兼容接口（当前接入千问，可扩展 DeepSeek / OpenAI 等任意兼容服务）、对话管理全链路。  
 > 无论是搭建 **AI 聊天助手、电商后台、内容管理系统、SaaS 平台、API 网关**，还是星座/命理等垂直领域应用，这套脚手架都能让你**半天内完成核心模块落地，专注于业务逻辑，而非基础设施**。
 
 ---
@@ -11,7 +11,7 @@
 |------|------|
 | **三层架构** | Controller → Service → Model 清晰分层，业务代码与基础设施解耦 |
 | **用户鉴权体系** | 注册/登录/Token 鉴权/管理员/密码找回，开箱即用 |
-| **AI 多模型接入** | OpenAI 兼容接口，支持 DeepSeek / 千问 / OpenAI 等任意兼容服务，切换模型只需改配置 |
+| **AI 模型接入** | OpenAI 兼容接口，当前接入千问，后续可扩展 DeepSeek / OpenAI 等任意兼容服务 |
 | **SSE 流式输出** | 标准 Server-Sent Events，兼容旧协议，前端直接对接 |
 | **对话管理** | 完整 CRUD + 上下文清除 + 重生成，按用户隔离 |
 | **数据库迁移** | Alembic 管理表结构变更，开发用 SQLite，生产切 MySQL |
@@ -91,7 +91,7 @@ app/
 │   └── user_controller.py   # 用户注册/登录/鉴权
 │
 ├── services/                # 业务逻辑层 ← 新模块在这加
-│   ├── ai_service.py        # AI 推理、千问/DeepSeek 调用
+│   ├── ai_service.py        # AI 推理、千问调用
 │   └── user_service.py      # 用户注册/登录/Token 管理
 │
 ├── models/                  # ORM 数据模型
@@ -162,7 +162,7 @@ alembic upgrade head
 
 # 4. 启动服务
 cd /mnt/d/python_work/fastapi_server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 表结构变更统一用 Alembic 管理。`AUTO_CREATE_TABLES=True` 仅建议本地临时初始化使用。
@@ -254,7 +254,7 @@ make clean           # 清理缓存/tmp/log
 
 ## AI 流式输出
 
-当前仓库已接入 OpenAI 兼容接口，框架已对接 DeepSeek / 千问双模型，开箱即用：
+当前仓库已接入 OpenAI 兼容接口，当前默认对接千问，开箱即用：
 
 - `POST /api/ai/chat`：返回完整回复
 - `POST /api/ai/chat/send_stream_sse`：返回 SSE 流式分片
