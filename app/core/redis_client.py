@@ -65,7 +65,9 @@ class RedisClient:
     async def close(self) -> None:
         """关闭 Redis 连接池（应用关闭时调用）"""
         if self._client is not None:
+            pool = self._client.connection_pool
             await self._client.aclose()
+            await pool.disconnect()
             self._client = None
 
     # ==================== 常用方法（快捷委托） ====================
