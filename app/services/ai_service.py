@@ -5,7 +5,9 @@ AI 业务逻辑服务层
 负责处理千问兼容模式对话、流式输出与聊天记录落库。
 """
 
+import asyncio
 import json
+import re
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
@@ -33,7 +35,7 @@ class AIService:
             "upstream_model": "qwen-max",
             "deep_reflection_model": "qwen-plus",
             "system": "你现在是一个全能生活小助手，擅长星座运势、生活百科、情感建议、健康养生、美食旅行、科技数码等各个领域的知识问答。你可以为用户查询星座运势、解读命理、推荐美食、规划旅行、解答情感困惑、分享生活技巧等。请以热情友好的方式回答；如果用户输入了链接，请不要声称你能直接访问网页内容。全程使用简体中文，如果回答中有数学相关公式请使用双$符加换行的markdown语法",
-            "enable_search": True,
+            "enable_search": False,
         },
     }
 
@@ -87,6 +89,16 @@ class AIService:
         # 2. 初始化累积变量（用于流结束后落库）
         accumulated_reply = ""
         accumulated_reasoning = ""
+
+        # 并行启动推荐问题生成任务（已屏蔽）
+        # suggestions_task = asyncio.create_task(
+        #     AIService._generate_suggestions(
+        #         messages=messages,
+        #         upstream_model=config["upstream_model"],
+        #         enable_search=config["enable_search"],
+        #     )
+        # )
+
         try:
             # 3. 建立 httpx 流式连接请求上游 LLM
             async with httpx.AsyncClient(
@@ -147,7 +159,13 @@ class AIService:
             yield f"上游流式调用失败: {exc!s}"
             yield "[EXCEPTION]"
         else:
-            # 7c. 正常结束 → 返回日志 ID 和完成标记
+            # 7c. 正常结束 → 返回日志 ID 和完成标记（推荐问题已屏蔽）
+            # suggestions = await suggestions_task
+            # if suggestions:
+            #     yield json.dumps(
+            #         {"type": "suggestions", "data": suggestions},
+            #         ensure_ascii=False,
+            #     )
             yield f"[LOG_ID]:{chat.id}"
             yield "[DONE]"
 
@@ -324,6 +342,42 @@ class AIService:
         chat.chat = chat_messages
         chat.update_time = datetime.now()
         await db.flush()
+
+    @staticmethod
+    async def _generate_suggestions(
+        messages: list[dict[str, Any]],
+        upstream_model: str,
+        enable_search: bool,
+    ) -> list[str]:
+        """并行生成推荐追问（基于对话历史，不等待回答）"""
+        suggestion_prompt = (
+            "请根据以上对话历史和用户刚才问的问题，生成3个用户可能会继续问的相关问题。"
+            "仅返回JSON数组，格式如：[\"问题1\", \"问题2\", \"问题3\"]，不要多余内容。"
+        )
+        suggest_messages = [
+            *messages,
+            {"role": "user", "content": suggestion_prompt},
+        ]
+        try:
+            resp_data = await AIService._request_completion(
+                messages=suggest_messages,
+                upstream_model=upstream_model,
+                enable_search=enable_search,
+                stream=False,
+            )
+            content = resp_data["choices"][0]["message"]["content"]
+            # 从回复中提取 JSON 数组
+            match = re.search(r"\[.*?\]", content, re.DOTALL)
+            if match:
+                suggestions = json.loads(match.group())
+            else:
+                suggestions = json.loads(content)
+            if not isinstance(suggestions, list):
+                suggestions = []
+            return suggestions[:3]  # 最多3个
+        except Exception:
+            logger.warning("生成推荐问题失败", exc_info=True)
+            return []
 
     @staticmethod
     async def _request_completion(
