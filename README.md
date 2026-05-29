@@ -296,7 +296,7 @@ curl -N \
 架构链路：
 
 ```
-Controller → 业务 Service (ConstellationService 等) → RAG / Agent Service → AIService → LLM 模型
+Controller → 业务 Service (ConstellationService 等) → LangChain Agent / LangGraph → AIService → LLM 模型
 ```
 
 各层职责：
@@ -305,7 +305,7 @@ Controller → 业务 Service (ConstellationService 等) → RAG / Agent Service
 |------|------|
 | **Controller** | 参数校验、认证鉴权、路由分发 |
 | **业务 Service** | 数据查询、业务规则、定价、权限校验，不拼 prompt、不调 LLM |
-| **Agent** | 意图识别、知识检索、工具调用编排，业务数据通过 Service 获取 |
+| **LangChain Agent / LangGraph** | 意图识别、知识检索、工具调用编排，通过 `@tool` 装饰器对接业务 Service |
 | **AIService** | prompt 组装、上下文管理、流式输出、多模型切换 |
 | **LLM 模型** | 语义理解、自然语言生成、推理总结，不接触价格/权限/订单 |
 
@@ -314,14 +314,14 @@ Controller → 业务 Service (ConstellationService 等) → RAG / Agent Service
 ```text
 用户：我是双鱼座，今天运势怎么样？
   ↓
-Controller → ChatService → AgentRouterService（意图路由）
+Controller → ChatService
   ↓
-Agent 层落地：
-  ├── 调用 ConstellationService（星座日期、星象、运势评分）
-  ├── 调用 RagService（星座知识库检索）
-  └── 生成指令给 AIService
+LangChain Agent（意图识别 + 工具路由）
+  ├── @tool: get_constellation_info  → 调用 ConstellationService（星座日期、星象、运势评分）
+  ├── @tool: search_knowledge_base    → 调用 RagService（星座知识库检索）
+  └── Agent 生成最终指令给 AIService
   ↓
-AIService 组装 prompt → 调用 LLM（千问/DeepSeek）→ SSE 流式返回
+AIService 组装 prompt → 调用 LLM（OpenAI 兼容接口）→ SSE 流式返回
 ```
 
 设计原则：
