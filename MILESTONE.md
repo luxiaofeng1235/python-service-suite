@@ -45,7 +45,6 @@
 |------|------|------|
 | Redis 集成 | Token 缓存 / 验证码 / 会话管理 | ✅ 已完成 |
 | 文件上传 | 图片上传、视频上传、分页列表、配置化限制 | ✅ 已完成 |
-| Web 模块 | 目录结构已搭建（web/controllers/models/services） | 🚧 骨架 |
 | 多模型切换 | 仅接入通义千问 Qwen | ⏳ P1 |
 | Docker 编排 | 多阶段构建 + docker-compose（app + mysql + redis） | ✅ 已完成 |
 | MySQL 迁移 | 数据库层使用 MySQL async + 连接池 | ✅ 已完成 |
