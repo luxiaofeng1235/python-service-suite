@@ -6,7 +6,6 @@ API 路由聚合
 """
 
 from fastapi import APIRouter
-from pygments.lexer import include
 
 from app.controllers import ai_controller, file_controller, user_controller, test_controller
 
