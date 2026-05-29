@@ -126,16 +126,3 @@ async def delete_chat(
     except ValueError as e:
         return Response.fail(msg=str(e))
 
-
-@router.post("/ai/chats/{chat_id}/clear", summary="清空 AI 对话上下文")
-async def clear_chat(
-    chat_id: int,
-    db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
-):
-    """清空当前登录用户指定对话的上下文"""
-    try:
-        data = await AIService.clear_chat_log_context(db, chat_id, current_user.get("user_id") or 0)
-        return Response.success(data=data, msg="清空成功")
-    except ValueError as e:
-        return Response.fail(msg=str(e))

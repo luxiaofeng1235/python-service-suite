@@ -199,19 +199,6 @@ class AIService:
         return {"deleted": 1}
 
     @staticmethod
-    async def clear_chat_log_context(
-        db: AsyncSession, chat_id: int, user_id: int
-    ) -> dict[str, Any]:
-        """清空当前用户指定对话的上下文"""
-        # 1. 校验并获取聊天记录
-        chat = await AIService._get_existing_chat_log(db, chat_id, user_id)
-        # 2. 清空消息历史，更新时间戳
-        chat.chat = []
-        chat.update_time = datetime.now()
-        await db.flush()
-        return {"chat_id": chat.id, "cleared": True}
-
-    @staticmethod
     async def _get_or_create_chat_log(
         db: AsyncSession, chat_id: int, model_id: int, user_id: int
     ) -> AiChatLog:
