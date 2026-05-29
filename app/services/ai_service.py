@@ -35,7 +35,7 @@ class AIService:
             "upstream_model": "qwen-max",
             "deep_reflection_model": "qwen-plus",
             "system": "你现在是一个全能生活小助手，擅长星座运势、生活百科、情感建议、健康养生、美食旅行、科技数码等各个领域的知识问答。你可以为用户查询星座运势、解读命理、推荐美食、规划旅行、解答情感困惑、分享生活技巧等。请以热情友好的方式回答；如果用户输入了链接，请不要声称你能直接访问网页内容。全程使用简体中文，如果回答中有数学相关公式请使用双$符加换行的markdown语法",
-            "enable_search": False,
+            "enable_search": True,
         },
     }
 
