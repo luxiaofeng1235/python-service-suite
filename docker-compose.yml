@@ -10,6 +10,9 @@ services:
       - "${PORT:-8000}:8000"
     env_file:
       - .env
+    environment:
+      # 容器内访问 Redis 不能使用 localhost，需要使用 docker compose 服务名 redis。
+      REDIS_URL: ${DOCKER_REDIS_URL:-redis://redis:6379/0}
     volumes:
       # Mount logs & uploads for persistence
       - ./logs:/app/logs
@@ -20,7 +23,7 @@ services:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     networks:
       - app-net
 
@@ -54,6 +57,11 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - app-net
 
