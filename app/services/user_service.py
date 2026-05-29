@@ -20,10 +20,10 @@ from app.core.security import (
     get_password_hash,
     verify_password,
 )
-from app.models.db_user import User
-from app.models.db_user_token import UserToken
-from app.models.db_verification_code import VerificationCode
-from app.models.user import (
+from app.models.user import User
+from app.models.user_token import UserToken
+from app.models.verification_code import VerificationCode
+from app.schemas.user import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
     UserLoginRequest,

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.response import Response
 from app.core.dependency import get_current_admin, get_current_user
 from app.database import get_session
-from app.models.user import (
+from app.schemas.user import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
     UserLoginRequest,

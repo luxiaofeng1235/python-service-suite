@@ -10,10 +10,10 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.database import Base
 from app.models import (
-    db_ai_chat_log,  # noqa: F401
-    db_user,  # noqa: F401
-    db_user_token,  # noqa: F401
-    db_verification_code,  # noqa: F401
+    AiChatLog,  # noqa: F401
+    User,  # noqa: F401
+    UserToken,  # noqa: F401
+    VerificationCode,  # noqa: F401
 )
 
 config = context.config

@@ -16,8 +16,8 @@ from starlette.requests import Request
 
 from app.core.config import settings
 from app.database import get_session
-from app.models.db_user import User
-from app.models.db_user_token import UserToken
+from app.models.user import User
+from app.models.user_token import UserToken
 
 # ==================== Token 提取方案 ====================
 bearer_scheme = HTTPBearer(auto_error=False)

@@ -15,8 +15,8 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.ai import ChatRequest, ChatResponse, StreamChunk
-from app.models.db_ai_chat_log import AiChatLog
+from app.schemas.ai import ChatRequest, ChatResponse, StreamChunk
+from app.models.ai_chat_log import AiChatLog
 
 
 class AIService:

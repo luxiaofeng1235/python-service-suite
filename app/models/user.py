@@ -1,120 +1,39 @@
 """
 ============================================
-用户数据模型模块
+用户 ORM 模型 — SQLAlchemy 数据库表映射
 ============================================
-定义用户相关的 Pydantic 请求体、响应体、数据校验。
-使用 Pydantic v2 语法。
+主要功能：定义前台用户账户模型，包含登录信息和状态标记。
 """
 
-from pydantic import BaseModel, EmailStr, Field
+from datetime import datetime
 
-# ==================== 请求体 ====================
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 
-
-class UserRegisterRequest(BaseModel):
-    """用户注册请求体"""
-
-    username: str = Field(..., min_length=2, max_length=50, description="用户名，2-50字符")
-    password: str = Field(..., min_length=6, max_length=128, description="密码，6-128字符")
-    email: EmailStr | None = Field(None, description="电子邮箱")
-    nickname: str | None = Field(None, max_length=50, description="昵称")
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "username": "test_user",
-                    "password": "12345677",
-                    "email": "test@example.com",
-                    "nickname": "测试用户",
-                }
-            ]
-        }
-    }
+from app.database import Base
 
 
-class UserLoginRequest(BaseModel):
-    """用户登录请求体"""
+class User(Base):
+    """用户表 ORM 模型"""
 
-    username: str = Field(..., description="用户名")
-    password: str = Field(..., description="密码")
+    __tablename__ = "users"
 
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "username": "test_user",
-                    "password": "12345677",
-                }
-            ]
-        }
-    }
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="用户ID")
+    username = Column(String(50), unique=True, nullable=False, comment="用户名")
+    password_hash = Column(String(255), nullable=False, comment="密码哈希")
+    nickname = Column(String(50), nullable=True, comment="昵称")
+    email = Column(String(255), nullable=True, comment="邮箱")
+    is_super = Column(Boolean, default=False, nullable=False, comment="是否管理员")
+    is_active = Column(Boolean, default=True, nullable=False, comment="是否启用")
+    is_deleted = Column(Boolean, default=False, nullable=False, comment="是否已注销（软删除）")
+    deleted_at = Column(DateTime, nullable=True, comment="注销时间")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="创建时间")
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+        comment="更新时间",
+    )
 
-
-class ForgotPasswordRequest(BaseModel):
-    """忘记密码 - 请求发送重置邮件"""
-
-    email: str = Field(..., description="注册时使用的邮箱地址")
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "email": "test@example.com",
-                }
-            ]
-        }
-    }
-
-
-class ResetPasswordRequest(BaseModel):
-    """重置密码 - 验证码 + 新密码"""
-
-    email: str = Field(..., description="注册时使用的邮箱地址")
-    code: str = Field(..., min_length=6, max_length=6, description="邮件中收到的 6 位验证码")
-    password: str = Field(..., min_length=6, max_length=128, description="新密码，6-128字符")
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "email": "test@example.com",
-                    "code": "123456",
-                    "password": "new123456",
-                }
-            ]
-        }
-    }
-
-
-# ==================== 响应体 ====================
-
-
-class UserResponse(BaseModel):
-    """用户信息响应体"""
-
-    id: int = Field(..., description="用户ID")
-    username: str = Field(..., description="用户名")
-    nickname: str | None = Field(None, description="昵称")
-    email: str | None = Field(None, description="邮箱")
-    is_super: bool = Field(False, description="是否管理员")
-    is_active: bool = Field(True, description="是否启用")
-    created_at: str | None = Field(None, description="创建时间")
-
-    model_config = {"from_attributes": True}
-
-
-class TokenResponse(BaseModel):
-    """Token 响应体"""
-
-    access_token: str = Field(..., description="32位登录Token")
-    token_type: str = Field("bearer", description="Token 类型")
-
-
-class UserListResponse(BaseModel):
-    """用户列表响应体"""
-
-    items: list[UserResponse] = Field(..., description="用户列表")
-    total: int = Field(..., description="总记录数")
-    page: int = Field(..., description="当前页码")
-    size: int = Field(..., description="每页条数")
+    def __repr__(self) -> str:
+        return f"<User(id={self.id}, username='{self.username}')>"

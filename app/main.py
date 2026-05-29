@@ -37,10 +37,10 @@ from app.database import engine, init_db  # noqa: E402
 
 # 导入 ORM 模型确保它们注册到 Base.metadata（用于自动建表）
 from app.models import (  # noqa: E402
-    db_ai_chat_log,  # noqa: F401
-    db_user,  # noqa: F401
-    db_user_token,  # noqa: F401
-    db_verification_code,  # noqa: F401
+    AiChatLog,  # noqa: F401
+    User,  # noqa: F401
+    UserToken,  # noqa: F401
+    VerificationCode,  # noqa: F401
 )
 from app.routes import api_router  # noqa: E402
 

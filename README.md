@@ -94,13 +94,15 @@ app/
 │   ├── ai_service.py        # AI 推理、千问/DeepSeek 调用
 │   └── user_service.py      # 用户注册/登录/Token 管理
 │
-├── models/                  # Pydantic 数据模型 ← 新模块在这加
+├── models/                  # ORM 数据模型
+│   ├── user.py              # 用户表 ORM 模型
+│   ├── user_token.py        # Token 表 ORM 模型
+│   ├── verification_code.py # 验证码 ORM 模型
+│   └── ai_chat_log.py       # 对话日志 ORM 模型
+│
+├── schemas/                 # Pydantic 请求/响应模型
 │   ├── ai.py                # AI 对话请求/响应体
-│   ├── user.py              # 用户注册/登录/密码重置请求体
-│   ├── db_user.py           # SQLAlchemy ORM 模型
-│   ├── db_ai_chat_log.py    # 对话日志 ORM 模型
-│   ├── db_user_token.py     # Token 表 ORM 模型
-│   └── db_verification_code.py  # 验证码 ORM 模型
+│   └── user.py              # 用户注册/登录/密码重置请求体
 │
 ├── web/                     # 预留 Web 业务模块
 │

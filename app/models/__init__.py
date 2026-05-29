@@ -1,6 +1,12 @@
 """
 ============================================
-数据模型模块
+ORM 数据模型模块
 ============================================
-包含 SQLAlchemy ORM 模型（db_*）和 Pydantic 请求/响应模型。
+SQLAlchemy 数据库表映射模型。
+Pydantic 请求/响应模型见 app.schemas。
 """
+
+from app.models.user import User  # noqa: F401
+from app.models.user_token import UserToken  # noqa: F401
+from app.models.verification_code import VerificationCode  # noqa: F401
+from app.models.ai_chat_log import AiChatLog  # noqa: F401

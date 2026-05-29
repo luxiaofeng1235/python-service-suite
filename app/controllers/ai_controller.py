@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.response import Response
 from app.core.dependency import get_current_user
 from app.database import get_session
-from app.models.ai import ChatRequest
+from app.schemas.ai import ChatRequest
 from app.services.ai_service import AIService
 from app.utils.sse import SSEUtil
 
