@@ -82,6 +82,81 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 表结构变更统一用 Alembic 管理。`AUTO_CREATE_TABLES=True` 仅建议本地临时初始化使用。
 
+## Docker 部署
+
+项目提供 Docker 与 docker-compose 一键部署，支持本地 SQLite 开发和生产 MySQL 集群。
+
+### 前置条件
+
+- Docker & Docker Compose v2+
+
+### 1. 本地开发（SQLite，无外部依赖）
+
+```bash
+# 1. 构建镜像
+make build
+
+# 2. 启动（仅 app 服务）
+docker compose up -d app --no-deps
+
+# 3. 初始化数据库
+make alembic-upgrade
+```
+
+> 本地 SQLite 开发无需 MySQL/Redis，用 `--no-deps` 跳过依赖服务。
+
+### 2. 生产部署（MySQL + Redis）
+
+```bash
+# 1. 修改 .env 数据库连接为 MySQL
+# DATABASE_URL=mysql+aiomysql://root:root123@mysql:3306/fastapi_ai?charset=utf8mb4
+
+# 2. 启动全套服务
+make docker-up
+
+# 3. 初始化数据库（首次）
+make alembic-upgrade
+
+# 4. 查看日志
+make docker-logs
+```
+
+> MySQL 首次启动会自动执行 `sql/init.sql` 初始化库表（如果卷为空）。
+
+### 3. 常用 Docker 命令
+
+```bash
+make build           # 构建镜像
+make docker-up       # 启动服务
+make docker-down     # 停止服务
+make docker-restart  # 重启
+make docker-logs     # 查看日志
+make docker-shell    # 进入容器
+make docker-clean    # 清理全部（含数据卷）
+```
+
+### 4. 验证
+
+```bash
+curl http://localhost:8000/api/health
+# 登录测试
+curl -X POST http://localhost:8000/api/user/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"123456"}'
+```
+
+## Makefile 快速参考
+
+```bash
+make help            # 显示所有可用命令
+make dev             # 本地热重载启动
+make install         # 安装依赖
+make lint            # 代码检查（ruff）
+make format          # 代码格式化（ruff）
+make alembic-upgrade # 数据库升级
+make clean           # 清理缓存/tmp/log
+```
+
 ## API 文档
 
 启动后访问：
