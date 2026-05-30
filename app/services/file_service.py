@@ -14,6 +14,7 @@ from pathlib import Path
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
 from app.core.config import settings
 from app.models.attachment import Attachment
@@ -54,17 +55,17 @@ class FileService:
     def _validate_image(ext: str, file_size: int) -> None:
         """校验图片格式与大小"""
         if ext not in IMAGE_EXTENSIONS:
-            raise ValueError(f"不支持的图片格式：{ext}，仅支持 {', '.join(sorted(IMAGE_EXTENSIONS))}")
+            raise AppException(msg=f"不支持的图片格式：{ext}，仅支持 {', '.join(sorted(IMAGE_EXTENSIONS))}")
         if file_size > IMAGE_MAX_SIZE:
-            raise ValueError(f"图片大小超过限制（最大 {IMAGE_MAX_SIZE // 1024 // 1024} MB）")
+            raise AppException(msg=f"图片大小超过限制（最大 {IMAGE_MAX_SIZE // 1024 // 1024} MB）")
 
     @staticmethod
     def _validate_video(ext: str, file_size: int) -> None:
         """校验视频格式与大小"""
         if ext not in VIDEO_EXTENSIONS:
-            raise ValueError(f"不支持的视频格式：{ext}，仅支持 {', '.join(sorted(VIDEO_EXTENSIONS))}")
+            raise AppException(msg=f"不支持的视频格式：{ext}，仅支持 {', '.join(sorted(VIDEO_EXTENSIONS))}")
         if file_size > VIDEO_MAX_SIZE:
-            raise ValueError(f"视频大小超过限制（最大 {VIDEO_MAX_SIZE // 1024 // 1024} MB）")
+            raise AppException(msg=f"视频大小超过限制（最大 {VIDEO_MAX_SIZE // 1024 // 1024} MB）")
 
     @staticmethod
     def _ensure_upload_dir(sub_dir: str) -> Path:
@@ -93,18 +94,7 @@ class FileService:
         original_name: str,
         mime_type: str,
     ) -> Attachment:
-        """上传图片
-
-        Args:
-            db: 数据库会话
-            user_id: 上传用户 ID
-            file_data: 文件二进制数据
-            original_name: 原始文件名
-            mime_type: MIME 类型
-
-        Returns:
-            Attachment ORM 对象
-        """
+        """上传图片（接收完整字节数据）"""
         ext = Path(original_name).suffix.lower()
         file_size = len(file_data)
 
@@ -122,7 +112,8 @@ class FileService:
         file_path.write_bytes(file_data)
 
         # 数据库记录
-        attachment = Attachment(
+        return await cls._create_attachment(
+            db=db,
             user_id=user_id,
             original_name=original_name,
             stored_name=stored_name,
@@ -131,10 +122,39 @@ class FileService:
             mime_type=mime_type,
             file_type="image",
         )
-        db.add(attachment)
-        await db.flush()
-        await db.refresh(attachment)
-        return attachment
+
+    @classmethod
+    async def upload_image_from_path(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        original_name: str,
+        mime_type: str,
+        stored_path: str,
+        file_size: int,
+    ) -> Attachment:
+        """上传图片（文件已由调用方流式写入磁盘）
+
+        Args:
+            db: 数据库会话
+            user_id: 上传用户 ID
+            original_name: 原始文件名
+            mime_type: MIME 类型
+            stored_path: 已写入磁盘的相对路径
+            file_size: 文件大小（字节）
+        """
+        ext = Path(original_name).suffix.lower()
+        cls._validate_image(ext, file_size)
+        return await cls._create_attachment(
+            db=db,
+            user_id=user_id,
+            original_name=original_name,
+            stored_name=Path(stored_path).name,
+            file_path=stored_path,
+            file_size=file_size,
+            mime_type=mime_type,
+            file_type="image",
+        )
 
     @classmethod
     async def upload_video(
@@ -145,10 +165,7 @@ class FileService:
         original_name: str,
         mime_type: str,
     ) -> Attachment:
-        """上传视频
-
-        参数同 upload_image
-        """
+        """上传视频（接收完整字节数据）"""
         ext = Path(original_name).suffix.lower()
         file_size = len(file_data)
 
@@ -166,7 +183,8 @@ class FileService:
         file_path.write_bytes(file_data)
 
         # 数据库记录
-        attachment = Attachment(
+        return await cls._create_attachment(
+            db=db,
             user_id=user_id,
             original_name=original_name,
             stored_name=stored_name,
@@ -174,6 +192,62 @@ class FileService:
             file_size=file_size,
             mime_type=mime_type,
             file_type="video",
+        )
+
+    @classmethod
+    async def upload_video_from_path(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        original_name: str,
+        mime_type: str,
+        stored_path: str,
+        file_size: int,
+    ) -> Attachment:
+        """上传视频（文件已由调用方流式写入磁盘）
+
+        Args:
+            db: 数据库会话
+            user_id: 上传用户 ID
+            original_name: 原始文件名
+            mime_type: MIME 类型
+            stored_path: 已写入磁盘的相对路径
+            file_size: 文件大小（字节）
+        """
+        ext = Path(original_name).suffix.lower()
+        cls._validate_video(ext, file_size)
+        return await cls._create_attachment(
+            db=db,
+            user_id=user_id,
+            original_name=original_name,
+            stored_name=Path(stored_path).name,
+            file_path=stored_path,
+            file_size=file_size,
+            mime_type=mime_type,
+            file_type="video",
+        )
+
+    @classmethod
+    async def _create_attachment(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        original_name: str,
+        stored_name: str,
+        file_path: str,
+        file_size: int,
+        mime_type: str,
+        file_type: str,
+    ) -> Attachment:
+        """创建附件数据库记录"""
+        attachment = Attachment(
+            user_id=user_id,
+            original_name=original_name,
+            stored_name=stored_name,
+            file_path=file_path,
+            file_size=file_size,
+            mime_type=mime_type,
+            file_type=file_type,
         )
         db.add(attachment)
         await db.flush()

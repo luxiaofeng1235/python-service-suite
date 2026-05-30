@@ -36,11 +36,8 @@ async def register(req: UserRegisterRequest, db: AsyncSession = Depends(get_sess
     - 用户名唯一校验
     - 密码自动加密存储
     """
-    try:
-        data = await UserService.register(db, req)
-        return Response.success(data, msg="注册成功")
-    except ValueError as e:
-        return Response.fail(msg=str(e))
+    data = await UserService.register(db, req)
+    return Response.success(data, msg="注册成功")
 
 
 # ==================== 登录 ====================
@@ -54,14 +51,11 @@ async def login(req: UserLoginRequest, db: AsyncSession = Depends(get_session)):
     - 校验用户名和密码
     - 签发短 Token
     """
-    try:
-        token = await UserService.authenticate(db, req)
-        return Response.success(
-            data={"access_token": token, "token_type": "bearer"},
-            msg="登录成功",
-        )
-    except ValueError as e:
-        return Response.fail(msg=str(e))
+    token = await UserService.authenticate(db, req)
+    return Response.success(
+        data={"access_token": token, "token_type": "bearer"},
+        msg="登录成功",
+    )
 
 
 @router.post("/logout", summary="退出登录")
@@ -96,11 +90,8 @@ async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends
     - 生成 6 位数字验证码并存储到数据库
     - 发送带验证码的 HTML 邮件
     """
-    try:
-        data = await UserService.forgot_password(db, req)
-        return Response.success(data)
-    except ValueError as e:
-        return Response.fail(msg=str(e))
+    data = await UserService.forgot_password(db, req)
+    return Response.success(data)
 
 
 # ==================== 重置密码 ====================
@@ -114,11 +105,8 @@ async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(g
     - 验证邮箱 + 验证码匹配
     - 更新用户密码
     """
-    try:
-        data = await UserService.reset_password(db, req)
-        return Response.success(data)
-    except ValueError as e:
-        return Response.fail(msg=str(e))
+    data = await UserService.reset_password(db, req)
+    return Response.success(data)
 
 
 # ==================== 用户列表 ====================
@@ -143,7 +131,7 @@ async def list_users(
 # ==================== 当前用户信息 ====================
 
 
-@router.get("/me", summary="获取当前登录用户信息")
+@router.get("/center", summary="获取当前登录用户信息")
 async def get_me(current_user: dict = Depends(get_current_user)):
     """
     获取当前登录用户信息（根据 Token）
@@ -165,12 +153,9 @@ async def delete_account(
     - 标记 is_deleted=True
     - 清空该用户所有 Token，强制下线
     """
-    try:
-        data = await UserService.delete_account(
-            db,
-            user_id=current_user["user_id"],
-            username=current_user["username"],
-        )
-        return Response.success(data=data, msg="账号已注销")
-    except ValueError as e:
-        return Response.fail(msg=str(e))
+    data = await UserService.delete_account(
+        db,
+        user_id=current_user["user_id"],
+        username=current_user["username"],
+    )
+    return Response.success(data=data, msg="账号已注销")

@@ -32,6 +32,8 @@ from app.schemas.user import (
     UserResponse,
 )
 from app.common.pagination import PageParams, paginate
+from app.common.exception import AppException  # noqa: TC002
+from app.common.ratelimit import RateLimiter
 from app.utils.email import EmailUtil
 
 
@@ -39,6 +41,16 @@ class UserService:
     """用户业务逻辑服务"""
 
     logger = logging.getLogger(__name__)
+
+    # ==================== 速率限制器（密码重置） ====================
+    _forgot_limiter = RateLimiter(
+        max_requests=settings.RATE_LIMIT_FORGOT_PASSWORD_MAX,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    )
+    _reset_limiter = RateLimiter(
+        max_requests=settings.RATE_LIMIT_RESET_PASSWORD_MAX,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    )
 
     # ==================== 注册 ====================
 
@@ -55,14 +67,14 @@ class UserService:
             注册成功的用户信息
 
         Raises:
-            ValueError: 用户名已存在
+            AppException: 用户名已存在
         """
         # 检查用户名是否已存在
         stmt = select(User).where(User.username == req.username)
         result = await db.execute(stmt)
         existing = result.scalar_one_or_none()
         if existing:
-            raise ValueError(f"用户名 '{req.username}' 已被注册")
+            raise AppException(msg=f"用户名 '{req.username}' 已被注册")
 
         # 创建用户
         user = User(
@@ -100,16 +112,16 @@ class UserService:
             短 Token 字符串
 
         Raises:
-            ValueError: 用户名或密码错误
+            AppException: 用户名或密码错误
         """
         stmt = select(User).where(User.username == req.username)
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if not user:
-            raise ValueError("用户名或密码错误")
+            raise AppException(msg="用户名或密码错误")
 
         if not verify_password(req.password, user.password_hash):
-            raise ValueError("用户名或密码错误")
+            raise AppException(msg="用户名或密码错误")
 
         token = create_short_token()
         expires_at = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -162,30 +174,33 @@ class UserService:
         Returns:
             dict: 提示信息
 
-        Raises:
-            ValueError: SMTP 未配置
+            AppException: SMTP 未配置
         """
         uniform_msg = "如果该邮箱已注册，您将收到一封密码重置邮件"
 
-        # 1. 检查 SMTP 是否配置（全局前置）
-        if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
-            raise ValueError("系统未配置邮件发送功能，请联系管理员")
+        # 1. 速率限制 — 按邮箱防刷
+        if not UserService._forgot_limiter.check(f"forgot:{req.email}"):
+            raise AppException(msg="请求过于频繁，请稍后再试")
 
-        # 2. 查找用户 — 找不到也走统一消息
+        # 2. 检查 SMTP 是否配置（全局前置）
+        if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
+            raise AppException(msg="系统未配置邮件发送功能，请联系管理员")
+
+        # 3. 查找用户 — 找不到也走统一消息
         stmt = select(User).where(User.email == req.email)
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if not user:
             return {"message": uniform_msg, "email": req.email}
 
-        # 3. 生成 6 位验证码
+        # 4. 生成 6 位验证码
         code = UserService._generate_code()
 
-        # 4. 计算过期时间
+        # 5. 计算过期时间
         expire_minutes = settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
         expires_at = datetime.now(UTC) + timedelta(minutes=expire_minutes)
 
-        # 5. 存储验证码到 Redis；数据库保留一份记录用于审计和兜底
+        # 6. 存储验证码到 Redis；数据库保留一份记录用于审计和兜底
         await UserService._cache_reset_code(user.email, code, expire_minutes * 60)
 
         vc = VerificationCode(
@@ -197,7 +212,7 @@ class UserService:
         db.add(vc)
         await db.flush()
 
-        # 6. 发送验证码邮件
+        # 7. 发送验证码邮件
         success = await EmailUtil.send_verification_code_email(
             to_email=user.email,
             username=user.nickname or user.username,
@@ -206,7 +221,7 @@ class UserService:
         )
 
         if not success:
-            raise ValueError("邮件发送失败，请稍后重试")
+            raise AppException(msg="邮件发送失败，请稍后重试")
 
         return {
             "message": uniform_msg,
@@ -228,14 +243,18 @@ class UserService:
             dict: 提示信息
 
         Raises:
-            ValueError: 验证码无效/过期 或 用户不存在
+            AppException: 验证码无效/过期 或 用户不存在
         """
+        # 1. 速率限制 — 按邮箱防刷
+        if not UserService._reset_limiter.check(f"reset:{req.email}"):
+            raise AppException(msg="操作过于频繁，请稍后再试")
+
         now = datetime.now(UTC)
 
-        # 1. 优先使用 Redis 校验验证码；Redis 不可用或未命中时查数据库兜底
+        # 2. 优先使用 Redis 校验验证码；Redis 不可用或未命中时查数据库兜底
         redis_code = await UserService._get_cached_reset_code(req.email)
         if redis_code is not None and redis_code != req.code:
-            raise ValueError("验证码无效或已过期，请重新申请")
+            raise AppException(msg="验证码无效或已过期，请重新申请")
 
         stmt = (
             select(VerificationCode)
@@ -253,21 +272,21 @@ class UserService:
         vc = result.scalar_one_or_none()
 
         if redis_code is None and not vc:
-            raise ValueError("验证码无效或已过期，请重新申请")
+            raise AppException(msg="验证码无效或已过期，请重新申请")
 
-        # 2. 标记验证码为已使用；删除 Redis 缓存，防止重复使用
+        # 3. 标记验证码为已使用；删除 Redis 缓存，防止重复使用
         if vc:
             vc.used = True
         await UserService._remove_cached_reset_code(req.email)
 
-        # 3. 查找用户
+        # 4. 查找用户
         stmt = select(User).where(User.email == req.email)
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if not user:
-            raise ValueError("用户不存在")
+            raise AppException(msg="用户不存在")
 
-        # 4. 更新密码
+        # 5. 更新密码
         user.password_hash = get_password_hash(req.password)
         await db.flush()
 
@@ -384,7 +403,7 @@ class UserService:
         result = await db.execute(select(User).where(User.id == user_id, User.is_deleted == False))  # noqa: E712
         user = result.scalar_one_or_none()
         if not user:
-            raise ValueError("用户不存在或已注销")
+            raise AppException(msg="用户不存在或已注销")
 
         # 2. 软删除标记
         now = datetime.now()

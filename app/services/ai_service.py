@@ -17,6 +17,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.pagination import PageParams, paginate
+from app.common.exception import AppException
 from app.core.config import settings
 from app.schemas.ai import ChatRequest, ChatResponse, StreamChunk
 from app.models.ai_chat_log import AiChatLog
@@ -119,7 +120,7 @@ class AIService:
                     # 4. 检查上游 HTTP 状态码
                     if resp.status_code >= 400:
                         error_text = await resp.aread()
-                        raise ValueError(AIService._extract_error_message(resp, error_text))
+                        raise AppException(msg=AIService._extract_error_message(resp, error_text))
 
                     # 5. 逐行解析 SSE 事件并实时 yield 给客户端
                     async for raw_line in resp.aiter_lines():
@@ -150,7 +151,7 @@ class AIService:
                 assistant_content=accumulated_reply,
                 reasoning_content=accumulated_reasoning,
             )
-        except ValueError as exc:
+        except AppException as exc:
             # 7a. 业务错误（参数/鉴权/上游返回错误）→ 直接暴露信息
             yield str(exc)
             yield "[EXCEPTION]"
@@ -232,7 +233,7 @@ class AIService:
             )
             chat = result.scalar_one_or_none()
             if chat is None:
-                raise ValueError("聊天记录不存在")
+                raise AppException(msg="聊天记录不存在")
             return chat
 
         # chat_id=0 → 创建新聊天记录
@@ -253,7 +254,7 @@ class AIService:
         )
         chat = result.scalar_one_or_none()
         if chat is None:
-            raise ValueError("聊天记录不存在")
+            raise AppException(msg="聊天记录不存在")
         return chat
 
     @staticmethod
@@ -278,7 +279,7 @@ class AIService:
         # 1. 按 model_id 查询对应配置
         config = AIService.MODEL_CONFIGS.get(model_id)
         if config is None:
-            raise ValueError("不支持的模型类型")
+            raise AppException(msg="不支持的模型类型")
 
         # 2. 深度思考回退逻辑：模型1启用深度思考时替换为 deep_reflection_model
         resolved = dict(config)
@@ -401,18 +402,18 @@ class AIService:
                     },
                 )
         except httpx.HTTPError as exc:
-            raise ValueError(f"上游接口连接失败: {exc!s}") from exc
+            raise AppException(msg=f"上游接口连接失败: {exc!s}") from exc
 
         # 2. 检查 HTTP 响应状态码
         if resp.status_code >= 400:
-            raise ValueError(AIService._extract_error_message(resp))
+            raise AppException(msg=AIService._extract_error_message(resp))
         return resp.json()
 
     @staticmethod
     def _build_headers() -> dict[str, str]:
         """构建上游请求头"""
         if not settings.QWEN_API_KEY:
-            raise ValueError("QWEN_API_KEY 未配置")
+            raise AppException(msg="QWEN_API_KEY 未配置")
         return {
             "Authorization": f"Bearer {settings.QWEN_API_KEY}",
             "Content-Type": "application/json",

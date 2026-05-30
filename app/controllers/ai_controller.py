@@ -55,11 +55,8 @@ async def chat(
     - 接收用户消息
     - 返回完整回复
     """
-    try:
-        data = await AIService.chat(db, req, user_id=current_user.get("user_id") or 0)
-        return Response.success(data=data, msg="调用成功")
-    except ValueError as e:
-        return Response.fail(msg=str(e))
+    data = await AIService.chat(db, req, user_id=current_user.get("user_id") or 0)
+    return Response.success(data=data, msg="调用成功")
 
 
 @router.post("/ai/chat/send_stream_sse", summary="AI 流式对话(SSE)")
@@ -87,16 +84,13 @@ async def list_chats(
     current_user: dict = Depends(get_current_user),
 ):
     """获取当前登录用户的 AI 对话列表"""
-    try:
-        data = await AIService.list_chat_logs(
-            db,
-            user_id=current_user.get("user_id") or 0,
-            page_params=page_params,
-            model_id=model_id,
-        )
-        return Response.success(data=data)
-    except ValueError as e:
-        return Response.fail(msg=str(e))
+    data = await AIService.list_chat_logs(
+        db,
+        user_id=current_user.get("user_id") or 0,
+        page_params=page_params,
+        model_id=model_id,
+    )
+    return Response.success(data=data)
 
 
 @router.get("/ai/chats/{chat_id}", summary="AI 对话详情")
@@ -106,11 +100,8 @@ async def chat_detail(
     current_user: dict = Depends(get_current_user),
 ):
     """获取当前登录用户的 AI 对话详情"""
-    try:
-        data = await AIService.get_chat_log_detail(db, chat_id, current_user.get("user_id") or 0)
-        return Response.success(data=data)
-    except ValueError as e:
-        return Response.fail(msg=str(e))
+    data = await AIService.get_chat_log_detail(db, chat_id, current_user.get("user_id") or 0)
+    return Response.success(data=data)
 
 
 @router.delete("/ai/chats/{chat_id}", summary="删除 AI 对话")
@@ -120,9 +111,6 @@ async def delete_chat(
     current_user: dict = Depends(get_current_user),
 ):
     """删除当前登录用户的指定 AI 对话"""
-    try:
-        data = await AIService.delete_chat_log(db, chat_id, current_user.get("user_id") or 0)
-        return Response.success(data=data, msg="删除成功")
-    except ValueError as e:
-        return Response.fail(msg=str(e))
+    data = await AIService.delete_chat_log(db, chat_id, current_user.get("user_id") or 0)
+    return Response.success(data=data, msg="删除成功")
 

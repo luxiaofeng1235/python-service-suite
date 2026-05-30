@@ -12,6 +12,7 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     "bcrypt==4.0.1",
     "python-multipart>=0.0.9",
+    "email-validator>=2.1.0",
     "python-dotenv>=1.0.0",
     "sse-starlette>=2.0.0",
     "aiosqlite>=0.20.0",
@@ -74,3 +75,7 @@ line-ending = "auto"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"

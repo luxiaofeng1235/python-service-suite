@@ -14,10 +14,11 @@ from app.core.config import settings
 def register_middleware(app: FastAPI) -> None:
     """注册 CORS 和请求日志中间件"""
     app.add_middleware(RequestLogMiddleware)
+    origins = settings.CORS_ORIGINS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=origins,
+        allow_credentials=origins != ["*"],
         allow_methods=["*"],
         allow_headers=["*"],
     )

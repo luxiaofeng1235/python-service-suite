@@ -96,9 +96,20 @@ class Settings(BaseSettings):
         "/,/docs,/redoc,/openapi.json,/favicon.ico,"
         "/api/health,/api/user/login,/api/user/register,"
         "/api/user/forgot-password,/api/user/reset-password,"
-        "/api/ai/chat,/api/ai/chat/send_stream_sse,"
         "/api/file/upload/image,/api/file/upload/video"
     )
+
+    # ==================== CORS ====================
+    CORS_ORIGINS: list[str] = ["*"]
+    """允许的跨域来源，生产环境建议设为具体域名，如 ["https://example.com"]"""
+
+    # ==================== 密码重置限速 ====================
+    RATE_LIMIT_FORGOT_PASSWORD_MAX: int = 3
+    """同一邮箱每段时间内最多请求 forgot-password 次数"""
+    RATE_LIMIT_RESET_PASSWORD_MAX: int = 5
+    """同一邮箱每段时间内最多请求 reset-password 次数"""
+    RATE_LIMIT_WINDOW_SECONDS: int = 300
+    """限速时间窗口（秒），默认 5 分钟"""
 
     model_config = {
         "env_file": ".env",
