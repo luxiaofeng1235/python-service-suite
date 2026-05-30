@@ -2,16 +2,13 @@
 ============================================
 调试工具模块 — PHP var_dump + exit 风味
 ============================================
-调试时用 dd() 替代 print + return，不用写两行。
-
 用法：
     from app.common.debug import dd
-    dd(variable)
 
-效果：
-    - 终端打印变量
-    - 浏览器返回 JSON 展示变量内容
-    - 进程不挂，不影响后续请求
+    @router.get("/users/{user_id}")
+    async def get_user(user_id: int):
+        user = await user_service.get_by_id(user_id)
+        dd(user)  # 👈 终端打印 + 浏览器返回 JSON，一行搞定
 """
 
 from typing import Any
@@ -21,32 +18,57 @@ from fastapi.responses import JSONResponse
 
 def dd(obj: Any) -> JSONResponse:
     """
-    PHP var_dump + exit 复刻，但不杀进程。
+    PHP var_dump + exit 复刻。
+
+    终端打印变量结构，浏览器返回 JSON 展示。
+    FastAPI 里直接 return dd(variable) 即可。
 
     Args:
-        obj: 要调试的变量
+        obj: 任意 Python 变量
 
     Returns:
-        JSONResponse: 直接 return 给 FastAPI
+        JSONResponse: 序列化后的变量内容
     """
-    print(obj)
-    return JSONResponse(content=_to_debug(obj))
+    _print(obj)
+    return JSONResponse(content=_to_json(obj))
 
 
-def _to_debug(obj: Any) -> Any:
-    """将任意对象转为可 JSON 序列化的格式"""
-    if hasattr(obj, "dict"):  # Pydantic model
-        return obj.dict()
-    if hasattr(obj, "__dict__"):  # ORM / dataclass / 普通对象
-        return _to_debug(obj.__dict__)
-    if isinstance(obj, list):
-        return [_to_debug(item) for item in obj]
+def _print(obj: Any, indent: int = 0) -> None:
+    """终端打印（递归展开对象）"""
+    prefix = "  " * indent
     if isinstance(obj, dict):
-        return {k: _to_debug(v) for k, v in obj.items()}
-    try:
-        # 测试是否能被 json.dumps 直接处理
-        import json
+        print(f"{prefix}dict ({len(obj)} keys):")
+        for k, v in obj.items():
+            print(f"{prefix}  {k} => ", end="")
+            _print(v, indent + 1)
+    elif isinstance(obj, list):
+        print(f"{prefix}list ({len(obj)} items):")
+        for i, item in enumerate(obj):
+            print(f"{prefix}  [{i}] => ", end="")
+            _print(item, indent + 1)
+    elif hasattr(obj, "dict"):
+        print(f"{prefix}Pydantic:")
+        _print(obj.dict(), indent + 1)
+    elif hasattr(obj, "__dict__"):
+        print(f"{prefix}{type(obj).__name__}:")
+        _print(obj.__dict__, indent + 1)
+    else:
+        print(f"{prefix}{obj!r}")
 
+
+def _to_json(obj: Any) -> Any:
+    """递归序列化任意对象为 JSON 安全格式"""
+    if hasattr(obj, "dict"):
+        return _to_json(obj.dict())
+    if hasattr(obj, "__dict__"):
+        return _to_json(obj.__dict__)
+    if isinstance(obj, (list, tuple)):
+        return [_to_json(i) for i in obj]
+    if isinstance(obj, dict):
+        return {k: _to_json(v) for k, v in obj.items()}
+    # 尝试直接序列化，失败则转字符串
+    try:
+        import json
         json.dumps(obj)
         return obj
     except (TypeError, ValueError):

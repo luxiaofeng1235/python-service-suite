@@ -26,7 +26,7 @@ async def testget(
     name:str ,
     age:int = 18):
     """
-    测试接收参数 ，可以铜鼓name和age来接受参数判断
+    测试接收参数 ，可以接收name和age来接受参数判断
     """
     items = {
         "name": name,
