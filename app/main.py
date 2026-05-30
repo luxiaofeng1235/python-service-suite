@@ -20,6 +20,7 @@ FastAPI AI Service - 应用入口
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_redoc_html
 from fastapi.staticfiles import StaticFiles
 
 from app.common.exception import (
@@ -54,9 +55,20 @@ app = FastAPI(
     version=settings.VERSION,
     description="企业级 FastAPI AI 接口服务（三层架构）",
     docs_url="/docs",
-    redoc_url="/redoc",
+    redoc_url=None,  # 使用下方自定义路由（固定 ReDoc CDN 版本）
     openapi_url="/openapi.json",
 )
+
+
+# ==================== 自定义 ReDoc（固定 CDN 版本，避免 @next 失效） ====================
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_html():
+    return get_redoc_html(
+        openapi_url="/openapi.json",
+        title=f"{settings.PROJECT_NAME} - ReDoc",
+        redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@2.5.3/bundles/redoc.standalone.js",
+    )
 
 # ==================== CORS 跨域配置 ====================
 
