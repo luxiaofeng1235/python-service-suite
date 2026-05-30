@@ -2,12 +2,10 @@
 ============================================
 文件上传业务逻辑层
 ============================================
-职责：文件存储、数据库记录写入、文件类型校验、大小校验。
-不在本层做任何路由/请求相关的操作。
+职责：文件上传流程编排、数据库记录写入、文件列表查询、URL 生成。
+不在本层做文件 I/O 和校验（委托给 storage 模块）。
 """
 
-import os
-import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -16,76 +14,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi import UploadFile
 
-from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
-from app.core.config import settings
 from app.models.attachment import Attachment
-
-
-# ==================== 支持的格式与大小限制（从配置读取）====================
-
-def _image_extensions() -> set[str]:
-    """允许的图片扩展名（带点前缀）"""
-    return {"." + ext for ext in settings.FILE_IMAGE_EXTENSIONS}
-
-
-def _video_extensions() -> set[str]:
-    """允许的视频扩展名（带点前缀）"""
-    return {"." + ext for ext in settings.FILE_VIDEO_EXTENSIONS}
-
-
-IMAGE_EXTENSIONS: set[str] = _image_extensions()
-VIDEO_EXTENSIONS: set[str] = _video_extensions()
-IMAGE_MAX_SIZE: int = settings.FILE_IMAGE_MAX_SIZE
-VIDEO_MAX_SIZE: int = settings.FILE_VIDEO_MAX_SIZE
+from app.storage.local import ensure_upload_dir, generate_stored_name, write_stream
+from app.storage.validation import (
+    IMAGE_MAX_SIZE,
+    VIDEO_MAX_SIZE,
+    validate_image,
+    validate_video,
+)
 
 
 class FileService:
     """文件上传业务逻辑"""
 
-    @staticmethod
-    def _get_file_type(ext: str) -> str:
-        """根据扩展名判断文件分类"""
-        ext = ext.lower()
-        if ext in IMAGE_EXTENSIONS:
-            return "image"
-        if ext in VIDEO_EXTENSIONS:
-            return "video"
-        return "other"
-
-    @staticmethod
-    def _validate_image(ext: str, file_size: int) -> None:
-        """校验图片格式与大小"""
-        if ext not in IMAGE_EXTENSIONS:
-            raise AppException(msg=f"不支持的图片格式：{ext}，仅支持 {', '.join(sorted(IMAGE_EXTENSIONS))}")
-        if file_size > IMAGE_MAX_SIZE:
-            raise AppException(msg=f"图片大小超过限制（最大 {IMAGE_MAX_SIZE // 1024 // 1024} MB）")
-
-    @staticmethod
-    def _validate_video(ext: str, file_size: int) -> None:
-        """校验视频格式与大小"""
-        if ext not in VIDEO_EXTENSIONS:
-            raise AppException(msg=f"不支持的视频格式：{ext}，仅支持 {', '.join(sorted(VIDEO_EXTENSIONS))}")
-        if file_size > VIDEO_MAX_SIZE:
-            raise AppException(msg=f"视频大小超过限制（最大 {VIDEO_MAX_SIZE // 1024 // 1024} MB）")
-
-    @staticmethod
-    def _ensure_upload_dir(sub_dir: str) -> Path:
-        """确保上传子目录存在并返回 Path 对象"""
-        upload_path = Path(settings.UPLOAD_DIR) / sub_dir
-        upload_path.mkdir(parents=True, exist_ok=True)
-        return upload_path
-
-    @staticmethod
-    def _generate_stored_name(original_name: str) -> tuple[str, str, str]:
-        """生成存储文件名
-
-        Returns:
-            (stored_name, ext, stored_filename)
-        """
-        ext = Path(original_name).suffix.lower()
-        stored_name = f"{uuid.uuid4().hex}{ext}"
-        return stored_name, ext, stored_name
+    # ==================== 图片上传（字节数据）====================
 
     @classmethod
     async def upload_image(
@@ -101,13 +44,13 @@ class FileService:
         file_size = len(file_data)
 
         # 1. 校验文件格式和大小
-        cls._validate_image(ext, file_size)
+        validate_image(ext, file_size)
 
         # 2. 确定存储路径（按日期分目录，避免单目录文件过多）
         date_str = datetime.now().strftime("%Y/%m")
-        stored_name, _, _ = cls._generate_stored_name(original_name)
+        stored_name, _, _ = generate_stored_name(original_name)
         sub_path = f"images/{date_str}"
-        upload_dir = cls._ensure_upload_dir(sub_path)
+        upload_dir = ensure_upload_dir(sub_path)
         file_path = upload_dir / stored_name
 
         # 3. 写入文件到磁盘
@@ -125,53 +68,45 @@ class FileService:
             file_type="image",
         )
 
-    # ==================== 流式写入（通用）====================
+    # ==================== 视频上传（字节数据）====================
 
-    @staticmethod
-    async def _write_stream(
-        file: UploadFile,
-        max_size: int,
-        sub_path_prefix: str,
-        chunk_size: int = 64 * 1024,
-    ) -> tuple[str, str, int]:
-        """流式写入文件到磁盘（图/视频共用）
+    @classmethod
+    async def upload_video(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        file_data: bytes,
+        original_name: str,
+        mime_type: str,
+    ) -> Attachment:
+        """上传视频（接收完整字节数据）"""
+        ext = Path(original_name).suffix.lower()
+        file_size = len(file_data)
 
-        Args:
-            file: FastAPI UploadFile 对象
-            max_size: 最大字节数
-            sub_path_prefix: 子目录前缀（"images" 或 "videos"）
-            chunk_size: 分块读取大小
+        # 1. 校验文件格式和大小
+        validate_video(ext, file_size)
 
-        Returns:
-            (sub_path, stored_name, file_size)
-        """
-        # 1. 生成存储路径（按日期分目录，避免单目录文件过多）
-        ext = Path(file.filename or "file").suffix.lower()
+        # 2. 确定存储路径（按日期分目录，避免单目录文件过多）
         date_str = datetime.now().strftime("%Y/%m")
-        stored_name = f"{uuid.uuid4().hex}{ext}"
-        sub_path = f"{sub_path_prefix}/{date_str}"
-        upload_dir = Path(settings.UPLOAD_DIR) / sub_path
-        upload_dir.mkdir(parents=True, exist_ok=True)
+        stored_name, _, _ = generate_stored_name(original_name)
+        sub_path = f"videos/{date_str}"
+        upload_dir = ensure_upload_dir(sub_path)
         file_path = upload_dir / stored_name
 
-        # 2. 分块读取并写入磁盘，超出限制时回滚（删除已写入文件）
-        file_size = 0
-        with open(file_path, "wb") as f:
-            while True:
-                chunk = await file.read(chunk_size)
-                if not chunk:
-                    break
-                file_size += len(chunk)
-                if file_size > max_size:
-                    file_path.unlink(missing_ok=True)
-                    type_label = "图片" if sub_path_prefix == "images" else "视频"
-                    max_mb = max_size // 1024 // 1024
-                    raise AppException(
-                        msg=f"{type_label}大小超过限制（最大 {max_mb} MB）"
-                    )
-                f.write(chunk)
+        # 3. 写入文件到磁盘
+        file_path.write_bytes(file_data)
 
-        return sub_path, stored_name, file_size
+        # 4. 写入数据库记录
+        return await cls._create_attachment(
+            db=db,
+            user_id=user_id,
+            original_name=original_name,
+            stored_name=stored_name,
+            file_path=str(Path(sub_path) / stored_name),
+            file_size=file_size,
+            mime_type=mime_type,
+            file_type="video",
+        )
 
     # ==================== 流式上传 API ====================
 
@@ -183,15 +118,16 @@ class FileService:
         file: UploadFile,
     ) -> Attachment:
         """流式上传图片（Controller 直接传 UploadFile）
+
         Args:
             db: 数据库会话
             user_id: 上传用户 ID
             file: FastAPI UploadFile 对象
         """
         ext = Path(file.filename or "image").suffix.lower()
-        cls._validate_image(ext, 0)
+        validate_image(ext, 0)
 
-        sub_path, stored_name, file_size = await cls._write_stream(
+        sub_path, stored_name, file_size = await write_stream(
             file, IMAGE_MAX_SIZE, "images"
         )
 
@@ -214,15 +150,16 @@ class FileService:
         file: UploadFile,
     ) -> Attachment:
         """流式上传视频（Controller 直接传 UploadFile）
+
         Args:
             db: 数据库会话
             user_id: 上传用户 ID
             file: FastAPI UploadFile 对象
         """
         ext = Path(file.filename or "video").suffix.lower()
-        cls._validate_video(ext, 0)
+        validate_video(ext, 0)
 
-        sub_path, stored_name, file_size = await cls._write_stream(
+        sub_path, stored_name, file_size = await write_stream(
             file, VIDEO_MAX_SIZE, "videos"
         )
 
@@ -236,6 +173,8 @@ class FileService:
             mime_type=file.content_type or "application/octet-stream",
             file_type="video",
         )
+
+    # ==================== 文件已落盘后创建记录 ====================
 
     @classmethod
     async def upload_image_from_path(
@@ -258,7 +197,7 @@ class FileService:
             file_size: 文件大小（字节）
         """
         ext = Path(original_name).suffix.lower()
-        cls._validate_image(ext, file_size)
+        validate_image(ext, file_size)
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
@@ -268,44 +207,6 @@ class FileService:
             file_size=file_size,
             mime_type=mime_type,
             file_type="image",
-        )
-
-    @classmethod
-    async def upload_video(
-        cls,
-        db: AsyncSession,
-        user_id: int,
-        file_data: bytes,
-        original_name: str,
-        mime_type: str,
-    ) -> Attachment:
-        """上传视频（接收完整字节数据）"""
-        ext = Path(original_name).suffix.lower()
-        file_size = len(file_data)
-
-        # 1. 校验文件格式和大小
-        cls._validate_video(ext, file_size)
-
-        # 2. 确定存储路径（按日期分目录，避免单目录文件过多）
-        date_str = datetime.now().strftime("%Y/%m")
-        stored_name, _, _ = cls._generate_stored_name(original_name)
-        sub_path = f"videos/{date_str}"
-        upload_dir = cls._ensure_upload_dir(sub_path)
-        file_path = upload_dir / stored_name
-
-        # 3. 写入文件到磁盘
-        file_path.write_bytes(file_data)
-
-        # 4. 写入数据库记录
-        return await cls._create_attachment(
-            db=db,
-            user_id=user_id,
-            original_name=original_name,
-            stored_name=stored_name,
-            file_path=str(Path(sub_path) / stored_name),
-            file_size=file_size,
-            mime_type=mime_type,
-            file_type="video",
         )
 
     @classmethod
@@ -329,7 +230,7 @@ class FileService:
             file_size: 文件大小（字节）
         """
         ext = Path(original_name).suffix.lower()
-        cls._validate_video(ext, file_size)
+        validate_video(ext, file_size)
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
@@ -340,6 +241,8 @@ class FileService:
             mime_type=mime_type,
             file_type="video",
         )
+
+    # ==================== 数据库操作 ====================
 
     @classmethod
     async def _create_attachment(
@@ -397,6 +300,8 @@ class FileService:
         query = query.order_by(Attachment.created_at.desc())
 
         return await paginate(db, query, page_params, count_query)
+
+    # ==================== URL 生成 ====================
 
     @staticmethod
     def get_file_url(file_path: str, base_url: str = "") -> str:
