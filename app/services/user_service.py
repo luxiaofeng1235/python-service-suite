@@ -69,14 +69,14 @@ class UserService:
         Raises:
             AppException: 用户名已存在
         """
-        # 检查用户名是否已存在
+        # 1. 检查用户名是否已存在
         stmt = select(User).where(User.username == req.username)
         result = await db.execute(stmt)
         existing = result.scalar_one_or_none()
         if existing:
             raise AppException(msg=f"用户名 '{req.username}' 已被注册")
 
-        # 创建用户
+        # 2. 创建用户并入库
         user = User(
             username=req.username,
             password_hash=get_password_hash(req.password),
@@ -114,15 +114,18 @@ class UserService:
         Raises:
             AppException: 用户名或密码错误
         """
+        # 1. 按用户名查找用户
         stmt = select(User).where(User.username == req.username)
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if not user:
             raise AppException(msg="用户名或密码错误")
 
+        # 2. 校验密码
         if not verify_password(req.password, user.password_hash):
             raise AppException(msg="用户名或密码错误")
 
+        # 3. 生成短 Token 并落库
         token = create_short_token()
         expires_at = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         db.add(

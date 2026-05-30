@@ -100,20 +100,20 @@ class FileService:
         ext = Path(original_name).suffix.lower()
         file_size = len(file_data)
 
-        # 校验
+        # 1. 校验文件格式和大小
         cls._validate_image(ext, file_size)
 
-        # 确定存储路径
+        # 2. 确定存储路径（按日期分目录，避免单目录文件过多）
         date_str = datetime.now().strftime("%Y/%m")
         stored_name, _, _ = cls._generate_stored_name(original_name)
         sub_path = f"images/{date_str}"
         upload_dir = cls._ensure_upload_dir(sub_path)
         file_path = upload_dir / stored_name
 
-        # 写入文件
+        # 3. 写入文件到磁盘
         file_path.write_bytes(file_data)
 
-        # 数据库记录
+        # 4. 写入数据库记录
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
@@ -145,6 +145,7 @@ class FileService:
         Returns:
             (sub_path, stored_name, file_size)
         """
+        # 1. 生成存储路径（按日期分目录，避免单目录文件过多）
         ext = Path(file.filename or "file").suffix.lower()
         date_str = datetime.now().strftime("%Y/%m")
         stored_name = f"{uuid.uuid4().hex}{ext}"
@@ -153,6 +154,7 @@ class FileService:
         upload_dir.mkdir(parents=True, exist_ok=True)
         file_path = upload_dir / stored_name
 
+        # 2. 分块读取并写入磁盘，超出限制时回滚（删除已写入文件）
         file_size = 0
         with open(file_path, "wb") as f:
             while True:
@@ -281,20 +283,20 @@ class FileService:
         ext = Path(original_name).suffix.lower()
         file_size = len(file_data)
 
-        # 校验
+        # 1. 校验文件格式和大小
         cls._validate_video(ext, file_size)
 
-        # 确定存储路径
+        # 2. 确定存储路径（按日期分目录，避免单目录文件过多）
         date_str = datetime.now().strftime("%Y/%m")
         stored_name, _, _ = cls._generate_stored_name(original_name)
         sub_path = f"videos/{date_str}"
         upload_dir = cls._ensure_upload_dir(sub_path)
         file_path = upload_dir / stored_name
 
-        # 写入文件
+        # 3. 写入文件到磁盘
         file_path.write_bytes(file_data)
 
-        # 数据库记录
+        # 4. 写入数据库记录
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
