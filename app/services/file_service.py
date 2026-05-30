@@ -14,6 +14,8 @@ from pathlib import Path
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi import UploadFile
+
 from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
 from app.core.config import settings
@@ -121,6 +123,116 @@ class FileService:
             file_size=file_size,
             mime_type=mime_type,
             file_type="image",
+        )
+
+    # ==================== 流式写入（通用）====================
+
+    @staticmethod
+    async def _write_stream(
+        file: UploadFile,
+        max_size: int,
+        sub_path_prefix: str,
+        chunk_size: int = 64 * 1024,
+    ) -> tuple[str, str, int]:
+        """流式写入文件到磁盘（图/视频共用）
+
+        Args:
+            file: FastAPI UploadFile 对象
+            max_size: 最大字节数
+            sub_path_prefix: 子目录前缀（"images" 或 "videos"）
+            chunk_size: 分块读取大小
+
+        Returns:
+            (sub_path, stored_name, file_size)
+        """
+        ext = Path(file.filename or "file").suffix.lower()
+        date_str = datetime.now().strftime("%Y/%m")
+        stored_name = f"{uuid.uuid4().hex}{ext}"
+        sub_path = f"{sub_path_prefix}/{date_str}"
+        upload_dir = Path(settings.UPLOAD_DIR) / sub_path
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        file_path = upload_dir / stored_name
+
+        file_size = 0
+        with open(file_path, "wb") as f:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                file_size += len(chunk)
+                if file_size > max_size:
+                    file_path.unlink(missing_ok=True)
+                    type_label = "图片" if sub_path_prefix == "images" else "视频"
+                    max_mb = max_size // 1024 // 1024
+                    raise AppException(
+                        msg=f"{type_label}大小超过限制（最大 {max_mb} MB）"
+                    )
+                f.write(chunk)
+
+        return sub_path, stored_name, file_size
+
+    # ==================== 流式上传 API ====================
+
+    @classmethod
+    async def upload_image_stream(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        file: UploadFile,
+    ) -> Attachment:
+        """流式上传图片（Controller 直接传 UploadFile）
+        Args:
+            db: 数据库会话
+            user_id: 上传用户 ID
+            file: FastAPI UploadFile 对象
+        """
+        ext = Path(file.filename or "image").suffix.lower()
+        cls._validate_image(ext, 0)
+
+        sub_path, stored_name, file_size = await cls._write_stream(
+            file, IMAGE_MAX_SIZE, "images"
+        )
+
+        return await cls._create_attachment(
+            db=db,
+            user_id=user_id,
+            original_name=file.filename or "unknown",
+            stored_name=stored_name,
+            file_path=str(Path(sub_path) / stored_name),
+            file_size=file_size,
+            mime_type=file.content_type or "application/octet-stream",
+            file_type="image",
+        )
+
+    @classmethod
+    async def upload_video_stream(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        file: UploadFile,
+    ) -> Attachment:
+        """流式上传视频（Controller 直接传 UploadFile）
+        Args:
+            db: 数据库会话
+            user_id: 上传用户 ID
+            file: FastAPI UploadFile 对象
+        """
+        ext = Path(file.filename or "video").suffix.lower()
+        cls._validate_video(ext, 0)
+
+        sub_path, stored_name, file_size = await cls._write_stream(
+            file, VIDEO_MAX_SIZE, "videos"
+        )
+
+        return await cls._create_attachment(
+            db=db,
+            user_id=user_id,
+            original_name=file.filename or "unknown",
+            stored_name=stored_name,
+            file_path=str(Path(sub_path) / stored_name),
+            file_size=file_size,
+            mime_type=file.content_type or "application/octet-stream",
+            file_type="video",
         )
 
     @classmethod
