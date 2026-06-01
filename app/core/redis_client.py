@@ -96,35 +96,6 @@ class RedisClient:
         """查看剩余过期时间（秒，-1 无过期，-2 不存在）"""
         return await self.client.ttl(key)
 
-    # ==================== Token 缓存快捷方法 ====================
-
-    async def cache_token(self, token_id: int, user_id: int, ttl: int) -> None:
-        """缓存 Token（键: token:{token_id} → 值: user_id）"""
-        await self.set(f"token:{token_id}", str(user_id), ex=ttl)
-
-    async def get_token_user(self, token_id: int) -> int | None:
-        """通过 token_id 获取缓存的 user_id"""
-        val = await self.get(f"token:{token_id}")
-        return int(val) if val is not None else None
-
-    async def remove_token(self, token_id: int) -> None:
-        """删除缓存的 Token"""
-        await self.delete(f"token:{token_id}")
-
-    # ==================== 验证码缓存快捷方法 ====================
-
-    async def cache_code(self, email: str, code: str, ttl: int = 300) -> None:
-        """缓存验证码（键: code:{email} → 值: code，默认 5 分钟）"""
-        await self.set(f"code:{email}", code, ex=ttl)
-
-    async def get_code(self, email: str) -> str | None:
-        """获取缓存的验证码"""
-        return await self.get(f"code:{email}")
-
-    async def remove_code(self, email: str) -> None:
-        """删除验证码"""
-        await self.delete(f"code:{email}")
-
 
 # ==================== 全局单例 ====================
 

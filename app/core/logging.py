@@ -2,18 +2,6 @@
 ============================================
 日志配置模块 — 基于 loguru
 ============================================
-对标 Go 版多个全局 Logger 的写法，按业务域分流到独立文件。
-
-使用方式：
-    from app.core.logging import pay_logger
-    pay_logger.info("订单 {} 支付成功", order_id)
-
-    from app.core.logging import app_logger
-    app_logger.error("数据库错误: {}", err)
-
-    from app.core.logging import get_logger
-    logger = get_logger(__name__)
-    logger.info("通用日志")
 """
 
 import os
@@ -36,17 +24,12 @@ LOG_FILES: dict[str, str] = {
     "ws":          "ws.log",            # WebSocket
     "collect":     "collect.log",       # 采集/爬虫
     "task":        "task.log",          # 定时任务
-    "err":         "err.log",
-    "zssq":        "zssq.log",
-    "nsq":         "nsq.log",
-    "update":      "update.log",
-    "jsonq":       "jsonq.log",
-    "xsw":         "xsw.log",
-    "bqg24":       "bqg24.log",
-    "siluke520":   "siluke520.log",
-    "vivo_click":  "vivo_click.log",
-    "sm_click":    "sm_click.log",
-    "baidu_click": "baidu_click.log",
+    "err":         "err.log",           # 错误日志
+    "zssq":        "zssq.log",          # 掌上书趣
+    "nsq":         "nsq.log",           # NSQ 消息队列
+    "update":      "update.log",        # 更新/升级
+    "jsonq":       "jsonq.log",         # JSON 查询
+    "sm_click":    "sm_click.log",      # 什么点击
 }
 
 

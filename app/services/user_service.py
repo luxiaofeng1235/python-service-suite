@@ -301,7 +301,7 @@ class UserService:
     async def _cache_reset_code(email: str, code: str, ttl: int) -> None:
         """缓存重置密码验证码；Redis 不可用时仅记录日志，不影响数据库兜底"""
         try:
-            await redis_client.cache_code(email, code, ttl=ttl)
+            await redis_client.set(f"code:{email}", code, ex=ttl)
         except Exception:
             UserService.logger.warning("Redis 验证码缓存写入失败 email=%s", email, exc_info=True)
 
@@ -309,7 +309,7 @@ class UserService:
     async def _get_cached_reset_code(email: str) -> str | None:
         """读取 Redis 中的重置密码验证码"""
         try:
-            return await redis_client.get_code(email)
+            return await redis_client.get(f"code:{email}")
         except Exception:
             UserService.logger.warning("Redis 验证码缓存读取失败 email=%s", email, exc_info=True)
             return None
@@ -318,7 +318,7 @@ class UserService:
     async def _remove_cached_reset_code(email: str) -> None:
         """删除 Redis 中的重置密码验证码"""
         try:
-            await redis_client.remove_code(email)
+            await redis_client.delete(f"code:{email}")
         except Exception:
             UserService.logger.warning("Redis 验证码缓存删除失败 email=%s", email, exc_info=True)
 
