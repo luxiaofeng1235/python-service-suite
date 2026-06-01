@@ -142,7 +142,7 @@ core/
 
 ### 3.3 与现有鉴权的衔接（二开胶水点）
 
-1. **subject 来源**：`require_permission` 内部 `Depends(get_current_user)`，用返回的角色/`user_id` 作为 Casbin 的 `sub`，不引入 Casbin 自带认证。
+1. ***subject 来源**：`require_permission` 内部 `Depends(get_current_user)`，用返回的角色/`user_id` 作为 Casbin 的 `sub`，不引入 Casbin 自带认证。
 2. **超管直通**：`is_super=True` 跳过 Casbin 校验，与现有 `get_current_admin` 语义一致。
 3. **白名单不变**：`AUTH_WHITE_LIST` 仍在 `get_current_user` 层生效，RBAC 只管「已登录用户能否访问该接口」。
 4. **失败响应统一**：鉴权不通过抛 `AppException`（或 403 `HTTPException`），由现有全局异常处理器转成统一 `Response.fail` 格式，不暴露 Casbin 默认 403。
