@@ -11,6 +11,7 @@
         return debug(user)  # 👈 终端打印 + 浏览器返回 JSON，一行搞定
 """
 
+import json
 from typing import Any
 
 from fastapi.responses import JSONResponse
@@ -71,7 +72,6 @@ def _to_json(obj: Any) -> Any:
         return {k: _to_json(v) for k, v in obj.items()}
     # 尝试直接序列化，失败则转字符串
     try:
-        import json
         json.dumps(obj)
         return obj
     except (TypeError, ValueError):
