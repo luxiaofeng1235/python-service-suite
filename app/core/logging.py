@@ -28,14 +28,25 @@ from app.core.config import settings
 # ============================================================
 # 新增业务只需在此加一行，然后 logger.bind(biz="xxx") 即可
 LOG_FILES: dict[str, str] = {
-    "app":      "app.log",           # 通用/杂项
-    "request":  "request.log",       # HTTP 请求日志
-    "slow":     "slow_request.log",  # 慢请求（>= SLOW_REQUEST_MS）
-    "pay":      "pay.log",           # 支付业务
-    "sql":      "sql.log",           # SQL 审计
-    "ws":       "ws.log",            # WebSocket
-    "collect":  "collect.log",       # 采集/爬虫
-    "task":     "task.log",          # 定时任务
+    "app":         "app.log",           # 通用/杂项
+    "request":     "request.log",       # HTTP 请求日志
+    "slow":        "slow_request.log",  # 慢请求（>= SLOW_REQUEST_MS）
+    "pay":         "pay.log",           # 支付业务
+    "sql":         "sql.log",           # SQL 审计
+    "ws":          "ws.log",            # WebSocket
+    "collect":     "collect.log",       # 采集/爬虫
+    "task":        "task.log",          # 定时任务
+    "err":         "err.log",
+    "zssq":        "zssq.log",
+    "nsq":         "nsq.log",
+    "update":      "update.log",
+    "jsonq":       "jsonq.log",
+    "xsw":         "xsw.log",
+    "bqg24":       "bqg24.log",
+    "siluke520":   "siluke520.log",
+    "vivo_click":  "vivo_click.log",
+    "sm_click":    "sm_click.log",
+    "baidu_click": "baidu_click.log",
 }
 
 
@@ -103,6 +114,23 @@ sql_logger     = logger.bind(biz="sql")
 ws_logger      = logger.bind(biz="ws")
 collect_logger = logger.bind(biz="collect")
 task_logger    = logger.bind(biz="task")
+
+# ← Go 版全局 Logger 对应 ↓
+err_logger     = logger.bind(biz="err")
+zssq_logger    = logger.bind(biz="zssq")
+nsq_logger     = logger.bind(biz="nsq")
+update_logger  = logger.bind(biz="update")
+jsonq_logger   = logger.bind(biz="jsonq")
+
+# 采集源 Logger
+xsw_logger        = logger.bind(biz="xsw")
+bqg24_logger      = logger.bind(biz="bqg24")
+siluke520_logger  = logger.bind(biz="siluke520")
+
+# 点击类 Logger
+vivo_click_logger  = logger.bind(biz="vivo_click")
+sm_click_logger    = logger.bind(biz="sm_click")
+baidu_click_logger = logger.bind(biz="baidu_click")
 
 
 def get_logger(name: str | None = None) -> "logger":  # type: ignore[type-arg]

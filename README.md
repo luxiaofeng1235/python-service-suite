@@ -17,7 +17,7 @@
 | **数据库迁移** | Alembic 管理表结构变更，开发用 SQLite，生产切 MySQL |
 | **Docker 一键部署** | 本地 SQLite 开发 / 生产 MySQL 集群，Makefile 一条命令搞定 |
 | **统一响应格式** | 所有接口返回统一 JSON 结构，前端对接无歧义 |
-| **请求日志/链路追踪** | 请求日志、慢请求告警、X-Trace-Id 链路追踪、敏感字段自动脱敏 |
+| **日志系统** | 基于 loguru 按业务域分流，对标 Go 版多全局 Logger 的写法，开箱即用 |
 
 ---
 
@@ -136,6 +136,7 @@ app/
 | `aiomysql` / `pymysql` | MySQL 异步驱动（生产环境） |
 | `alembic` | 数据库迁移 |
 | `ipip-ipdb` | IP 地址解析（ipip.net .ipdb 格式） |
+| `loguru` | 日志框架（按业务域分流到独立文件） |
 
 ## 环境变量配置
 
@@ -417,14 +418,51 @@ curl -H "Authorization: Bearer <token>" http://localhost:8000/api/user/me
 - `DELETE /api/user/tokens/expired` 需 `users.is_super=1` 管理员权限
 - 免登录路径由 `.env` 的 `AUTH_WHITE_LIST` 统一配置，逗号分隔
 
-## 日志
+## 日志系统
 
-- `logs/app.log`：应用日志，按天切割
-- `logs/request.log`：请求日志，按天切割
-- `logs/slow_request.log`：慢请求日志，默认超过 `SLOW_REQUEST_MS=1000` 记录
-- 响应头会返回 `X-Trace-Id` 和 `X-Process-Time`
-- query 参数里的 `password/token/access_token/authorization/code` 会脱敏
-- 未捕获异常会记录堆栈到应用日志
+基于 **loguru** 实现，对标 Go 版 `ZapLog.Pay.Info(...)` 的多全局 Logger 写法，按业务域自动分流到独立文件。
+
+### 日志文件
+
+启动后日志写入 `logs/` 目录：
+
+| 文件 | 对应 Logger | 业务场景 |
+|------|------------|---------|
+| `logs/app.log` | `app_logger` | 通用业务日志 |
+| `logs/request.log` | `request_logger` | HTTP 请求日志（已集成中间件，自动写入） |
+| `logs/slow_request.log` | `slow_logger` | 慢请求日志，超过 `SLOW_REQUEST_MS` 自动记录 |
+| `logs/pay.log` | `pay_logger` | 支付回调用 |
+| `logs/sql.log` | `sql_logger` | SQL 审计 |
+| `logs/ws.log` | `ws_logger` | WebSocket 日志 |
+| `logs/collect.log` | `collect_logger` | 采集/爬虫日志 |
+| `logs/task.log` | `task_logger` | 定时任务日志 |
+
+### 使用方式
+
+```python
+# 1. 用预定义全局 Logger — 推荐方式
+from app.core.logging import pay_logger, request_logger, app_logger
+
+pay_logger.info("支付回调: order_no={}, amount={}", order_no, amount)
+pay_logger.error("验签失败: order_no={}", order_no)
+
+# 2. 用 get_logger() — 适合 utils/services 通用模块
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
+logger.warning("登录失败: ip={}", ip)
+logger.info("用户注册成功: email={}", email)
+```
+
+> loguru 使用 `{}` 占位符，不是 `%s` 也不是 f-string。
+
+### 特性
+
+- 按天自动切割，保留 14 天
+- 控制台彩色输出（开发友好）
+- 响应头返回 `X-Trace-Id` 和 `X-Process-Time`
+- query 参数 `password/token/access_token/authorization/code` 自动脱敏
+- 未捕获异常自动记录堆栈
 
 ## 数据库迁移
 
