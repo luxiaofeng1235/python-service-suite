@@ -84,6 +84,10 @@ async def list_files(
         AttachmentResponse.from_orm(item, str(request.base_url))
         for item in data["items"]
     ]
-    return Response.success(
-        {"items": items, "total": data["total"], "page": data["page"], "size": data["size"]}
-    )
+    file_list = {
+        "items": items,#文件列表
+        "total": data["total"], #记录集总数
+        "total_page": data["page"],#总页数
+        "size": data["size"],#步长
+    }
+    return Response.success(file_list,"文件列表")
