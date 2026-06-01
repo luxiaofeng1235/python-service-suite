@@ -50,6 +50,11 @@ def _print(obj: Any, indent: int = 0) -> None:
         for i, item in enumerate(obj):
             print(f"{prefix}  [{i}] => ", end="")
             _print(item, indent + 1)
+    elif hasattr(obj, "_sa_instance_state"):
+        # SQLAlchemy ORM 模型 — 只取表字段，跳过 _sa_instance_state 等内部属性
+        col_names = [c.name for c in obj.__table__.columns]
+        print(f"{prefix}SQLAlchemy [{type(obj).__name__}] ({len(col_names)} fields):")
+        _print({k: getattr(obj, k) for k in col_names}, indent + 1)
     elif hasattr(obj, "dict"):
         print(f"{prefix}Pydantic:")
         _print(obj.dict(), indent + 1)
@@ -62,6 +67,9 @@ def _print(obj: Any, indent: int = 0) -> None:
 
 def _to_json(obj: Any) -> Any:
     """递归序列化任意对象为 JSON 安全格式"""
+    if hasattr(obj, "_sa_instance_state"):
+        col_names = [c.name for c in obj.__table__.columns]
+        return _to_json({k: getattr(obj, k) for k in col_names})
     if hasattr(obj, "dict"):
         return _to_json(obj.dict())
     if hasattr(obj, "__dict__"):
