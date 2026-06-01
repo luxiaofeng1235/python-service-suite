@@ -43,7 +43,7 @@ def get_file_type(ext: str) -> str:
 # ==================== 格式与大校校验 ====================
 
 def validate_image(ext: str, file_size: int) -> None:
-    """校验图片格式与大小"""
+    """校验图片格式与大小2"""
     if ext not in IMAGE_EXTENSIONS:
         raise AppException(msg=f"不支持的图片格式：{ext}，仅支持 {', '.join(sorted(IMAGE_EXTENSIONS))}")
     if file_size > IMAGE_MAX_SIZE:
