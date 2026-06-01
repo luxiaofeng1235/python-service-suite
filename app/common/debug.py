@@ -1,14 +1,14 @@
 """
 ============================================
-调试工具模块 — PHP var_dump + exit 风味
+调试工具模块,方便快速开发测试调试
 ============================================
 用法：
-    from app.common.debug import dd
+    from app.common.debug import debug
 
     @router.get("/users/{user_id}")
     async def get_user(user_id: int):
         user = await user_service.get_by_id(user_id)
-        dd(user)  # 👈 终端打印 + 浏览器返回 JSON，一行搞定
+        return debug(user)  # 👈 终端打印 + 浏览器返回 JSON，一行搞定
 """
 
 from typing import Any
@@ -16,21 +16,24 @@ from typing import Any
 from fastapi.responses import JSONResponse
 
 
-def dd(obj: Any) -> JSONResponse:
+def debug(*objs: Any) -> JSONResponse:
     """
     PHP var_dump + exit 复刻。
 
     终端打印变量结构，浏览器返回 JSON 展示。
-    FastAPI 里直接 return dd(variable) 即可。
+    FastAPI 里直接 return debug(variable1, variable2, ...) 即可。
 
     Args:
-        obj: 任意 Python 变量
+        *objs: 一个或多个任意 Python 变量
 
     Returns:
-        JSONResponse: 序列化后的变量内容
+        JSONResponse: 单个变量返回 JSON 对象，多个返回数组
     """
-    _print(obj)
-    return JSONResponse(content=_to_json(obj))
+    for obj in objs:
+        _print(obj)
+    if len(objs) == 1:
+        return JSONResponse(content=_to_json(objs[0]))
+    return JSONResponse(content=[_to_json(obj) for obj in objs])
 
 
 def _print(obj: Any, indent: int = 0) -> None:
