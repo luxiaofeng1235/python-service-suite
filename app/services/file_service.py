@@ -62,7 +62,7 @@ class FileService:
             user_id=user_id,
             original_name=original_name,
             stored_name=stored_name,
-            file_path=str(Path(sub_path) / stored_name),
+            file_path=f"{sub_path}/{stored_name}",
             file_size=file_size,
             mime_type=mime_type,
             file_type="image",
@@ -102,7 +102,7 @@ class FileService:
             user_id=user_id,
             original_name=original_name,
             stored_name=stored_name,
-            file_path=str(Path(sub_path) / stored_name),
+            file_path=f"{sub_path}/{stored_name}",
             file_size=file_size,
             mime_type=mime_type,
             file_type="video",
@@ -136,7 +136,7 @@ class FileService:
             user_id=user_id,
             original_name=file.filename or "unknown",
             stored_name=stored_name,
-            file_path=str(Path(sub_path) / stored_name),
+            file_path=f"{sub_path}/{stored_name}",
             file_size=file_size,
             mime_type=file.content_type or "application/octet-stream",
             file_type="image",
@@ -168,7 +168,7 @@ class FileService:
             user_id=user_id,
             original_name=file.filename or "unknown",
             stored_name=stored_name,
-            file_path=str(Path(sub_path) / stored_name),
+            file_path=f"{sub_path}/{stored_name}",
             file_size=file_size,
             mime_type=file.content_type or "application/octet-stream",
             file_type="video",
@@ -312,7 +312,9 @@ class FileService:
             base_url: 当前请求的基础 URL（例如 http://localhost:8000/），
                       不传则返回相对路径
         """
+        # 统一为正斜杠，兼容 Windows 环境 Path 可能产生的反斜杠
+        normalized_path = file_path.replace("\\", "/")
         if base_url:
             base_url = base_url.rstrip("/")
-            return f"{base_url}/uploads/{file_path}"
-        return f"/uploads/{file_path}"
+            return f"{base_url}/uploads/{normalized_path}"
+        return f"/uploads/{normalized_path}"
