@@ -22,3 +22,6 @@ redis[hiredis]>=5.0.0
 
 # === IP 地址解析 ===
 ipip-ipdb>=1.6.0
+
+# === 日志 ===
+loguru>=0.7.0

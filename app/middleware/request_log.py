@@ -5,7 +5,6 @@
 主要功能：记录接口请求路径、状态码、耗时、客户端 IP 和 trace_id。
 """
 
-import logging
 import time
 import uuid
 from collections.abc import Callable
@@ -15,9 +14,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core.config import settings
-
-logger = logging.getLogger("app.request")
-slow_logger = logging.getLogger("app.request.slow")
+from app.core.logging import request_logger, slow_logger
 
 SENSITIVE_KEYS = {"password", "token", "access_token", "authorization", "code"}
 
@@ -35,8 +32,8 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
             return response
         except Exception:
             cost_ms = round((time.perf_counter() - start_time) * 1000, 2)
-            logger.exception(
-                "trace_id=%s method=%s path=%s status=500 cost_ms=%s client_ip=%s query=%s",
+            request_logger.exception(
+                "trace_id={} method={} path={} status=500 cost_ms={} client_ip={} query={}",
                 trace_id,
                 request.method,
                 request.url.path,
@@ -50,8 +47,8 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
             status_code = response.status_code if response else 500
             client_ip = self._get_client_ip(request)
 
-            logger.info(
-                "trace_id=%s method=%s path=%s status=%s cost_ms=%s client_ip=%s query=%s",
+            request_logger.info(
+                "trace_id={} method={} path={} status={} cost_ms={} client_ip={} query={}",
                 trace_id,
                 request.method,
                 request.url.path,
@@ -63,7 +60,7 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
 
             if cost_ms >= settings.SLOW_REQUEST_MS:
                 slow_logger.warning(
-                    "trace_id=%s method=%s path=%s status=%s cost_ms=%s client_ip=%s query=%s",
+                    "trace_id={} method={} path={} status={} cost_ms={} client_ip={} query={}",
                     trace_id,
                     request.method,
                     request.url.path,

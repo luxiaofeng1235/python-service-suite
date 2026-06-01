@@ -6,14 +6,14 @@ rsa — RSA / AES 加解密工具（对标 Go rsa.go）
 """
 
 import binascii
-import logging
+from app.core.logging import get_logger
 import os
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding, serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding as asym_padding
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 AES_BLOCK_SIZE = 16
 # 对标 Go EncodeStr2Base64 / DecodeStrFromBase64（rsa.go 中导出的公共函数）

@@ -11,7 +11,6 @@
     - Exception（兜底）
 """
 
-import logging
 from typing import Any
 
 from fastapi import HTTPException
@@ -20,8 +19,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.common.response import Response
-
-logger = logging.getLogger("app.exception")
+from app.core.logging import app_logger
 
 # ==================== 自定义异常基类 ====================
 
@@ -89,11 +87,8 @@ async def validation_exception_handler(
 
 async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """兜底异常处理器 — 捕获所有未预期的异常"""
-    logger.error(
-        "Unhandled exception path=%s method=%s",
-        request.url.path,
-        request.method,
-        exc_info=(type(exc), exc, exc.__traceback__),
+    app_logger.opt(exception=exc).error(
+        "Unhandled exception path={} method={}", request.url.path, request.method,
     )
     return JSONResponse(
         content={

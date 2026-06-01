@@ -6,10 +6,10 @@ url_ — HTTP 请求与 URL 解析工具
 文件名带下划线后缀避免与 Python 标准库 urllib 冲突。
 """
 
-import logging
+from app.core.logging import get_logger
 from urllib.parse import urlparse
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ── HTTP 请求 ────────────────────────────────
 

@@ -5,9 +5,9 @@ string_ — 字符串工具（对标 Go string.go）
 注意：文件名带下划线后缀避免与 Python 标准库 string 冲突。
 """
 
-import logging
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def join_int_str(nums: list[int], sep: str = ", ") -> str:

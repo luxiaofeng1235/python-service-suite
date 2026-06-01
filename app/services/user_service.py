@@ -6,7 +6,6 @@
 Controller 通过调用 Service 方法完成业务，不写任何逻辑代码。
 """
 
-import logging
 import random
 import string
 from datetime import UTC, datetime, timedelta
@@ -15,6 +14,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.core.security import (
     create_short_token,
     get_password_hash,
@@ -40,7 +40,7 @@ from app.utils.email import EmailUtil
 class UserService:
     """用户业务逻辑服务"""
 
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
 
     # ==================== 速率限制器（密码重置） ====================
     _forgot_limiter = RateLimiter(

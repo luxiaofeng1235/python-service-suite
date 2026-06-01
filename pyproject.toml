@@ -23,6 +23,7 @@ dependencies = [
     "redis[hiredis]>=5.0.0",
     "alembic>=1.13.0",
     "ipip-ipdb>=1.6.0",
+    "loguru>=0.7.0",
 ]
 
 [project.optional-dependencies]

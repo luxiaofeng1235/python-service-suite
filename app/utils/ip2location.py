@@ -26,12 +26,12 @@ IP 地址解析工具类 — 基于 ipip.net .ipdb 数据库
     - 支持 ipip.net ipdb 格式的 IPv4 城市数据库
 """
 
-import logging
+from app.core.logging import get_logger
 from pathlib import Path
 
 from ipdb import City
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 UNKNOWN_CITY_PLACEHOLDER = "未知城市"
 

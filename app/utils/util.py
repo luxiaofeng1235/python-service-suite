@@ -6,10 +6,10 @@ util — 通用序列化工具（对标 Go util.go）
 """
 
 import json
-import logging
+from app.core.logging import get_logger
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def get_bytes(val: Any) -> bytes:

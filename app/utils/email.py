@@ -25,7 +25,7 @@
     - 自动根据端口选择加密方式
 """
 
-import logging
+from app.core.logging import get_logger
 import smtplib
 import ssl
 from email.mime.application import MIMEApplication
@@ -36,7 +36,7 @@ from pathlib import Path
 
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EmailUtil:
