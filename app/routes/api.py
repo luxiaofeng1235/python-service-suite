@@ -7,7 +7,7 @@ API 路由聚合
 
 from fastapi import APIRouter
 
-from app.controllers import ai_controller, file_controller, user_controller, test_controller
+from app.controllers import ai_controller, file_controller, tools_controller, user_controller, test_controller
 
 api_router = APIRouter()
 
@@ -19,6 +19,9 @@ api_router.include_router(ai_controller.router)
 
 # 文件上传接口
 api_router.include_router(file_controller.router)
+
+# 工具接口
+api_router.include_router(tools_controller.router)
 
 
 # 测试路由

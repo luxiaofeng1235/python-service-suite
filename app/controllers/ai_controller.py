@@ -20,29 +20,6 @@ from app.utils.sse import SSEUtil
 router = APIRouter(prefix="/api", tags=["AI 服务"])
 
 
-# ==================== 健康检查 ====================
-
-
-@router.get("/health", summary="健康检查")
-async def health_check():
-    """
-    服务健康检查接口（无鉴权，白名单）
-
-    返回服务运行状态，用于监控和负载均衡健康探测。
-    """
-    return Response.success(
-        data={
-            "status": "running",
-            "version": "1.0.0",
-            "service": "FastAPI AI Service",
-        },
-        msg="服务运行正常",
-    )
-
-
-# ==================== 预留 AI 接口 ====================
-
-
 @router.post("/ai/chat", summary="AI 对话")
 async def chat(
     req: ChatRequest,
@@ -83,7 +60,16 @@ async def list_chats(
     db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):
-    """获取当前登录用户的 AI 对话列表"""
+    """
+    获取当前登录用户的 AI 对话列表
+
+    Args:
+        page_params: 分页参数（page, page_size）
+        model_id: 模型类型过滤（1=千问）
+
+    Returns:
+        分页后的对话列表
+    """
     data = await AIService.list_chat_logs(
         db,
         user_id=current_user.get("user_id") or 0,
@@ -99,7 +85,17 @@ async def chat_detail(
     db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):
-    """获取当前登录用户的 AI 对话详情"""
+    """
+    获取当前登录用户的指定对话详情
+
+    包含该对话下的所有消息记录，按创建时间升序排列。
+
+    Args:
+        chat_id: 对话 ID
+
+    Returns:
+        对话详情（含消息列表）
+    """
     data = await AIService.get_chat_log_detail(db, chat_id, current_user.get("user_id") or 0)
     return Response.success(data=data)
 
@@ -110,7 +106,16 @@ async def delete_chat(
     db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):
-    """删除当前登录用户的指定 AI 对话"""
+    """
+    删除当前登录用户的指定 AI 对话
+
+    同时会删除该对话下的所有消息记录。只能删除自己的对话，越权访问会抛异常。
+
+    Args:
+        chat_id: 要删除的对话 ID
+
+    Returns:
+        被删除的对话记录
+    """
     data = await AIService.delete_chat_log(db, chat_id, current_user.get("user_id") or 0)
     return Response.success(data=data, msg="删除成功")
-
