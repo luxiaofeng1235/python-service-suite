@@ -1,6 +1,6 @@
 # FastAPI AI Service — 架构说明
 
-> 更新日期：2026-06-02
+> 更新日期：2026-06-01
 
 ---
 
@@ -27,6 +27,9 @@ setup/routes.py
 - 普通接口：`Depends(get_current_user)` — JWT Token 校验
 - 管理员接口：`Depends(get_current_admin)` — 校验 `is_super=True`
 - 白名单路径：`AUTH_WHITE_LIST` 配置，免登录
+
+> 当前授权只有「普通用户 / 超管」两级（`is_super` 布尔位），无细粒度权限。
+> 接口级 RBAC 的引入方案见 [第三章](#三接口级-rbac基于-casbin-二开)。
 
 ### 部署
 
@@ -104,7 +107,70 @@ setup/routes.py
 
 ---
 
-## 三、部署建议
+## 三、接口级 RBAC（基于 Casbin 二开）
+
+### 3.1 选型结论
+
+接口级 RBAC（角色 → 接口）选用 **Casbin** 生态，二开接入现有鉴权链路：
+
+| 组件 | 作用 |
+|------|------|
+| `casbin` (PyCasbin) | 权限决策引擎，`subject-object-action` 模型 |
+| `casbin-async-sqlalchemy-adapter` | 策略存入现有 MySQL，复用 async 引擎，不用 CSV |
+
+Casbin 的 `sub(角色) - obj(URL 路径) - act(HTTP 方法)` 模型天然就是接口级 RBAC，无需自造轮子。
+
+> **不直接用 `fastapi-authz` 中间件**。它依赖 Starlette `AuthenticationMiddleware` 注入身份，与本项目「依赖注入式」鉴权（`get_current_user` 查 `UserToken` 表）机制不一致。本项目只引入 `casbin` 内核，鉴权入口仍走依赖注入。
+
+### 3.2 模型分层
+
+权限决策属于「鉴权」基础设施，**不下沉到业务 Service**，与 `get_current_user` 同层：
+
+```
+core/
+├── dependency.py        # 已有 get_current_user / get_current_admin
+├── rbac.py              # 新增 — Casbin enforcer 单例 + require_permission 依赖工厂
+└── ...
+```
+
+| 文件 | 改动 | 说明 |
+|------|------|------|
+| `core/rbac.py` | **新增** | 初始化 enforcer（async adapter），暴露 `require_permission()` 依赖工厂 |
+| `core/dependency.py` | **不动** | RBAC 复用 `get_current_user` 拿到的 `user_id` / `is_super` 作为 subject |
+| `services/rbac_service.py` | **新增** | 角色/权限/分配的 CRUD（管理后台用），是策略表的唯一数据源 |
+| `controllers/*` | 仅在需要鉴权的路由加 `dependencies=[Depends(require_permission(...))]` | 不动既有业务逻辑 |
+
+### 3.3 与现有鉴权的衔接（二开胶水点）
+
+1. **subject 来源**：`require_permission` 内部 `Depends(get_current_user)`，用返回的角色/`user_id` 作为 Casbin 的 `sub`，不引入 Casbin 自带认证。
+2. **超管直通**：`is_super=True` 跳过 Casbin 校验，与现有 `get_current_admin` 语义一致。
+3. **白名单不变**：`AUTH_WHITE_LIST` 仍在 `get_current_user` 层生效，RBAC 只管「已登录用户能否访问该接口」。
+4. **失败响应统一**：鉴权不通过抛 `AppException`（或 403 `HTTPException`），由现有全局异常处理器转成统一 `Response.fail` 格式，不暴露 Casbin 默认 403。
+
+### 3.4 用法示例
+
+```python
+from app.core.rbac import require_permission
+
+@router.delete(
+    "/api/user/delete",
+    dependencies=[Depends(require_permission("user", "delete"))],
+)
+async def delete_user(...):
+    ...
+```
+
+策略与角色分配通过 `RbacService` 落库，运行时可动态变更、无需重启。
+
+### 3.5 待确认 / 实现时再定
+
+- 角色与权限表结构（`roles` / `role_permissions` / `user_roles`，或直接用 Casbin 的 `casbin_rule` 表 + 一张角色表）
+- `obj` 用 URL 路径还是抽象资源名（`user`/`order`）—— 影响策略可读性
+- 策略缓存与热更新策略（多进程部署下 enforcer 一致性）
+
+---
+
+## 四、部署建议
 
 ### 默认：一个服务
 
@@ -126,7 +192,7 @@ Nginx (可选)
 
 ---
 
-## 四、不变原则
+## 五、不变原则
 
 | 原则 | 说明 |
 |------|------|
@@ -135,3 +201,4 @@ Nginx (可选)
 | 服务层是唯一数据源 | 所有 DB 操作经过 Service |
 | 统一响应 | `Response.success()` / `Response.fail()` |
 | 全局异常 | 不允许 try/catch 吞错误 |
+| 鉴权在依赖层 | 认证/权限校验走 `Depends`，不渗进业务 Service；Service 只信任已注入的 `user_id` |
