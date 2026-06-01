@@ -13,9 +13,8 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-from app.core.logging import get_logger
-
-logger = get_logger(__name__)
+from loguru import logger
+from app.core.logging import err_logger
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -403,7 +402,7 @@ class AIService:
                 suggestions = []
             return suggestions[:3]  # 最多3个
         except Exception:
-            logger.warning("生成推荐问题失败", exc_info=True)
+            err_logger.warning("生成推荐问题失败", exc_info=True)
             return []
 
     @staticmethod
