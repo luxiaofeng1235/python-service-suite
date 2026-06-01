@@ -13,7 +13,10 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-import logger
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
