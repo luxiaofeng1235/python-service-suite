@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 import httpx
+import logger
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
