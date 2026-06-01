@@ -165,7 +165,7 @@ cd /mnt/d/python_work/fastapi_server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-表结构变更统一用 Alembic 管理。`AUTO_CREATE_TABLES=True` 仅建议本地临时初始化使用。
+表结构变更统一用 Alembic 管理。`AUTO_CREATE_TABLES=True` 仅建议本地临时初始化使用测试。
 
 ## 里程碑
 
