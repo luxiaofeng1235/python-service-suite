@@ -100,7 +100,6 @@ async def update_user(
 @router.delete(
     "/{user_id}",
     summary="强制注销用户（后台）",
-    dependencies=[Depends(require_permission("user", "delete"))],
 )
 async def delete_user(
     user_id: int,

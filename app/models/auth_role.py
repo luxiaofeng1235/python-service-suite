@@ -12,7 +12,7 @@ from app.database import Base
 
 
 class Role(Base):
-    """角色定义表（辅助展示，不参与鉴权逻辑）"""
+    """角色定义表（name 即 casbin_rule 的关联键，承载角色的元信息与展示）"""
 
     __tablename__ = "auth_roles"
 

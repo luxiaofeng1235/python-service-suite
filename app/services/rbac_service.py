@@ -10,7 +10,7 @@ RBAC 业务逻辑层
   5. 用户-角色绑定
 """
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
@@ -100,7 +100,7 @@ class RbacService:
 
     @staticmethod
     async def delete_permission(db: AsyncSession, permission_id: int) -> None:
-        """删除权限目录条目"""
+        """删除权限目录条目（同步回收已分配给各角色的该权限策略）"""
         result = await db.execute(
             select(Permission).where(Permission.id == permission_id)
         )
@@ -108,6 +108,15 @@ class RbacService:
         if not perm:
             raise AppException(msg="权限不存在")
 
+        # 级联清理：删掉所有角色对该 resource:action 的 p 策略，
+        # 否则目录里看不到该权限，角色却仍持有它（check_permission 照样放行）
+        await db.execute(
+            delete(CasbinRule).where(
+                CasbinRule.ptype == "p",
+                CasbinRule.v1 == perm.resource,
+                CasbinRule.v2 == perm.action,
+            )
+        )
         await db.delete(perm)
 
     @staticmethod
@@ -165,7 +174,22 @@ class RbacService:
             result = await db.execute(select(Role).where(Role.name == name))
             if result.scalar_one_or_none():
                 raise AppException(msg=f"角色名 '{name}' 已存在")
+
+            old_name = role.name
             role.name = name
+
+            # 角色名是 casbin_rule 的关联键，改名必须同步迁移所有引用，
+            # 否则该角色的权限策略（p.v0）和用户绑定（g.v1）会全部失效，留下孤儿数据
+            await db.execute(
+                update(CasbinRule)
+                .where(CasbinRule.ptype == "p", CasbinRule.v0 == old_name)
+                .values(v0=name)
+            )
+            await db.execute(
+                update(CasbinRule)
+                .where(CasbinRule.ptype == "g", CasbinRule.v1 == old_name)
+                .values(v1=name)
+            )
 
         if description is not None:
             role.description = description
@@ -181,10 +205,14 @@ class RbacService:
         if role.is_system:
             raise AppException(msg="系统内置角色不可删除")
 
-        # 删除 casbin_rule 中所有跟该角色相关的策略
+        # 精确清理 casbin_rule：
+        #   p 策略的 v0 是角色名（v1 是资源名，不能误删）
+        #   g 关系的 v1 是角色名（v0 是用户ID）
+        # 用 ptype 区分，避免角色名恰好与某资源名相同时误删权限策略
         await db.execute(
             delete(CasbinRule).where(
-                (CasbinRule.v0 == role.name) | (CasbinRule.v1 == role.name)
+                ((CasbinRule.ptype == "p") & (CasbinRule.v0 == role.name))
+                | ((CasbinRule.ptype == "g") & (CasbinRule.v1 == role.name))
             )
         )
         await db.delete(role)

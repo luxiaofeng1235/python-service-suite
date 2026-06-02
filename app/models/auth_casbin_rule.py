@@ -15,7 +15,7 @@ Casbin 规则表遵循标准 Casbin 策略格式：
   v3~v5 — Casbin 标准预留字段，本系统未使用
 """
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, UniqueConstraint
 
 from app.database import Base
 
@@ -24,6 +24,10 @@ class CasbinRule(Base):
     """Casbin 策略规则表（兼容 Casbin 标准 schema）"""
 
     __tablename__ = "auth_casbin_rule"
+    __table_args__ = (
+        # 整行唯一，让分配权限/绑定角色的幂等由 DB 兜底，杜绝并发写入重复策略
+        UniqueConstraint("ptype", "v0", "v1", "v2", "v3", "v4", "v5", name="uk_casbin_rule"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment="主键")
     ptype = Column(String(10), nullable=False, index=True, comment="策略类型：p=权限, g=角色归属")

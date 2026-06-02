@@ -1,7 +1,7 @@
 """add RBAC tables (permissions, casbin_rule, roles)
 
 Revision ID: 20260601_0001
-Revises: 99b440bc3a16
+Revises: 20260713_0001
 Create Date: 2026-06-01
 """
 
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import mysql
 
 
 revision: str = "20260601_0001"
-down_revision: Union[str, None] = "99b440bc3a16"
+down_revision: Union[str, None] = "20260713_0001"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -52,6 +52,7 @@ def upgrade() -> None:
         sa.Column("v4", sa.String(length=100), nullable=False, server_default="", comment="预留"),
         sa.Column("v5", sa.String(length=100), nullable=False, server_default="", comment="预留"),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("ptype", "v0", "v1", "v2", "v3", "v4", "v5", name="uk_casbin_rule"),
         mysql_charset="utf8mb4",
         mysql_collate="utf8mb4_unicode_ci",
         mysql_comment="Casbin 策略规则表",
@@ -91,7 +92,7 @@ def upgrade() -> None:
 
     # 1. 插入默认权限目录
     op.execute(
-        "INSERT INTO permissions (resource, action, description) VALUES\n"
+        "INSERT INTO auth_permissions (resource, action, description) VALUES\n"
         "('user',       'list',     '查看用户列表'),\n"
         "('user',       'read',     '查看用户详情'),\n"
         "('user',       'update',   '更新用户信息'),\n"
@@ -114,14 +115,14 @@ def upgrade() -> None:
 
     # 2. 创建 admin 角色
     op.execute(
-        "INSERT INTO roles (name, description, is_system) "
+        "INSERT INTO auth_roles (name, description, is_system) "
         "VALUES ('admin', '超级管理员', 1)"
     )
 
     # 3. admin 角色拥有所有权限
     op.execute(
-        "INSERT INTO casbin_rule (ptype, v0, v1, v2) "
-        "SELECT 'p', 'admin', resource, action FROM permissions"
+        "INSERT INTO auth_casbin_rule (ptype, v0, v1, v2) "
+        "SELECT 'p', 'admin', resource, action FROM auth_permissions"
     )
 
 
