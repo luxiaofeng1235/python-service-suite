@@ -2,21 +2,26 @@
 ============================================
 后台用户管理业务逻辑
 ============================================
-职责：管理员专属的用户管理操作，复用 UserService 的部分方法。
+职责：管理员专属的用户管理操作，不依赖前台 UserService。
 """
 
-from sqlalchemy import select
+from datetime import datetime
+
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.user_admin import AdminUserResponse, AdminUserUpdateRequest
 from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
+from app.common.logging import get_logger
 from app.models.user import User
-from app.services.user_service import UserService
+from app.models.user_token import UserToken
 
 
 class UserAdminService:
     """后台用户管理服务"""
+
+    logger = get_logger(__name__)
 
     # ==================== 用户列表（含已注销） ====================
 
@@ -127,28 +132,49 @@ class UserAdminService:
         operator_username: str,
     ) -> dict:
         """
-        管理员强制注销用户（复用前台 UserService.delete_account）
+        管理员强制注销用户（软删除，不依赖前台 UserService）
+
+        - 标记 is_deleted=True，记录 deleted_at
+        - 使所有 Token 失效
+        - 记录操作日志
 
         Args:
             db: 数据库会话
             user_id: 要注销的用户ID
             operator_username: 操作的管理员用户名
 
-        Returns:
-            dict: 操作结果
+        Raises:
+            AppException: 用户不存在或已注销
         """
-        return await UserService.delete_account(
-            db,
-            user_id=user_id,
-            username=operator_username,
+        result = await db.execute(
+            select(User).where(User.id == user_id, User.is_deleted == False)  # noqa: E712
         )
+        user = result.scalar_one_or_none()
+        if not user:
+            raise AppException(msg="用户不存在或已注销")
+
+        now = datetime.now()
+        user.is_deleted = True
+        user.deleted_at = now
+
+        # 使所有 Token 失效
+        await db.execute(delete(UserToken).where(UserToken.user_id == user_id))
+
+        UserAdminService.logger.warning(
+            "管理员强制注销 | user_id=%s | operator=%s | deleted_at=%s",
+            user_id,
+            operator_username,
+            now.strftime("%Y-%m-%d %H:%M:%S"),
+        )
+
+        return {"deleted": True, "deleted_at": now.strftime("%Y-%m-%d %H:%M:%S")}
 
     # ==================== 清理过期 Token ====================
 
     @staticmethod
     async def cleanup_expired_tokens(db: AsyncSession) -> dict:
         """
-        清理过期 Token（后台管理）
+        清理过期 Token（后台管理，独立实现不依赖前台 UserService）
 
         Args:
             db: 数据库会话
@@ -156,7 +182,8 @@ class UserAdminService:
         Returns:
             dict: {"deleted": N}
         """
-        return await UserService.cleanup_expired_tokens(db)
+        result = await db.execute(delete(UserToken).where(UserToken.expires_at <= datetime.now()))
+        return {"deleted": result.rowcount or 0}
 
     # ==================== 禁用 / 启用 ====================
 
