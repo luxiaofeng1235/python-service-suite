@@ -14,7 +14,9 @@ from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
-from app.models.rbac import CasbinRule, Permission, Role
+from app.models.auth_permission import Permission
+from app.models.auth_casbin_rule import CasbinRule
+from app.models.auth_role import Role
 
 
 class RbacService:

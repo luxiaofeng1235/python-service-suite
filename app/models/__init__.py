@@ -11,6 +11,8 @@ from app.models.user_token import UserToken  # noqa: F401
 from app.models.verification_code import VerificationCode  # noqa: F401
 from app.models.ai_chat_log import AiChatLog  # noqa: F401
 from app.models.attachment import Attachment  # noqa: F401
-from app.models.rbac import CasbinRule, Permission, Role  # noqa: F401
+from app.models.auth_permission import Permission  # noqa: F401
+from app.models.auth_casbin_rule import CasbinRule  # noqa: F401
+from app.models.auth_role import Role  # noqa: F401
 from app.models.auth_admin import AuthAdmin  # noqa: F401
 from app.models.admin_token import AdminToken  # noqa: F401
