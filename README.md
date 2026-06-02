@@ -331,11 +331,14 @@ make clean           # 清理缓存/tmp/log
 - `/api/ai/chat/send_stream_sse` 返回 `text/event-stream`
 - AI 对话接口无需登录；如果携带登录 Token，会按当前用户保存和查询上下文
 - 流式输出兼容旧协议：`data:` 直接返回增量文本
-- 流结束时依次返回 `data: [LOG_ID]:<chat_id>` 和 `data: [DONE]`
+- 正常结束时依次返回两条独立 SSE 消息：`data: [LOG_ID]:<chat_id>`、`data: [DONE]`
+- **出错时不会返回 `[DONE]`**：先返回一条错误文本（业务错误为具体提示，系统异常为 `上游流式调用失败: ...`），再返回 `data: [EXCEPTION]` 作为结束标记。前端需同时处理 `[DONE]` 和 `[EXCEPTION]` 两种收尾
 - 深度思考片段返回 JSON 字符串：`{"type":"reasoning_content","data":"..."}`
 - `chat_id=0` 表示新建对话；传已有 `chat_id` 表示续聊
-- `restart=1` 表示重生成上一条 AI 回复
-- `model` 取值为 `1`，对应千问 qwen-max
+- `restart=1` 表示重新生成：丢弃历史中的最后一条消息且不追加本轮 `msg`，让模型基于剩余上下文重答（`restart=0` 时才会把 `msg` 作为新一轮用户提问追加）
+- `is_deep_reflection=1` 启用深度思考：model 1 会把上游模型从 `qwen-max` 切换为 `qwen-plus`（`is_deep_reflection=0` 时用默认 `qwen-max`）
+- `model` 当前仅支持取值 `1`（对应千问 qwen-max）；对话列表接口 `GET /api/ai/chats` 的 `model_id` 查询参数同样限定为 `1`
+- 所有上游请求默认开启千问联网搜索（`enable_search=true`）
 
 `curl` 示例：
 
