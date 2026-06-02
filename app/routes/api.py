@@ -1,13 +1,19 @@
 """
 ============================================
-API 路由聚合
+前台 API 路由聚合
 ============================================
-后续新增业务 controller 时，在此集中 include_router。
+后续新增前台业务 controller 时，在此集中 include_router。
 """
 
 from fastapi import APIRouter
 
-from app.controllers import ai_controller, file_controller, tools_controller, user_controller, test_controller
+from app.api.controllers import (
+    ai_controller,
+    file_controller,
+    test_controller,
+    tools_controller,
+    user_controller,
+)
 
 api_router = APIRouter()
 
@@ -22,7 +28,6 @@ api_router.include_router(file_controller.router)
 
 # 工具接口
 api_router.include_router(tools_controller.router)
-
 
 # 测试路由
 api_router.include_router(test_controller.router)

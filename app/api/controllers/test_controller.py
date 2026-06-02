@@ -1,10 +1,9 @@
 from fastapi import APIRouter
 
-from app.common import response
 from app.common.response import Response
 
-#初始化API的整体路由
-router = APIRouter(prefix="/api/test",tags=["api测试"])
+# 初始化API的整体路由
+router = APIRouter(prefix="/api/test", tags=["api测试"])
 
 
 @router.get("/testarr", tags=["api"])
@@ -19,12 +18,13 @@ async def test():
         "name": "张三",
         "status": True,
     }
-    return Response.success(items,"测试路由")
+    return Response.success(items, "测试路由")
+
 
 @router.get("/testget", tags=["api"])
 async def testget(
-    name:str ,
-    age:int = 18):
+    name: str,
+    age: int = 18):
     """
     测试接收参数 ，可以接收name和age来接受参数判断
     """

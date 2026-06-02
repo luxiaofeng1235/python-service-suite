@@ -9,7 +9,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_serializer
 
-from app.services.file_service import FileService
+from app.api.services.file_service import FileService
 
 
 class AttachmentResponse(BaseModel):
@@ -43,7 +43,6 @@ class AttachmentResponse(BaseModel):
             AttachmentResponse.from_orm(orm_obj, str(request.base_url))
         """
         url = FileService.get_file_url(obj.file_path, base_url)
-        # 先构建完整 dict，再校验——绕过 ORM 对象缺少 url 字段的问题
         data = {
             "id": obj.id,
             "original_name": obj.original_name,

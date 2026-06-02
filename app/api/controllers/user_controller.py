@@ -9,16 +9,16 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.response import Response
-from app.common.pagination import PageParams
-from app.core.dependency import get_current_admin, get_current_user
-from app.database import get_session
 from app.schemas.user import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
     UserLoginRequest,
     UserRegisterRequest,
 )
+from app.common.pagination import PageParams
+from app.common.response import Response
+from app.core.dependency import get_current_admin, get_current_user
+from app.database import get_session
 from app.services.user_service import UserService
 
 # ==================== 路由定义 ====================

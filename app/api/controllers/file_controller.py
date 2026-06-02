@@ -13,7 +13,7 @@ from app.common.response import Response
 from app.database import get_session
 from app.schemas.file import AttachmentResponse
 from app.common.pagination import PageParams
-from app.services.file_service import FileService
+from app.api.services.file_service import FileService
 
 router = APIRouter(prefix="/api/file", tags=["文件管理"])
 
@@ -85,9 +85,9 @@ async def list_files(
         for item in data["items"]
     ]
     file_list = {
-        "items": items,#文件列表
-        "total": data["total"], #记录集总数
-        "total_page": data["page"],#总页数
-        "size": data["size"],#步长
+        "items": items,  # 文件列表
+        "total": data["total"],  # 记录集总数
+        "total_page": data["page"],  # 总页数
+        "size": data["size"],  # 步长
     }
-    return Response.success(file_list,"文件列表")
+    return Response.success(file_list, "文件列表")

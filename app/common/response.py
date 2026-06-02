@@ -15,6 +15,8 @@
     return Response.fail("用户已被禁用", code=1001)
 """
 
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from fastapi.responses import JSONResponse
@@ -22,13 +24,25 @@ from pydantic import BaseModel
 
 
 def _serialize(obj: Any) -> Any:
-    """递归序列化对象，支持 Pydantic BaseModel、列表、字典等"""
+    """递归序列化对象，支持 Pydantic BaseModel、SQLAlchemy ORM、列表、字典、日期等"""
     if isinstance(obj, BaseModel):
         return obj.model_dump()
     if isinstance(obj, list):
         return [_serialize(item) for item in obj]
     if isinstance(obj, dict):
         return {key: _serialize(value) for key, value in obj.items()}
+    if isinstance(obj, datetime):
+        return obj.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
+    # SQLAlchemy ORM 对象 → 转 dict
+    if hasattr(obj, "_sa_instance_state"):
+        cols = getattr(obj, "__table__", None)
+        if cols is not None:
+            return {col.name: _serialize(getattr(obj, col.name)) for col in cols.columns}
+        return str(obj)
     return obj
 
 

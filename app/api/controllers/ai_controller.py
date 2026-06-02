@@ -8,12 +8,12 @@ AI 接口控制器层
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.schemas.ai import ChatRequest
+from app.api.services.ai_service import AIService
 from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.dependency import get_current_user
 from app.database import get_session
-from app.schemas.ai import ChatRequest
-from app.services.ai_service import AIService
 from app.utils.sse import SSEUtil
 
 # ==================== 路由定义 ====================

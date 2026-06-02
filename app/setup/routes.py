@@ -9,13 +9,14 @@ import os
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.routes import api_router
 from app.core.config import settings
+from app.routes import admin_router, api_router
 
 
 def register_routes(app: FastAPI) -> None:
-    """注册所有业务路由"""
+    """注册所有业务路由（前台 /api/* + 后台 /admin/*）"""
     app.include_router(api_router)
+    app.include_router(admin_router)
 
 
 def register_static_files(app: FastAPI) -> None:

@@ -27,11 +27,14 @@
 
 ```text
 1. 在 app/models/ 下新建 xxx.py —— 定义数据库模型（如需新表，跑 alembic 迁移）
-2. 在 app/services/ 下新建 xxx_service.py —— 写业务逻辑
-3. 在 app/controllers/ 下新建 xxx_controller.py —— 注册路由
-4. 在 app/routes/api.py 中 include_router —— 挂接到主服务
+2. 在 app/<模块>/services/ 下新建 xxx_service.py —— 写业务逻辑
+3. 在 app/<模块>/controllers/ 下新建 xxx_controller.py —— 注册路由
+4. 在 app/routes/<模块>.py 中 include_router —— 挂接到主服务
 5. ✅ 重启服务，接口可用
 ```
+
+> - 前台接口 → 放在 `app/api/` 下，路由注册到 `app/routes/api.py`
+> - 后台管理 → 放在 `app/admin/` 下，路由注册到 `app/routes/admin.py`
 
 > 鉴权、数据库、流式输出、统一响应格式、日志追踪全都不用自己写。
 
@@ -52,16 +55,26 @@
 ## 架构分层
 
 ```
-Controller → Service → Model
+前台 (app/api/)                 后台 (app/admin/)
+    │                                 │
+Controller → Service → Model    Controller → Service → Model
+                                   (RBAC 权限)
+                                       │
+                                   auth_admins (独立表)
 ```
 
-| 层 | 职责 | 示例 |
-|----|------|------|
-| **Controller** | 路由定义、参数校验、返回响应 | `user_controller.py`、`ai_controller.py` |
-| **Service** | 核心业务逻辑（AI 推理、数据查询、鉴权） | `user_service.py`、`ai_service.py` |
-| **Model** | Pydantic 数据模型（请求体、响应体） | `user.py`、`ai.py` |
+| 层 | 职责 | 前台示例 | 后台示例 |
+|----|------|---------|---------|
+| **Controller** | 路由定义、参数校验、返回响应 | `api/controllers/user_controller.py` | `admin/controllers/rbac_controller.py` |
+| **Service** | 核心业务逻辑 | `api/services/user_service.py` | `admin/services/auth_service.py` |
+| **Model (ORM)** | 数据库表映射 | `app/models/user.py` | `app/models/auth_admin.py` |
+| **Schema** | Pydantic 请求/响应体 | `app/schemas/user.py` | `app/schemas/auth_admin.py` |
+| **Route** | 路由聚合 | `app/routes/api.py` | `app/routes/admin.py` |
 
-**关键约定**：业务逻辑只放在 Service 层，Controller 不做任何数据操作，Model 只定义数据结构。
+**关键约定**：
+- 前台 (`app/api/`) 和后台 (`app/admin/`) 完全隔离，各用各的 controller + service
+- 业务逻辑只放在 Service 层，Controller 不做任何数据操作
+- 后台 RBAC 使用独立的 `auth_admins` + `admin_tokens` 表，与前台 `users` 体系无关
 
 ---
 
@@ -70,50 +83,86 @@ Controller → Service → Model
 ```
 app/
 ├── main.py                  # 入口 — app 工厂、中间件、路由挂载
-├── routes/
-│   └── api.py               # 路由聚合入口，新增模块在此 include_router
+│
+├── routes/                  # 路由聚合入口
+│   ├── api.py               # 前台接口路由（app/api/controllers）
+│   └── admin.py             # 后台管理路由（app/admin/controllers）
+│
+├── setup/                   # 应用启动配置
+│   ├── lifecycle.py         # 启动/关闭生命周期钩子
+│   └── routes.py            # 统一注册前台+后台路由
+│
+├── api/                     # 前台接口层（面向普通用户）
+│   ├── controllers/         # 前台路由控制器
+│   │   ├── user_controller.py
+│   │   ├── ai_controller.py
+│   │   ├── file_controller.py
+│   │   ├── tools_controller.py
+│   │   └── test_controller.py
+│   └── services/            # 前台业务逻辑
+│       ├── user_service.py
+│       ├── ai_service.py
+│       └── file_service.py
+│
+├── admin/                   # 后台管理层（面向管理员）
+│   ├── controllers/         # 后台路由控制器
+│   │   ├── auth_controller.py       # 管理员认证（login/register/logout/me）
+│   │   ├── admin_controller.py      # 管理员管理（列表/禁用启用）
+│   │   ├── user_admin_controller.py # 前台用户管理（后台视角）
+│   │   └── rbac_controller.py       # RBAC 权限管理
+│   └── services/            # 后台业务逻辑
+│       ├── auth_service.py          # 管理员认证服务
+│       └── user_admin_service.py    # 前台用户管理服务
 │
 ├── core/                    # 核心基础设施（改配置就够了）
-│   ├── config.py            # 集中配置管理，从 .env 读取所有敏感项
-│   ├── security.py          # Token 签发/验证
-│   ├── dependency.py        # 依赖注入：get_current_user / get_current_admin
-│   └── response.py          # 统一响应格式 Response.success / Response.fail
+│   ├── config.py            # 集中配置管理，从 .env 读取
+│   ├── security.py          # Token 签发/验证/密码加密
+│   ├── dependency.py        # 前台鉴权依赖：get_current_user
+│   ├── admin_auth.py        # 后台鉴权依赖：get_current_admin_user
+│   └── rbac.py              # RBAC 鉴权依赖工厂：require_permission
 │
-├── common/
-│   └── exception.py         # 全局异常处理器
-│
-├── utils/
-│   ├── email.py             # SMTP 邮件发送（验证码、通知）
+├── common/                  # 通用工具
+│   ├── response.py          # 统一响应格式 Response.success / Response.fail
+│   ├── exception.py         # 全局异常处理器
+│   ├── pagination.py        # 分页查询工具
 │   └── sse.py               # SSE 流式响应工具
 │
-├── controllers/             # 路由控制器层 ← 新模块在这加
-│   ├── ai_controller.py     # AI 对话接口（流式/非流式）
-│   └── user_controller.py   # 用户注册/登录/鉴权
-│
-├── services/                # 业务逻辑层 ← 新模块在这加
-│   ├── ai_service.py        # AI 推理、千问调用
-│   └── user_service.py      # 用户注册/登录/Token 管理
-│
 ├── models/                  # ORM 数据模型
-│   ├── user.py              # 用户表 ORM 模型
-│   ├── user_token.py        # Token 表 ORM 模型
-│   ├── verification_code.py # 验证码 ORM 模型
-│   └── ai_chat_log.py       # 对话日志 ORM 模型
+│   ├── user.py              # 前台用户表
+│   ├── user_token.py        # 前台用户 Token 表
+│   ├── verification_code.py # 验证码表
+│   ├── ai_chat_log.py       # AI 对话日志表
+│   ├── attachment.py        # 文件附件表
+│   ├── rbac.py              # RBAC 权限/角色/CasbinRule 表
+│   ├── auth_admin.py        # 后台管理员表（独立于 users）
+│   └── admin_token.py       # 后台管理员 Token 表
 │
 ├── schemas/                 # Pydantic 请求/响应模型
 │   ├── ai.py                # AI 对话请求/响应体
-│   └── user.py              # 用户注册/登录/密码重置请求体
+│   ├── user.py              # 用户注册/登录/密码重置
+│   ├── user_admin.py        # 后台用户管理请求/响应
+│   ├── auth_admin.py        # 管理员登录/注册请求体
+│   ├── rbac.py              # RBAC 请求/响应体
+│   ├── file.py              # 文件上传响应体
+│   └── storage.py           # 存储验证
+│
+├── storage/                 # 文件存储
+│   └── validation.py        # 文件上传验证规则
+│
+├── utils/                   # 辅助工具
+│   └── email.py             # SMTP 邮件发送（验证码、通知）
 │
 ├── web/                     # 预留 Web 业务模块
+│   └── README.md
 │
-├── database.py              # 数据库会话管理（session 工厂）
+├── database.py              # 数据库引擎 & 会话管理
 │
 └── migrations/              # Alembic 迁移脚本
     ├── versions/
     └── env.py
 ```
 
-**新增模块只需四步**：创建 `model`（如需新表）→ 创建 `service` → 创建 `controller` → 在 `routes/api.py` 注册。
+**新增模块只需四步**：创建 `model`（如需新表）→ 创建 `service` → 创建 `controller` → 在 `routes/api.py` 或 `routes/admin.py` 注册。
 
 ---
 
@@ -372,6 +421,67 @@ app/services/
 | `GET` | `/api/user/me` | 获取当前登录用户信息 | 是 |
 | `DELETE` | `/api/user/delete` | 注销当前账号（软删除） | 是 |
 | `DELETE` | `/api/user/tokens/expired` | 清理过期 Token | 管理员 |
+
+### 后台管理员认证（`/admin/auth/*`）
+
+后台管理员使用独立的 `auth_admins` 表，与前台用户完全隔离：
+
+| 方法 | 路径 | 说明 | 权限要求 |
+|------|------|------|---------|
+| `POST` | `/admin/auth/login` | 管理员登录 | 否 |
+| `POST` | `/admin/auth/register` | 创建新管理员 | `admin:create` |
+| `POST` | `/admin/auth/logout` | 退出登录 | 是 |
+| `GET` | `/admin/auth/me` | 当前管理员信息 | 是 |
+
+### RBAC 权限管理（`/admin/*`）
+
+基于 Casbin 的 RBAC 权限体系，三张核心表：
+
+| 表 | 说明 |
+|----|------|
+| `auth_permissions` | 权限目录（resource + action，如 `user:list`） |
+| `auth_roles` | 角色（如 admin、editor） |
+| `auth_casbin_rule` | 规则表：角色-权限映射 `p` + 管理员-角色绑定 `g` |
+
+**权限校验流程**：
+
+```
+请求 → require_permission("user", "list")
+         │
+         ├─ 超管（is_super=True）→ ✅ 直通
+         │
+         └─ 普通管理员
+              │
+              └─ 查 CasbinRule：
+                   g, admin_id, role_name  →  获取角色
+                   p, role_name, resource, action  →  判断是否有权限
+```
+
+**已有后台管理接口**：
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| `GET` | `/admin/users/list` | 前台用户列表 | `user:list` |
+| `GET` | `/admin/users/{id}` | 前台用户详情 | `user:read` |
+| `PUT` | `/admin/users/{id}` | 更新前台用户 | `user:update` |
+| `DELETE` | `/admin/users/{id}` | 强制注销前台用户 | `user:delete` |
+| `POST` | `/admin/users/{id}/disable` | 禁用前台用户 | `user:disable` |
+| `POST` | `/admin/users/{id}/enable` | 启用前台用户 | `user:enable` |
+| `GET` | `/admin/permissions` | 权限目录列表 | `permission:list` |
+| `POST` | `/admin/permissions` | 创建权限条目 | `permission:create` |
+| `DELETE` | `/admin/permissions/{id}` | 删除权限条目 | `permission:delete` |
+| `GET` | `/admin/roles` | 角色列表 | `role:list` |
+| `POST` | `/admin/roles` | 创建角色 | `role:create` |
+| `PUT` | `/admin/roles/{id}` | 更新角色 | `role:update` |
+| `DELETE` | `/admin/roles/{id}` | 删除角色 | `role:delete` |
+| `GET` | `/admin/roles/{id}/permissions` | 角色权限列表 | `permission:list` |
+| `POST` | `/admin/roles/{id}/permissions` | 为角色分配权限 | `permission:assign` |
+| `DELETE` | `/admin/roles/{id}/permissions` | 移除角色权限 | `permission:assign` |
+| `GET` | `/admin/admins` | 管理员列表 | `admin:list` |
+| `POST` | `/admin/admins/{id}/toggle-active` | 禁用/启用管理员 | `admin:toggle` |
+| `GET` | `/admin/admins/{id}/roles` | 管理员的角色列表 | `user_role:list` |
+| `POST` | `/admin/admins/{id}/roles` | 为管理员分配角色 | `user_role:assign` |
+| `DELETE` | `/admin/admins/{id}/roles/{role_id}` | 移除管理员角色 | `user_role:assign` |
 
 ### 注册 / 登录
 

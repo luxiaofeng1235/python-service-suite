@@ -15,6 +15,9 @@ from app.models import (
     UserToken,  # noqa: F401
     VerificationCode,  # noqa: F401
     Attachment,  # noqa: F401
+    CasbinRule,  # noqa: F401
+    Permission,  # noqa: F401
+    Role,  # noqa: F401
 )
 
 config = context.config
