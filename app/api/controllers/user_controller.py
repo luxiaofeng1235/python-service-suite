@@ -15,17 +15,11 @@ from app.schemas.user import (
     UserLoginRequest,
     UserRegisterRequest,
 )
-from app.common.exception import AppException
 from app.common.pagination import PageParams
-from app.common.ratelimit import RateLimiter
 from app.common.response import Response
 from app.core.dependency import get_current_admin, get_current_user
 from app.database import get_session
 from app.services.user_service import UserService
-
-# 速率限制器
-_login_limiter = RateLimiter(max_requests=5, window_seconds=300)   # 登录：5次/5分钟
-_register_limiter = RateLimiter(max_requests=3, window_seconds=600)  # 注册：3次/10分钟
 
 # ==================== 路由定义 ====================
 router = APIRouter(prefix="/api/user", tags=["用户管理"])
@@ -46,11 +40,7 @@ async def register(
     - 用户名唯一校验
     - 密码自动加密存储
     """
-    client_ip = request.client.host if request.client else "unknown"
-    if not _register_limiter.check(f"register:{client_ip}"):
-        raise AppException(msg="注册过于频繁，请 10 分钟后再试")
-
-    data = await UserService.register(db, req)
+    data = await UserService.register(db, req, request=request)
     return Response.success(data, msg="注册成功")
 
 
@@ -68,12 +58,9 @@ async def login(
 
     - 校验用户名和密码
     - 签发短 Token
+    - 记录登录 IP 和时间到用户表
     """
-    client_ip = request.client.host if request.client else "unknown"
-    if not _login_limiter.check(f"login:{client_ip}:{req.username}"):
-        raise AppException(msg="登录过于频繁，请 5 分钟后再试")
-
-    token = await UserService.authenticate(db, req)
+    token = await UserService.authenticate(db, req, request=request)
     return Response.success(
         data={"access_token": token, "token_type": "bearer"},
         msg="登录成功",

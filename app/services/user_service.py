@@ -10,11 +10,12 @@ import random
 import string
 from datetime import UTC, datetime, timedelta
 
+from fastapi import Request
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.logging import get_logger
+from app.core.logging import request_logger
 from app.core.security import (
     create_short_token,
     get_password_hash,
@@ -34,15 +35,16 @@ from app.schemas.user import (
 from app.common.pagination import PageParams, paginate
 from app.common.exception import AppException  # noqa: TC002
 from app.common.ratelimit import RateLimiter
+from app.utils.url_ import get_client_ip
 from app.utils.email import EmailUtil
 
 
 class UserService:
     """用户业务逻辑服务"""
 
-    logger = get_logger(__name__)
-
-    # ==================== 速率限制器（密码重置） ====================
+    # ==================== 速率限制器 ====================
+    _register_limiter = RateLimiter(max_requests=3, window_seconds=600)   # 注册：3次/10分钟
+    _login_limiter = RateLimiter(max_requests=5, window_seconds=300)      # 登录：5次/5分钟
     _forgot_limiter = RateLimiter(
         max_requests=settings.RATE_LIMIT_FORGOT_PASSWORD_MAX,
         window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
@@ -55,21 +57,27 @@ class UserService:
     # ==================== 注册 ====================
 
     @staticmethod
-    async def register(db: AsyncSession, req: UserRegisterRequest) -> UserResponse:
+    async def register(db: AsyncSession, req: UserRegisterRequest, request: Request | None = None) -> UserResponse:
         """
         用户注册
 
         Args:
             db: 数据库会话
             req: 注册请求体（用户名、密码、邮箱等）
+            request: 请求对象（用于限流）
 
         Returns:
             注册成功的用户信息
 
         Raises:
-            AppException: 用户名已存在
+            AppException: 用户名已存在 / 注册过于频繁
         """
-        # 1. 检查用户名是否已存在
+        # 1. 速率限制
+        client_ip = get_client_ip(request) if request else ""
+        if client_ip and not UserService._register_limiter.check(f"register:{client_ip}"):
+            raise AppException(msg="注册过于频繁，请 10 分钟后再试")
+
+        # 2. 检查用户名是否已存在
         stmt = select(User).where(User.username == req.username)
         result = await db.execute(stmt)
         existing = result.scalar_one_or_none()
@@ -100,21 +108,28 @@ class UserService:
     # ==================== 登录 ====================
 
     @staticmethod
-    async def authenticate(db: AsyncSession, req: UserLoginRequest) -> str:
+    async def authenticate(db: AsyncSession, req: UserLoginRequest, request: Request | None = None) -> str:
         """
         用户登录认证
 
         Args:
             db: 数据库会话
             req: 登录请求体（用户名、密码）
+            request: 请求对象（用于限流及 IP 记录）
 
         Returns:
             短 Token 字符串
 
         Raises:
-            AppException: 用户名或密码错误
+            AppException: 用户名或密码错误 / 登录过于频繁
         """
-        # 1. 按用户名查找用户
+        client_ip = get_client_ip(request) if request else ""
+
+        # 1. 速率限制
+        if client_ip and not UserService._login_limiter.check(f"login:{client_ip}:{req.username}"):
+            raise AppException(msg="登录过于频繁，请 5 分钟后再试")
+
+        # 2. 按用户名查找用户
         stmt = select(User).where(User.username == req.username)
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
@@ -125,7 +140,11 @@ class UserService:
         if not verify_password(req.password, user.password_hash):
             raise AppException(msg="用户名或密码错误")
 
-        # 3. 生成短 Token 并落库
+        # 3. 更新登录 IP 和时间
+        user.last_login_ip = client_ip
+        user.last_login_at = datetime.now()
+
+        # 4. 生成短 Token 并落库
         token = create_short_token()
         expires_at = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         db.add(
@@ -136,6 +155,7 @@ class UserService:
                 is_active=True,
             )
         )
+        await db.flush()
         return token
 
     # ==================== 退出登录 ====================
@@ -303,7 +323,7 @@ class UserService:
         try:
             await redis_client.set(f"code:{email}", code, ex=ttl)
         except Exception:
-            UserService.logger.warning("Redis 验证码缓存写入失败 email=%s", email, exc_info=True)
+            request_logger.warning("Redis 验证码缓存写入失败 email=%s", email, exc_info=True)
 
     @staticmethod
     async def _get_cached_reset_code(email: str) -> str | None:
@@ -311,7 +331,7 @@ class UserService:
         try:
             return await redis_client.get(f"code:{email}")
         except Exception:
-            UserService.logger.warning("Redis 验证码缓存读取失败 email=%s", email, exc_info=True)
+            request_logger.warning("Redis 验证码缓存读取失败 email=%s", email, exc_info=True)
             return None
 
     @staticmethod
@@ -320,7 +340,16 @@ class UserService:
         try:
             await redis_client.delete(f"code:{email}")
         except Exception:
-            UserService.logger.warning("Redis 验证码缓存删除失败 email=%s", email, exc_info=True)
+            request_logger.warning("Redis 验证码缓存删除失败 email=%s", email, exc_info=True)
+            return None
+
+    @staticmethod
+    async def _remove_cached_reset_code(email: str) -> None:
+        """删除 Redis 中的重置密码验证码"""
+        try:
+            await redis_client.delete(f"code:{email}")
+        except Exception:
+            request_logger.warning("Redis 验证码缓存删除失败 email=%s", email, exc_info=True)
 
     # ==================== 用户列表 ====================
 
@@ -417,7 +446,7 @@ class UserService:
         await db.execute(delete(UserToken).where(UserToken.user_id == user_id))
 
         # 4. 记录操作日志
-        UserService.logger.warning(
+        request_logger.warning(
             "账号注销 | user_id=%s | username=%s | deleted_at=%s",
             user_id,
             username,

@@ -1,10 +1,13 @@
 """
 ============================================
-url_ — HTTP 请求与 URL 解析工具
+url_ — HTTP 请求、URL 解析、客户端 IP 获取
 ============================================
-提供通用的 HTTP GET/POST 请求封装以及基础 URL 解析能力。
+提供通用的 HTTP GET/POST 请求封装、基础 URL 解析能力以及客户端 IP 提取。
 文件名带下划线后缀避免与 Python 标准库 urllib 冲突。
 """
+
+from fastapi import Request
+from starlette.requests import Request as StarletteRequest
 
 from app.core.logging import get_logger
 from urllib.parse import urlparse
@@ -71,3 +74,27 @@ def get_last_segment(url_path: str) -> str:
     if idx == -1:
         return url_path
     return url_path[idx + 1:]
+
+
+# ── 客户端 IP ────────────────────────────────
+
+
+def get_client_ip(request: Request | StarletteRequest) -> str:
+    """
+    从请求中提取真实客户端 IP，优先兼容代理转发头。
+
+    Args:
+        request: FastAPI / Starlette 请求对象
+
+    Returns:
+        客户端 IP 字符串，空串表示无法获取
+    """
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+
+    return request.client.host if request.client else ""

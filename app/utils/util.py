@@ -6,17 +6,15 @@ util — 通用序列化工具（对标 Go util.go）
 """
 
 import json
+
 from app.core.logging import get_logger
 from typing import Any
+
 
 logger = get_logger(__name__)
 
 
 def get_bytes(val: Any) -> bytes:
-    """
-    将值序列化为 bytes（对标 Go GetBytes，使用 gob 编码）。
-    Python 无 gob，改用 pickle 做二进制序列化。
-    """
     import pickle
     try:
         return pickle.dumps(val)

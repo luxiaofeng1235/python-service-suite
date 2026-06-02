@@ -26,6 +26,8 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False, comment="是否启用")
     is_deleted = Column(Boolean, default=False, nullable=False, comment="是否已注销（软删除）")
     deleted_at = Column(DateTime, nullable=True, comment="注销时间")
+    last_login_ip = Column(String(45), nullable=True, comment="最后登录 IP")
+    last_login_at = Column(DateTime, nullable=True, comment="最后登录时间")
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="创建时间")
     updated_at = Column(
         DateTime,

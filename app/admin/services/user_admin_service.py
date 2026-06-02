@@ -13,15 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.user_admin import AdminUserResponse, AdminUserUpdateRequest
 from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
-from app.common.logging import get_logger
+from app.core.logging import request_logger
 from app.models.user import User
 from app.models.user_token import UserToken
 
 
 class UserAdminService:
     """后台用户管理服务"""
-
-    logger = get_logger(__name__)
 
     # ==================== 用户列表（含已注销） ====================
 
@@ -160,8 +158,8 @@ class UserAdminService:
         # 使所有 Token 失效
         await db.execute(delete(UserToken).where(UserToken.user_id == user_id))
 
-        UserAdminService.logger.warning(
-            "管理员强制注销 | user_id=%s | operator=%s | deleted_at=%s",
+        request_logger.info(
+            "管理员强制注销 | user_id={} | operator={} | deleted_at={}",
             user_id,
             operator_username,
             now.strftime("%Y-%m-%d %H:%M:%S"),

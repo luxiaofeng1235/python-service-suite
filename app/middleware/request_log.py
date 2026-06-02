@@ -15,6 +15,7 @@ from starlette.responses import Response
 
 from app.core.config import settings
 from app.core.logging import request_logger, slow_logger
+from app.utils.url_ import get_client_ip
 
 SENSITIVE_KEYS = {"password", "token", "access_token", "authorization", "code"}
 
@@ -38,14 +39,14 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
                 request.method,
                 request.url.path,
                 cost_ms,
-                self._get_client_ip(request),
+                get_client_ip(request),
                 self._masked_query(request),
             )
             raise
         finally:
             cost_ms = round((time.perf_counter() - start_time) * 1000, 2)
             status_code = response.status_code if response else 500
-            client_ip = self._get_client_ip(request)
+            client_ip = get_client_ip(request)
 
             request_logger.info(
                 "trace_id={} method={} path={} status={} cost_ms={} client_ip={} query={}",
@@ -73,19 +74,6 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
             if response is not None:
                 response.headers["X-Trace-Id"] = trace_id
                 response.headers["X-Process-Time"] = f"{cost_ms}ms"
-
-    @staticmethod
-    def _get_client_ip(request: Request) -> str:
-        """获取客户端 IP，优先兼容代理转发头"""
-        forwarded_for = request.headers.get("X-Forwarded-For")
-        if forwarded_for:
-            return forwarded_for.split(",")[0].strip()
-
-        real_ip = request.headers.get("X-Real-IP")
-        if real_ip:
-            return real_ip
-
-        return request.client.host if request.client else ""
 
     @staticmethod
     def _masked_query(request: Request) -> dict[str, str]:
