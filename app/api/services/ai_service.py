@@ -232,28 +232,6 @@ class AIService:
         return {"deleted": 1}
 
     @staticmethod
-    async def delChatLog(db: AsyncSession, params: dict[str, Any], uid: int) -> dict[str, Any]:
-        """
-        删除指定 AI 对话（PHP 风格，按 find → delete 流程）
-
-        Args:
-            params: 参数字典，含 chat_id
-            uid: 用户 ID
-
-        Returns:
-            删除成功消息
-        """
-        chat_id = params["chat_id"]
-        result = await db.execute(
-            select(AiChatLog).where(AiChatLog.id == chat_id, AiChatLog.user_id == uid)
-        )
-        chat = result.scalar_one_or_none()
-        if not chat:
-            raise AppException(msg="聊天记录不存在")
-        await db.delete(chat)
-        return {"msg": "删除成功"}
-
-    @staticmethod
     async def _get_or_create_chat_log(
         db: AsyncSession, chat_id: int, model_id: int, user_id: int
     ) -> AiChatLog:
@@ -379,15 +357,6 @@ class AIService:
         chat.chat = chat_messages
         chat.update_time = datetime.now()
         await db.flush()
-
-    @staticmethod
-    async def _generate_suggestions(
-        messages: list[dict[str, Any]],
-        upstream_model: str,
-        enable_search: bool,
-    ) -> list[str]:
-        """并行生成推荐追问 — 暂未启用"""
-        return []
 
     @staticmethod
     async def _request_completion(
