@@ -88,7 +88,7 @@ async def update_user(
     """
     更新用户信息（需 user:update 权限）
 
-    - 可修改 nickname / is_super / is_active
+    - 可修改 nickname / is_active
     """
     data = await UserAdminService.update_user(db, user_id=user_id, req=req)
     return Response.success(data, msg="更新成功")

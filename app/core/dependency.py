@@ -99,17 +99,9 @@ async def get_current_user(
         "sub": str(user.id),
         "username": user.username,
         "nickname": user.nickname,
-        "is_super": bool(user.is_super),
         "token_id": token.id,
         "token": credentials.credentials,
     }
 
 
-async def get_current_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    """管理员依赖：仅允许 is_super 用户访问"""
-    if not current_user.get("is_super"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无管理员权限",
-        )
-    return current_user
+

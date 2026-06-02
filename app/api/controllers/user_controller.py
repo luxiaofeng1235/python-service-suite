@@ -17,7 +17,7 @@ from app.schemas.user import (
 )
 from app.common.pagination import PageParams
 from app.common.response import Response
-from app.core.dependency import get_current_admin, get_current_user
+from app.core.dependency import get_current_user
 from app.database import get_session
 from app.services.user_service import UserService
 
@@ -75,16 +75,6 @@ async def logout(
     """退出登录，使当前 Token 立即失效"""
     data = await UserService.logout(db, current_user["token_id"])
     return Response.success(data=data, msg="退出成功")
-
-
-@router.delete("/tokens/expired", summary="清理过期 Token")
-async def cleanup_expired_tokens(
-    db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_admin),
-):
-    """清理过期 Token（管理员）"""
-    data = await UserService.cleanup_expired_tokens(db)
-    return Response.success(data=data, msg="清理成功")
 
 
 # ==================== 忘记密码 ====================

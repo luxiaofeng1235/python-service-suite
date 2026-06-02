@@ -100,7 +100,6 @@ class UserService:
             username=user.username,
             nickname=user.nickname,
             email=user.email,
-            is_super=user.is_super,
             is_active=user.is_active,
             created_at=user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None,
         )
@@ -374,7 +373,6 @@ class UserService:
                 username=u.username,
                 nickname=u.nickname,
                 email=u.email,
-                is_super=u.is_super,
                 is_active=u.is_active,
                 created_at=u.created_at.strftime("%Y-%m-%d %H:%M:%S") if u.created_at else None,
             )
@@ -407,7 +405,6 @@ class UserService:
             username=user.username,
             nickname=user.nickname,
             email=user.email,
-            is_super=user.is_super,
             is_active=user.is_active,
             created_at=user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None,
         )

@@ -14,7 +14,6 @@ class AdminUserUpdateRequest(BaseModel):
     """管理后台 - 更新用户信息"""
 
     nickname: str | None = Field(None, max_length=50, description="昵称")
-    is_super: bool | None = Field(None, description="是否管理员")
     is_active: bool | None = Field(None, description="是否启用")
 
 
@@ -28,7 +27,6 @@ class AdminUserResponse(BaseModel):
     username: str = Field(..., description="用户名")
     nickname: str | None = Field(None, description="昵称")
     email: str | None = Field(None, description="邮箱")
-    is_super: bool = Field(False, description="是否管理员")
     is_active: bool = Field(True, description="是否启用")
     is_deleted: bool = Field(False, description="是否已注销")
     created_at: str | None = Field(None, description="创建时间")

@@ -22,7 +22,6 @@ class User(Base):
     password_hash = Column(String(255), nullable=False, comment="密码哈希")
     nickname = Column(String(50), nullable=True, comment="昵称")
     email = Column(String(255), nullable=True, comment="邮箱")
-    is_super = Column(Boolean, default=False, nullable=False, comment="是否管理员")
     is_active = Column(Boolean, default=True, nullable=False, comment="是否启用")
     is_deleted = Column(Boolean, default=False, nullable=False, comment="是否已注销（软删除）")
     deleted_at = Column(DateTime, nullable=True, comment="注销时间")

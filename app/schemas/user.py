@@ -97,7 +97,6 @@ class UserResponse(BaseModel):
     username: str = Field(..., description="用户名")
     nickname: str | None = Field(None, description="昵称")
     email: str | None = Field(None, description="邮箱")
-    is_super: bool = Field(False, description="是否管理员")
     is_active: bool = Field(True, description="是否启用")
     created_at: str | None = Field(None, description="创建时间")
 

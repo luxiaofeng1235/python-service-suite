@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS `users` (
     `password_hash` VARCHAR(255)    NOT NULL                 COMMENT '密码哈希',
     `nickname`      VARCHAR(50)     DEFAULT NULL             COMMENT '昵称',
     `email`         VARCHAR(255)    DEFAULT NULL             COMMENT '电子邮箱',
-    `is_super`      TINYINT(1)      NOT NULL DEFAULT 0       COMMENT '是否管理员 1-是 0-否',
     `is_active`     TINYINT(1)      NOT NULL DEFAULT 1       COMMENT '是否启用 1-启用 0-禁用',
     `is_deleted`    TINYINT(1)      NOT NULL DEFAULT 0       COMMENT '是否已注销（软删除）',
     `deleted_at`    DATETIME        DEFAULT NULL             COMMENT '注销时间',
