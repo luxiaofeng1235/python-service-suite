@@ -5,16 +5,13 @@ AI 业务逻辑服务层
 负责处理千问兼容模式对话、流式输出与聊天记录落库。
 """
 
-import asyncio
 import json
-import re
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 
 import httpx
 from loguru import logger
-from app.core.logging import err_logger
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.pagination import PageParams, paginate
 from app.common.exception import AppException
 from app.core.config import settings
+from app.database import async_session
 from app.schemas.ai import ChatRequest, ChatResponse, StreamChunk
 from app.models.ai_chat_log import AiChatLog
 
@@ -82,96 +80,109 @@ class AIService:
 
     @staticmethod
     async def stream_chat(
-        db: AsyncSession, req: ChatRequest, user_id: int = 0
+        req: ChatRequest, user_id: int = 0
     ) -> AsyncGenerator[str, None]:
-        """流式对话接口，按旧协议直接输出文本片段"""
-        # 1. 获取/创建聊天记录、解析配置、组装消息
-        chat = await AIService._get_or_create_chat_log(db, req.chat_id, req.model, user_id)
-        config = AIService._resolve_model_config(req.model, req.is_deep_reflection)
-        messages = AIService._prepare_messages(chat, req.msg, req.restart, config["system"])
+        """流式对话接口，自管 DB 事务，按旧协议直接输出文本片段"""
+        # 在生成器内部自建独立 session，避免 FastAPI yield 依赖提前 commit/close
+        async with async_session() as db:
+            try:
+                # 1. 获取/创建聊天记录、解析配置、组装消息
+                chat = await AIService._get_or_create_chat_log(db, req.chat_id, req.model, user_id)
+                config = AIService._resolve_model_config(req.model, req.is_deep_reflection)
+                messages = AIService._prepare_messages(chat, req.msg, req.restart, config["system"])
 
-        # 2. 初始化累积变量（用于流结束后落库）
-        accumulated_reply = ""
-        accumulated_reasoning = ""
+                # 2. 初始化累积变量（用于流结束后落库）
+                accumulated_reply = ""
+                accumulated_reasoning = ""
 
-        # 并行启动推荐问题生成任务（已屏蔽）
-        # suggestions_task = asyncio.create_task(
-        #     AIService._generate_suggestions(
-        #         messages=messages,
-        #         upstream_model=config["upstream_model"],
-        #         enable_search=config["enable_search"],
-        #     )
-        # )
+                # 并行启动推荐问题生成任务（已屏蔽）
+                # suggestions_task = asyncio.create_task(
+                #     AIService._generate_suggestions(
+                #         messages=messages,
+                #         upstream_model=config["upstream_model"],
+                #         enable_search=config["enable_search"],
+                #     )
+                # )
 
-        try:
-            # 3. 建立 httpx 流式连接请求上游 LLM
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(300.0, connect=30.0),
-                trust_env=False,
-            ) as client:
-                async with client.stream(
-                    "POST",
-                    settings.QWEN_CHAT_URL,
-                    headers=AIService._build_headers(),
-                    json={
-                        "model": config["upstream_model"],
-                        "messages": messages,
-                        "stream": True,
-                        "enable_search": config["enable_search"],
-                    },
-                ) as resp:
-                    # 4. 检查上游 HTTP 状态码
-                    if resp.status_code >= 400:
-                        error_text = await resp.aread()
-                        raise AppException(msg=AIService._extract_error_message(resp, error_text))
+                # 3. 建立 httpx 流式连接请求上游 LLM
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(300.0, connect=30.0),
+                    trust_env=False,
+                ) as client:
+                    async with client.stream(
+                        "POST",
+                        settings.QWEN_CHAT_URL,
+                        headers=AIService._build_headers(),
+                        json={
+                            "model": config["upstream_model"],
+                            "messages": messages,
+                            "stream": True,
+                            "enable_search": config["enable_search"],
+                        },
+                    ) as resp:
+                        # 4. 检查上游 HTTP 状态码
+                        if resp.status_code >= 400:
+                            error_text = await resp.aread()
+                            raise AppException(msg=AIService._extract_error_message(resp, error_text))
 
-                    # 5. 逐行解析 SSE 事件并实时 yield 给客户端
-                    async for raw_line in resp.aiter_lines():
-                        event = AIService._parse_stream_line(raw_line, chat.id)
-                        if not event:
-                            continue
+                        # 5. 逐行解析 SSE 事件并实时 yield 给客户端
+                        async for raw_line in resp.aiter_lines():
+                            event = AIService._parse_stream_line(raw_line, chat.id)
+                            if not event:
+                                continue
 
-                        # 5a. 普通文本片段 → 累加后直接输出
-                        if event["type"] == "delta":
-                            accumulated_reply += event["content"]
-                            yield event["content"]
-                        # 5b. 推理过程片段 → 包装为 JSON 格式输出
-                        elif event["type"] == "reasoning":
-                            accumulated_reasoning += event["content"]
-                            yield json.dumps(
-                                {"type": "reasoning_content", "data": event["content"]},
-                                ensure_ascii=False,
-                            )
-                        # 5c. 结束标记 → 跳过（后续走 else 分支收尾）
-                        elif event["type"] == "end":
-                            continue
+                            # 5a. 普通文本片段 → 累加后直接输出
+                            if event["type"] == "delta":
+                                accumulated_reply += event["content"]
+                                yield event["content"]
+                            # 5b. 推理过程片段 → 包装为 JSON 格式输出
+                            elif event["type"] == "reasoning":
+                                accumulated_reasoning += event["content"]
+                                yield json.dumps(
+                                    {"type": "reasoning_content", "data": event["content"]},
+                                    ensure_ascii=False,
+                                )
+                            # 5c. 结束标记 → 跳过（后续走 else 分支收尾）
+                            elif event["type"] == "end":
+                                continue
 
-            # 6. 流结束后将完整对话落库
-            await AIService._save_chat_log(
-                db=db,
-                chat=chat,
-                messages=messages,
-                assistant_content=accumulated_reply,
-                reasoning_content=accumulated_reasoning,
-            )
-        except AppException as exc:
-            # 7a. 业务错误（参数/鉴权/上游返回错误）→ 直接暴露信息
-            yield str(exc)
-            yield "[EXCEPTION]"
-        except Exception as exc:
-            # 7b. 系统异常（网络超时/连接断开等）→ 通用提示
-            yield f"上游流式调用失败: {exc!s}"
-            yield "[EXCEPTION]"
-        else:
-            # 7c. 正常结束 → 返回日志 ID 和完成标记（推荐问题已屏蔽）
-            # suggestions = await suggestions_task
-            # if suggestions:
-            #     yield json.dumps(
-            #         {"type": "suggestions", "data": suggestions},
-            #         ensure_ascii=False,
-            #     )
-            yield f"[LOG_ID]:{chat.id}"
-            yield "[DONE]"
+                # 6. 流结束后将完整对话落库
+                await AIService._save_chat_log(
+                    db=db,
+                    chat=chat,
+                    messages=messages,
+                    assistant_content=accumulated_reply,
+                    reasoning_content=accumulated_reasoning,
+                )
+                await db.commit()
+
+            except AppException as exc:
+                # 7a. 业务错误 → 先 rollback 再 yield，避免客户端断连时 rollback 不执行
+                await db.rollback()
+                try:
+                    yield str(exc)
+                    yield "[EXCEPTION]"
+                except RuntimeError:
+                    pass
+            except Exception as exc:
+                # 7b. 系统异常 → 先 rollback，堆栈日志，再 yield
+                await db.rollback()
+                logger.exception("流式对话系统异常")
+                try:
+                    yield f"上游流式调用失败: {exc!s}"
+                    yield "[EXCEPTION]"
+                except RuntimeError:
+                    pass
+            else:
+                # 7c. 正常结束 → 返回日志 ID 和完成标记（推荐问题已屏蔽）
+                # suggestions = await suggestions_task
+                # if suggestions:
+                #     yield json.dumps(
+                #         {"type": "suggestions", "data": suggestions},
+                #         ensure_ascii=False,
+                #     )
+                yield f"[LOG_ID]:{chat.id}"
+                yield "[DONE]"
 
     @staticmethod
     async def list_chat_logs(
@@ -375,35 +386,8 @@ class AIService:
         upstream_model: str,
         enable_search: bool,
     ) -> list[str]:
-        """并行生成推荐追问（基于对话历史，不等待回答）"""
-        suggestion_prompt = (
-            "请根据以上对话历史和用户刚才问的问题，生成3个用户可能会继续问的相关问题。"
-            "仅返回JSON数组，格式如：[\"问题1\", \"问题2\", \"问题3\"]，不要多余内容。"
-        )
-        suggest_messages = [
-            *messages,
-            {"role": "user", "content": suggestion_prompt},
-        ]
-        try:
-            resp_data = await AIService._request_completion(
-                messages=suggest_messages,
-                upstream_model=upstream_model,
-                enable_search=enable_search,
-                stream=False,
-            )
-            content = resp_data["choices"][0]["message"]["content"]
-            # 从回复中提取 JSON 数组
-            match = re.search(r"\[.*?\]", content, re.DOTALL)
-            if match:
-                suggestions = json.loads(match.group())
-            else:
-                suggestions = json.loads(content)
-            if not isinstance(suggestions, list):
-                suggestions = []
-            return suggestions[:3]  # 最多3个
-        except Exception:
-            err_logger.warning("生成推荐问题失败", exc_info=True)
-            return []
+        """并行生成推荐追问 — 暂未启用"""
+        return []
 
     @staticmethod
     async def _request_completion(

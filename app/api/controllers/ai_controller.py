@@ -39,7 +39,6 @@ async def chat(
 @router.post("/ai/chat/send_stream_sse", summary="AI 流式对话(SSE)")
 async def chat_stream(
     req: ChatRequest,
-    db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -49,7 +48,7 @@ async def chat_stream(
     - SSE 推送分片响应
     """
     return SSEUtil.stream_response(
-        AIService.stream_chat(db, req, user_id=current_user.get("user_id") or 0),
+        AIService.stream_chat(req, user_id=current_user.get("user_id") or 0),
     )
 
 
