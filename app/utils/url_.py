@@ -11,6 +11,7 @@ from starlette.requests import Request as StarletteRequest
 
 from app.core.logging import get_logger
 from urllib.parse import urlparse
+import requests
 
 logger = get_logger(__name__)
 
@@ -24,7 +25,7 @@ def get(url: str, timeout: int = _TIMEOUT) -> str:
     HTTP GET 请求，返回响应文本。
     失败时返回空字符串并记日志。
     """
-    import requests
+
     try:
         resp = requests.get(url, timeout=timeout)
         resp.raise_for_status()
@@ -40,7 +41,6 @@ def post(url: str, data: dict = None, json: dict = None,
     HTTP POST 请求，返回响应文本。
     可传 form data 或 json body，失败时返回空字符串。
     """
-    import requests
     try:
         resp = requests.post(url, data=data, json=json, timeout=timeout)
         resp.raise_for_status()
