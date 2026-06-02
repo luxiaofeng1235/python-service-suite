@@ -71,7 +71,7 @@ class UserAdminService:
             username=user.username,
             nickname=user.nickname,
             email=user.email,
-            is_super=user.is_super,
+
             is_active=user.is_active,
             is_deleted=user.is_deleted,
             created_at=user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None,
@@ -114,7 +114,7 @@ class UserAdminService:
             username=user.username,
             nickname=user.nickname,
             email=user.email,
-            is_super=user.is_super,
+
             is_active=user.is_active,
             is_deleted=user.is_deleted,
             created_at=user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None,
@@ -216,7 +216,7 @@ class UserAdminService:
             username=user.username,
             nickname=user.nickname,
             email=user.email,
-            is_super=user.is_super,
+
             is_active=user.is_active,
             is_deleted=user.is_deleted,
             created_at=user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None,
