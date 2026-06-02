@@ -23,7 +23,7 @@ from app.setup import (
     register_root_route,
     register_static_files,
     register_docs,
-    register_lifecycle,
+    lifespan,
 )
 
 # 日志必须在其他任何操作之前初始化
@@ -52,6 +52,7 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url=None,  # 使用下方自定义路由（固定 ReDoc CDN 版本）
         openapi_url="/openapi.json",
+        lifespan=lifespan,  # 使用现代 lifespan 模式替代弃用的 on_event
     )
 
     register_middleware(app)            # CORS + 请求日志
@@ -59,7 +60,6 @@ def create_app() -> FastAPI:
     register_routes(app)                # 业务路由
     register_static_files(app)          # 上传文件静态目录
     register_docs(app)                  # 自定义 ReDoc 文档
-    register_lifecycle(app)             # startup / shutdown 事件
     register_root_route(app)            # 根路径
 
     return app

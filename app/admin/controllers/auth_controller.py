@@ -6,27 +6,40 @@
 路由前缀 /admin/auth，完全独立于前台 /api/user/ 体系。
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.services.auth_service import AdminAuthService
+from app.common.exception import AppException
+from app.common.ratelimit import RateLimiter
 from app.common.response import Response
 from app.core.admin_auth import get_current_admin_user
 from app.core.rbac import require_permission
 from app.database import get_session
 from app.schemas.auth_admin import AdminLoginRequest, AdminRegisterRequest
 
+# 速率限制器
+_admin_login_limiter = RateLimiter(max_requests=5, window_seconds=300)  # 后台登录：5次/5分钟
+
 router = APIRouter(prefix="/admin/auth", tags=["后台-管理员认证"])
 
 
 @router.post("/login", summary="管理员登录")
-async def login(req: AdminLoginRequest, db: AsyncSession = Depends(get_session)):
+async def login(
+    req: AdminLoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+):
     """
     管理员登录接口
 
     - 使用 auth_admins 表中的账号密码
     - 签发独立的后台 Token
     """
+    client_ip = request.client.host if request.client else "unknown"
+    if not _admin_login_limiter.check(f"admin_login:{client_ip}:{req.username}"):
+        raise AppException(msg="登录过于频繁，请 5 分钟后再试")
+
     token = await AdminAuthService.authenticate(db, req.username, req.password)
     return Response.success(
         data={"access_token": token, "token_type": "bearer"},
