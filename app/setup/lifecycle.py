@@ -40,12 +40,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     print(f"  Swagger 文档: http://localhost:{settings.PORT}/docs")
     print(f"  ReDoc 文档:   http://localhost:{settings.PORT}/redoc")
 
-    yield
-
-    # ==================== shutdown ====================
-    await engine.dispose()
-    await redis_client.close()
-    print("  服务正在关闭... 数据库连接已释放")
+    try:
+        yield
+    finally:
+        # ==================== shutdown ====================
+        await engine.dispose()
+        await redis_client.close()
+        print("  服务正在关闭... 数据库连接已释放")
 
 
 def register_lifecycle(app: FastAPI) -> None:

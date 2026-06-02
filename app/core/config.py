@@ -99,6 +99,12 @@ class Settings(BaseSettings):
         "/api/file/upload/image,/api/file/upload/video"
     )
 
+    # ==================== API 加解密 ====================
+    API_ENCRYPT_ENABLED: bool = False
+    """是否开启接口请求参数加密签名校验（关闭则明文传输）"""
+    API_ENCRYPT_KEY: str = ""
+    """接口加密密钥（开启加密时必填）"""
+
     # ==================== CORS ====================
     CORS_ORIGINS: list[str] = ["*"]
     """允许的跨域来源，生产环境建议设为具体域名，如 ["https://example.com"]"""
