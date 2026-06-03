@@ -10,12 +10,12 @@ from datetime import datetime
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.user_admin import AdminUserResponse, AdminUserUpdateRequest
 from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
 from app.core.logging import request_logger
 from app.models.user import User
 from app.models.user_token import UserToken
+from app.schemas.user_admin import AdminUserResponse, AdminUserUpdateRequest
 
 
 class UserAdminService:
@@ -106,7 +106,7 @@ class UserAdminService:
         for field, value in update_data.items():
             setattr(user, field, value)
 
-        await db.flush()
+        await db.commit()
         await db.refresh(user)
 
         return AdminUserResponse(
@@ -165,6 +165,8 @@ class UserAdminService:
             now.strftime("%Y-%m-%d %H:%M:%S"),
         )
 
+        await db.commit()
+
         return {"deleted": True, "deleted_at": now.strftime("%Y-%m-%d %H:%M:%S")}
 
     # ==================== 清理过期 Token ====================
@@ -181,6 +183,7 @@ class UserAdminService:
             dict: {"deleted": N}
         """
         result = await db.execute(delete(UserToken).where(UserToken.expires_at <= datetime.now()))
+        await db.commit()
         return {"deleted": result.rowcount or 0}
 
     # ==================== 禁用 / 启用 ====================
@@ -208,7 +211,7 @@ class UserAdminService:
             raise AppException(msg="用户不存在或已注销")
 
         user.is_active = is_active
-        await db.flush()
+        await db.commit()
         await db.refresh(user)
 
         return AdminUserResponse(

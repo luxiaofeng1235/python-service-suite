@@ -9,10 +9,9 @@
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from fastapi import UploadFile
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.pagination import PageParams, paginate
 from app.models.attachment import Attachment
@@ -267,7 +266,7 @@ class FileService:
             file_type=file_type,
         )
         db.add(attachment)
-        await db.flush()
+        await db.commit()
         await db.refresh(attachment)
         return attachment
 

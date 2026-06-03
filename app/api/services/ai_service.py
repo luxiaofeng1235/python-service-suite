@@ -12,16 +12,15 @@ from typing import Any
 
 import httpx
 from loguru import logger
-
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.pagination import PageParams, paginate
 from app.common.exception import AppException
+from app.common.pagination import PageParams, paginate
 from app.core.config import settings
 from app.database import async_session
-from app.schemas.ai import ChatRequest, ChatResponse, StreamChunk
 from app.models.ai_chat_log import AiChatLog
+from app.schemas.ai import ChatRequest, ChatResponse, StreamChunk
 
 
 class AIService:
@@ -70,6 +69,7 @@ class AIService:
             assistant_content=reply,
             reasoning_content=reasoning_content,
         )
+        await db.commit()
         # 7. 返回结构化响应
         return ChatResponse(
             reply=reply,
@@ -229,6 +229,7 @@ class AIService:
         await db.execute(
             delete(AiChatLog).where(AiChatLog.id == chat_id, AiChatLog.user_id == user_id)
         )
+        await db.commit()
         return {"deleted": 1}
 
     @staticmethod

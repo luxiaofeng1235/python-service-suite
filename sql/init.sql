@@ -139,7 +139,28 @@ CREATE TABLE IF NOT EXISTS `attachment` (
 
 
 -- ============================================
--- 8. RBAC — 权限目录表
+-- 8. 抽奖配置表
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS `lottery_configs` (
+    `id`          INT             NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `scene_key`   VARCHAR(100)    NOT NULL                COMMENT '场景标识（唯一），如 sign_reward / recharge / daily_free',
+    `name`        VARCHAR(100)    NOT NULL DEFAULT ''     COMMENT '场景名称（后台展示用）',
+    `config_json` JSON            NOT NULL                COMMENT '完整抽奖配置，JSON 结构见下方',
+    `status`      TINYINT(1)      NOT NULL DEFAULT 1      COMMENT '1=启用 0=禁用',
+    `created_at`  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_scene_key` (`scene_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='抽奖配置表';
+
+INSERT INTO `lottery_configs` (`scene_key`, `name`, `config_json`) VALUES
+('default', '通用奖池配置', '{\n  "mode": "pool",\n  "pool": [\n    {"type": "cash",     "v": 40, "money": [0.5, 5]},\n    {"type": "prop",     "v": 30, "props": {"id": "gift_001", "name": "金币"}},\n    {"type": "score",    "v": 20, "money": [10, 100]},\n    {"type": "physical", "v": 5,  "props": {"name": "蓝牙音箱", "image": "https://...", "need_address": true}},\n    {"type": "coupon",   "v": 5,  "props": {"coupon_id": 1001, "amount": 10}}\n  ]\n}')
+ON DUPLICATE KEY UPDATE `id` = `id`;
+
+
+-- ============================================
+-- 9. RBAC — 权限目录表
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS `auth_permissions` (
@@ -154,7 +175,7 @@ CREATE TABLE IF NOT EXISTS `auth_permissions` (
 
 
 -- ============================================
--- 9. RBAC — 角色定义表
+-- 10. RBAC — 角色定义表
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS `auth_roles` (
@@ -170,7 +191,7 @@ CREATE TABLE IF NOT EXISTS `auth_roles` (
 
 
 -- ============================================
--- 10. RBAC — Casbin 策略规则表
+-- 11. RBAC — Casbin 策略规则表
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS `auth_casbin_rule` (

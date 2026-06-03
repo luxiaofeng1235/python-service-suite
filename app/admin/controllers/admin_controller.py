@@ -64,5 +64,7 @@ async def toggle_admin_active(
         return Response.fail(msg="不能操作超管账号")
 
     admin.is_active = not admin.is_active
+    await db.commit()
+    await db.refresh(admin)
     status = "启用" if admin.is_active else "禁用"
     return Response.success(data={"is_active": admin.is_active}, msg=f"已{status}")

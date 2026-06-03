@@ -10,12 +10,12 @@ RBAC 业务逻辑层
   5. 用户-角色绑定
 """
 
-from sqlalchemy import select, delete, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
-from app.models.auth_permission import Permission
 from app.models.auth_casbin_rule import CasbinRule
+from app.models.auth_permission import Permission
 from app.models.auth_role import Role
 
 
@@ -94,7 +94,7 @@ class RbacService:
 
         perm = Permission(resource=resource, action=action, description=description)
         db.add(perm)
-        await db.flush()
+        await db.commit()
         await db.refresh(perm)
         return perm
 
@@ -118,6 +118,7 @@ class RbacService:
             )
         )
         await db.delete(perm)
+        await db.commit()
 
     @staticmethod
     async def get_permission_by_id(db: AsyncSession, permission_id: int) -> Permission:
@@ -141,7 +142,7 @@ class RbacService:
 
         role = Role(name=name, description=description)
         db.add(role)
-        await db.flush()
+        await db.commit()
         await db.refresh(role)
         return role
 
@@ -194,7 +195,7 @@ class RbacService:
         if description is not None:
             role.description = description
 
-        await db.flush()
+        await db.commit()
         await db.refresh(role)
         return role
 
@@ -216,6 +217,7 @@ class RbacService:
             )
         )
         await db.delete(role)
+        await db.commit()
 
     # ==================== 权限分配（校验权限目录） ====================
 
@@ -298,6 +300,7 @@ class RbacService:
             v2=action,
         )
         db.add(rule)
+        await db.commit()
 
     @staticmethod
     async def remove_role_permission(
@@ -317,6 +320,7 @@ class RbacService:
                 CasbinRule.v2 == action,
             )
         )
+        await db.commit()
 
     # ==================== 用户-角色绑定 ====================
 
@@ -371,6 +375,7 @@ class RbacService:
             v1=role.name,
         )
         db.add(rule)
+        await db.commit()
 
     @staticmethod
     async def remove_user_role(db: AsyncSession, user_id: int, role_id: int) -> None:
@@ -384,3 +389,4 @@ class RbacService:
                 CasbinRule.v1 == role.name,
             )
         )
+        await db.commit()

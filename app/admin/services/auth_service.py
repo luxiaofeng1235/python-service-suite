@@ -54,7 +54,7 @@ class AdminAuthService:
             is_active=True,
         )
         db.add(admin)
-        await db.flush()
+        await db.commit()
         await db.refresh(admin)
         return admin
 
@@ -90,7 +90,7 @@ class AdminAuthService:
         if not admin.is_active:
             raise AppException(msg="账号已禁用，请联系超管")
 
-        # 4. 生成短 Token 并落库
+        # 4. 生成短 Token 并落库（立即提交，否则后续请求查不到）
         token = create_short_token()
         expires_at = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         db.add(
@@ -101,6 +101,7 @@ class AdminAuthService:
                 is_active=True,
             )
         )
+        await db.commit()
         return token
 
     @staticmethod
@@ -111,4 +112,5 @@ class AdminAuthService:
             .where(AdminToken.id == token_id)
             .values(is_active=False, updated_at=datetime.now())
         )
+        await db.commit()
         return {"message": "退出登录成功"}

@@ -11,17 +11,20 @@ import string
 from datetime import UTC, datetime, timedelta
 
 from fastapi import Request
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.exception import AppException
+from app.common.pagination import PageParams, paginate
+from app.common.ratelimit import RateLimiter
 from app.core.config import settings
 from app.core.logging import request_logger
+from app.core.redis_client import redis_client
 from app.core.security import (
     create_short_token,
     get_password_hash,
     verify_password,
 )
-from app.core.redis_client import redis_client
 from app.models.user import User
 from app.models.user_token import UserToken
 from app.models.verification_code import VerificationCode
@@ -32,11 +35,8 @@ from app.schemas.user import (
     UserRegisterRequest,
     UserResponse,
 )
-from app.common.pagination import PageParams, paginate
-from app.common.exception import AppException  # noqa: TC002
-from app.common.ratelimit import RateLimiter
-from app.utils.url_ import get_client_ip
 from app.utils.email import EmailUtil
+from app.utils.url_ import get_client_ip
 
 
 class UserService:
@@ -92,7 +92,7 @@ class UserService:
             email=req.email,
         )
         db.add(user)
-        await db.flush()  # 获取自增 ID
+        await db.commit()
         await db.refresh(user)  # 刷新所有字段（避免 async 延迟加载报错）
 
         return UserResponse(
@@ -154,7 +154,7 @@ class UserService:
                 is_active=True,
             )
         )
-        await db.flush()
+        await db.commit()
         return token
 
     # ==================== 退出登录 ====================
@@ -167,12 +167,14 @@ class UserService:
             .where(UserToken.id == token_id)
             .values(is_active=False, updated_at=datetime.now())
         )
+        await db.commit()
         return {"message": "退出登录成功"}
 
     @staticmethod
     async def cleanup_expired_tokens(db: AsyncSession) -> dict:
         """清理过期 Token"""
         result = await db.execute(delete(UserToken).where(UserToken.expires_at <= datetime.now()))
+        await db.commit()
         return {"deleted": result.rowcount or 0}
 
     # ==================== 忘记密码 ====================
@@ -232,7 +234,6 @@ class UserService:
             expires_at=expires_at,
         )
         db.add(vc)
-        await db.flush()
 
         # 7. 发送验证码邮件
         success = await EmailUtil.send_verification_code_email(
@@ -244,6 +245,8 @@ class UserService:
 
         if not success:
             raise AppException(msg="邮件发送失败，请稍后重试")
+
+        await db.commit()
 
         return {
             "message": uniform_msg,
@@ -310,7 +313,7 @@ class UserService:
 
         # 5. 更新密码
         user.password_hash = get_password_hash(req.password)
-        await db.flush()
+        await db.commit()
 
         return {"message": "密码重置成功，请使用新密码登录"}
 
@@ -449,5 +452,7 @@ class UserService:
             username,
             now.strftime("%Y-%m-%d %H:%M:%S"),
         )
+
+        await db.commit()
 
         return {"deleted": True, "deleted_at": now.strftime("%Y-%m-%d %H:%M:%S")}
