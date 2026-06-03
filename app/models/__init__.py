@@ -16,3 +16,4 @@ from app.models.auth_casbin_rule import CasbinRule  # noqa: F401
 from app.models.auth_role import Role  # noqa: F401
 from app.models.auth_admin import AuthAdmin  # noqa: F401
 from app.models.admin_token import AdminToken  # noqa: F401
+from app.models.lottery_config import LotteryConfig  # noqa: F401

@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from app.api.controllers import (
     ai_controller,
     file_controller,
+    lottery_controller,
     test_controller,
     tools_controller,
     user_controller,
@@ -28,6 +29,9 @@ api_router.include_router(file_controller.router)
 
 # 工具接口
 api_router.include_router(tools_controller.router)
+
+# 抽奖接口
+api_router.include_router(lottery_controller.router)
 
 # 测试路由
 api_router.include_router(test_controller.router)
