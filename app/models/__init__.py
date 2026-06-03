@@ -17,3 +17,4 @@ from app.models.auth_role import Role  # noqa: F401
 from app.models.auth_admin import AuthAdmin  # noqa: F401
 from app.models.admin_token import AdminToken  # noqa: F401
 from app.models.lottery_config import LotteryConfig  # noqa: F401
+from app.models.lottery_record import LotteryRecord  # noqa: F401

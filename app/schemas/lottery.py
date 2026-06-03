@@ -6,7 +6,7 @@
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LotteryMode(str, Enum):
@@ -17,6 +17,8 @@ class LotteryMode(str, Enum):
 
 class PoolItem(BaseModel):
     """奖池单项"""
+    prize_id: Optional[str] = None
+    id: Optional[Any] = None
     type: str
     v: int = 1
     money: Optional[Any] = None
@@ -30,6 +32,8 @@ class PoolItem(BaseModel):
 
 class NestedPoolItem(BaseModel):
     """二级嵌套奖池项（tiered odds 结构）"""
+    prize_id: Optional[str] = None
+    id: Optional[Any] = None
     type: str
     v: int = 1
     money: Optional[Any] = None
@@ -55,30 +59,37 @@ class LotteryConfig(BaseModel):
 
 
 class LotteryOptions(BaseModel):
-    """运行时参数"""
+    """内部运行时参数。真实抽奖接口不要直接暴露给前端。"""
     mode: Optional[LotteryMode] = Field(default=None, description="抽奖模式，强制指定 tiered / pool，默认自动识别")
-    level: int = Field(default=1, description="等级（tiered 模式必填，对应 level_rewards 的 key）")
+    level: int = Field(default=1, ge=1, description="等级（tiered 模式必填，对应 level_rewards 的 key）")
     pool_key: str = Field(default="reward_pool", description="奖池 key（pool 模式用，可选 reward_pool / free_reward_pool / paid_reward_pool / pool）")
-    batch_count: int = Field(default=1, description="批量抽奖次数，>1 走批量模式，默认 1")
+    batch_count: int = Field(default=1, ge=1, le=10, description="批量抽奖次数，>1 走批量模式，默认 1")
     no_duplicate: bool = Field(default=True, description="批量时是否去重，true=抽过的不再出现")
     exclude_types: Optional[list[str]] = Field(default=None, description="排除的奖励类型列表，如 ['cash', 'prop']")
+    exclude_props: Optional[list[Any]] = Field(default=None, description="排除的道具/奖品标识列表")
     exclude_cash: bool = Field(default=False, description="是否排除现金类奖励")
-    cash_weight_factor: float = Field(default=1.0, description="现金权重倍率，活动翻倍用，范围 [0, 10]")
+    cash_weight_factor: float = Field(default=1.0, ge=0, le=10, description="现金权重倍率，活动翻倍用，范围 [0, 10]")
     int_amount_types: Optional[list[str]] = Field(default=None, description="整数金额类型列表（默认 yl/yq），匹配的类型金额取整")
 
 
 class LotteryResult(BaseModel):
     """抽奖结果"""
     type: str = Field(default="", description="奖励类型 cash/prop/score/physical/coupon 等")
+    prize_id: Optional[str] = Field(default=None, description="具体奖品 ID")
     amount: float = Field(default=0, description="金额（现金/积分类）")
     props: Any = Field(default=None, description="附加信息（道具ID/实物信息/优惠券信息等）")
     desc: str = Field(default="", description="描述")
+    record_id: Optional[int] = Field(default=None, description="抽奖记录 ID")
 
 
 class LotteryDrawRequest(BaseModel):
     """抽奖请求"""
-    config_key: str = Field(default="", description="配置场景标识，如 default / sign_reward / recharge，对应 DB lottery_configs.scene_key")
-    options: Optional[LotteryOptions] = Field(default=None, description="运行时参数（可选）")
+    model_config = ConfigDict(extra="forbid")
+
+    config_key: str = Field(description="配置场景标识，如 default / sign_reward / recharge，对应 DB lottery_configs.scene_key", min_length=1)
+    level: int = Field(default=1, ge=1, description="等级（tiered 模式对应 level_rewards 的 key）")
+    batch_count: int = Field(default=1, ge=1, le=10, description="批量抽奖次数，默认 1，最多 10")
+    request_id: Optional[str] = Field(default=None, min_length=1, max_length=64, description="客户端请求幂等 ID，可选")
 
 
 class LotteryDrawResponse(BaseModel):

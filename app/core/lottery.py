@@ -6,12 +6,6 @@
 import random
 from typing import Any, Callable, Optional
 
-from app.utils.time_ import TimeUtil
-
-
-# ==================== 权重归一化（最大余额法） ====================
-
-
 # ==================== 权重归一化（最大余额法） ====================
 
 def normalize_weights(items: list[dict]) -> list[dict]:
@@ -140,6 +134,7 @@ def filter_pool_items(
     items: list[dict],
     exclude_types: Optional[list[str]] = None,
     exclude_props: Optional[list] = None,
+    exclude_prize_ids: Optional[list[str]] = None,
     exclude_cash: bool = False,
     custom_filter: Optional[Callable[[dict], bool]] = None,
 ) -> list[dict]:
@@ -147,22 +142,42 @@ def filter_pool_items(
     多维度过滤奖池项。
     返回过滤后的新列表。
     """
-    result = list(items)
+    exclude_type_set = set(exclude_types or [])
+    exclude_prize_id_set = set(exclude_prize_ids or [])
 
-    if exclude_types:
-        result = [item for item in result if item.get("type") not in exclude_types]
+    result = []
+    for item in items:
+        item_type = item.get("type")
+        item_props = item.get("props")
+        prize_id = _get_prize_id(item)
 
-    if exclude_props:
-        result = [
-            item for item in result
-            if item.get("props") is None or item["props"] not in exclude_props
-        ]
+        if item_type in exclude_type_set:
+            continue
+        if prize_id and prize_id in exclude_prize_id_set:
+            continue
+        if exclude_cash and item_type == "cash":
+            continue
+        if exclude_props and item_props is not None and item_props in exclude_props:
+            continue
+        if custom_filter and not custom_filter(item):
+            continue
 
-    if exclude_cash:
-        result = [item for item in result if item.get("type") != "cash"]
+        new_item = dict(item)
+        money = new_item.get("money")
+        if isinstance(money, list) and money and isinstance(money[0], dict):
+            nested_money = filter_pool_items(
+                money,
+                exclude_types=exclude_types,
+                exclude_props=exclude_props,
+                exclude_prize_ids=exclude_prize_ids,
+                exclude_cash=False,
+                custom_filter=custom_filter,
+            )
+            if not nested_money:
+                continue
+            new_item["money"] = nested_money
 
-    if custom_filter:
-        result = [item for item in result if custom_filter(item)]
+        result.append(new_item)
 
     return result
 
@@ -184,7 +199,7 @@ def apply_weight_modifier(
     result = []
     for item in items:
         new_item = dict(item)
-        v = item.get("v", 1)
+        v = item.get("v", item.get("weight", 1))
 
         if custom_modifier:
             v = custom_modifier(new_item)
@@ -227,9 +242,13 @@ def draw_tiered(config: dict, options: Optional[dict] = None) -> Optional[dict]:
         # 嵌套抽奖
         items = list(odds)
 
-        # 过滤 cash
-        if opts.get("exclude_cash"):
-            items = [item for item in items if item.get("type") != "cash"]
+        items = filter_pool_items(
+            items,
+            exclude_types=opts.get("exclude_types"),
+            exclude_props=opts.get("exclude_props"),
+            exclude_prize_ids=opts.get("exclude_prize_ids"),
+            exclude_cash=opts.get("exclude_cash", False),
+        )
 
         if not items:
             return {"type": "none", "amount": 0, "props": None, "desc": "奖池为空"}
@@ -239,8 +258,13 @@ def draw_tiered(config: dict, options: Optional[dict] = None) -> Optional[dict]:
         # 简单权重抽奖
         items = list(rewards)
 
-        if opts.get("exclude_cash"):
-            items = [item for item in items if item.get("type") != "cash"]
+        items = filter_pool_items(
+            items,
+            exclude_types=opts.get("exclude_types"),
+            exclude_props=opts.get("exclude_props"),
+            exclude_prize_ids=opts.get("exclude_prize_ids"),
+            exclude_cash=opts.get("exclude_cash", False),
+        )
 
         # 权重修改器
         cash_factor = opts.get("cash_weight_factor", 1.0)
@@ -268,6 +292,7 @@ def draw_tiered(config: dict, options: Optional[dict] = None) -> Optional[dict]:
 
     return {
         "type": result.get("type", ""),
+        "prize_id": _get_prize_id(result),
         "amount": result.get("amount", 0),
         "props": result.get("props"),
         "desc": result.get("desc", ""),
@@ -295,6 +320,8 @@ def draw_pool(config: dict, options: Optional[dict] = None) -> Optional[dict]:
     items = filter_pool_items(
         items,
         exclude_types=opts.get("exclude_types"),
+        exclude_props=opts.get("exclude_props"),
+        exclude_prize_ids=opts.get("exclude_prize_ids"),
         exclude_cash=opts.get("exclude_cash", False),
     )
 
@@ -342,6 +369,7 @@ def draw_pool(config: dict, options: Optional[dict] = None) -> Optional[dict]:
 
     return {
         "type": result.get("type", ""),
+        "prize_id": _get_prize_id(result),
         "amount": result.get("amount", 0),
         "props": result.get("props"),
         "desc": result.get("desc", ""),
@@ -359,15 +387,18 @@ def draw_batch(config: dict, options: Optional[dict] = None) -> list[dict]:
     opts = dict(options or {})
     batch_count = opts.get("batch_count", 1)
     no_duplicate = opts.get("no_duplicate", True)
-    mode = (opts.get("mode") or config.get("mode") or "pool").lower()
+    mode = _normalize_mode(opts.get("mode") or config.get("mode") or "pool")
 
     results = []
     excluded_types = list(opts.get("exclude_types") or [])
+    excluded_prize_ids = list(opts.get("exclude_prize_ids") or [])
 
     for _ in range(batch_count):
         batch_opts = dict(opts)
         if excluded_types:
             batch_opts["exclude_types"] = list(excluded_types)
+        if excluded_prize_ids:
+            batch_opts["exclude_prize_ids"] = list(excluded_prize_ids)
 
         if mode == "tiered":
             result = draw_tiered(config, batch_opts)
@@ -379,9 +410,12 @@ def draw_batch(config: dict, options: Optional[dict] = None) -> list[dict]:
 
         results.append(result)
 
-        # 去重：将抽中类型加入排除列表
-        if no_duplicate and result.get("type"):
-            excluded_types.append(result["type"])
+        if no_duplicate:
+            prize_id = result.get("prize_id")
+            if prize_id:
+                excluded_prize_ids.append(prize_id)
+            elif result.get("type"):
+                excluded_types.append(result["type"])
 
     return results
 
@@ -397,8 +431,35 @@ def draw(config: dict, options: Optional[dict] = None) -> Optional[dict]:
 
     # 手动指定 mode
     mode = opts.get("mode") or config.get("mode") or ""
+    mode = _normalize_mode(mode)
 
     if mode == "tiered" or config.get("level_rewards"):
         return draw_tiered(config, opts)
 
     return draw_pool(config, opts)
+
+
+def _normalize_mode(mode: Any) -> str:
+    """兼容 Pydantic Enum / 普通字符串传入。"""
+    if hasattr(mode, "value"):
+        mode = mode.value
+    return str(mode or "").lower()
+
+
+def _get_prize_id(item: dict) -> Optional[str]:
+    """返回具体奖品标识；配置没有 prize_id 时尽量从常见字段推导。"""
+    for key in ("prize_id", "id"):
+        value = item.get(key)
+        if value is not None:
+            return str(value)
+
+    props = item.get("props")
+    if isinstance(props, dict):
+        for key in ("prize_id", "id", "coupon_id"):
+            value = props.get(key)
+            if value is not None:
+                return str(value)
+    elif isinstance(props, (str, int)):
+        return str(props)
+
+    return None
