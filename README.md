@@ -249,6 +249,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ### 端口映射说明
 
+所有端口统一写在 `ai-server` 服务下：
+
 ```
 宿主机端口 → 容器端口    用途
 ─────────────────────    ──────────────────────────
@@ -256,8 +258,6 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 13306      → 3306       数据库
 16379      → 6379       Redis
 ```
-
-所有端口统一列在 app 服务的 `ports` 下。内网互通通过 Docker 网络 `app-net`，mysql 和 redis 不单独暴露端口到宿主机。
 
 ### 1. 本地开发（SQLite，无外部依赖）
 
