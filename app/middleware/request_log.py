@@ -15,7 +15,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core.config import settings
-from app.core.logging import request_logger, slow_logger
+from app.pkg.logging import request_logger, slow_logger
 from app.utils.url_ import get_client_ip
 
 SENSITIVE_KEYS = {"password", "token", "access_token", "authorization", "code"}

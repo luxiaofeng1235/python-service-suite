@@ -11,7 +11,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.redis_client import redis_client
+from app.pkg.redis_client import redis_client
 from app.schemas.user import (
     ForgotPasswordRequest,
     ResetPasswordRequest,

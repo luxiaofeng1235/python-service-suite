@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
 from app.core.config import settings
-from app.core.security import create_short_token, get_password_hash, verify_password
+from app.pkg.security import create_short_token, get_password_hash, verify_password
 from app.models.admin_token import AdminToken
 from app.models.auth_admin import AuthAdmin
 

@@ -26,7 +26,7 @@ IP 地址解析工具类 — 基于 ipip.net .ipdb 数据库
     - 支持 ipip.net ipdb 格式的 IPv4 城市数据库
 """
 
-from app.core.logging import get_logger
+from app.pkg.logging import get_logger
 from pathlib import Path
 
 from ipdb import City

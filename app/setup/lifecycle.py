@@ -11,7 +11,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.core.redis_client import redis_client
+from app.pkg.redis_client import redis_client
 from app.database import engine, init_db
 
 

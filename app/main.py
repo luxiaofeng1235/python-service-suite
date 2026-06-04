@@ -15,7 +15,7 @@ FastAPI AI Service - 应用入口
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.core.logging import setup_logging
+from app.pkg.logging import setup_logging
 from app.setup import (
     register_middleware,
     register_exception_handlers,

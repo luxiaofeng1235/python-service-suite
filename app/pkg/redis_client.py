@@ -8,7 +8,7 @@ Redis 客户端底座 — 统一封装，即插即用
     # 2. 应用启动时自动连接（已在 main.py 中注册）
     # 3. 任意地方导入使用：
 
-    from app.core.redis_client import redis_client
+    from app.pkg.redis_client import redis_client
 
     await redis_client.set("key", "value", ex=3600)
     value = await redis_client.get("key")

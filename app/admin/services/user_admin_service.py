@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
-from app.core.logging import request_logger
+from app.pkg.logging import request_logger
 from app.models.user import User
 from app.models.user_token import UserToken
 from app.schemas.user_admin import AdminUserResponse, AdminUserUpdateRequest

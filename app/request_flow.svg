@@ -30,8 +30,8 @@
 
   <g filter="url(#shadow)">
     <rect x="130" y="98" width="180" height="34" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
-    <text x="220" y="119" text-anchor="middle" fill="#1e293b" font-size="13" font-weight="600">GET /api/user/list</text>
-    <text x="220" y="135" text-anchor="middle" fill="#3b82f6" font-size="10">Authorization: Bearer xxx</text>
+    <text x="220" y="119" text-anchor="middle" fill="#1e293b" font-size="13" font-weight="600">{method} {path}</text>
+    <text x="220" y="135" text-anchor="middle" fill="#3b82f6" font-size="10">{headers}</text>
   </g>
 
   <!-- 箭头 -->

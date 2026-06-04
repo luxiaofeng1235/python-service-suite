@@ -19,7 +19,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.common.response import Response
-from app.core.logging import app_logger
+from app.pkg.logging import app_logger
 
 # ==================== 自定义异常基类 ====================
 

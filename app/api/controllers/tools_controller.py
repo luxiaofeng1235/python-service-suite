@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from app.common.health_check import HealthChecker
 from app.common.response import Response
 from app.core.config import settings
-from app.core.redis_client import redis_client
+from app.pkg.redis_client import redis_client
 from app.database import engine
 
 # ==================== 路由定义 ====================

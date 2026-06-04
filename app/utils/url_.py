@@ -9,7 +9,7 @@ url_ — HTTP 请求、URL 解析、客户端 IP 获取
 from fastapi import Request
 from starlette.requests import Request as StarletteRequest
 
-from app.core.logging import get_logger
+from app.pkg.logging import get_logger
 from urllib.parse import urlparse
 import requests
 

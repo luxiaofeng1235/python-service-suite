@@ -86,7 +86,7 @@ def setup_logging() -> None:
 # ============================================================
 # 对外暴露的全局 Logger（对标 Go 版全局变量）
 # ============================================================
-# 用法：from app.core.logging import pay_logger
+# 用法：from app.pkg.logging import pay_logger
 #       pay_logger.info("回调处理完成")
 
 app_logger     = logger.bind(biz="app")
@@ -120,7 +120,7 @@ def get_logger(name: str | None = None) -> "logger":  # type: ignore[type-arg]
     """供 utils / services 等通用模块使用的简便方法
 
     用法：
-        from app.core.logging import get_logger
+        from app.pkg.logging import get_logger
         logger = get_logger(__name__)
         logger.info("任意日志")
     """
