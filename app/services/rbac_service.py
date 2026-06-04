@@ -45,9 +45,9 @@ class RbacService:
         """
         # 1. 查用户的所有角色（casbin_rule g 关系）
         result = await db.execute(
-            select(CasbinRule.v1).where(
+            select(CasbinRule.obj).where(
                 CasbinRule.ptype == "g",
-                CasbinRule.v0 == str(user_id),
+                CasbinRule.sub == str(user_id),
             )
         )
         role_names = [row[0] for row in result.all()]
@@ -58,9 +58,9 @@ class RbacService:
         result = await db.execute(
             select(CasbinRule).where(
                 CasbinRule.ptype == "p",
-                CasbinRule.v0.in_(role_names),
-                CasbinRule.v1 == resource,
-                CasbinRule.v2 == action,
+                CasbinRule.sub.in_(role_names),
+                CasbinRule.obj == resource,
+                CasbinRule.act == action,
             ).limit(1)
         )
         return result.first() is not None
@@ -113,8 +113,8 @@ class RbacService:
         await db.execute(
             delete(CasbinRule).where(
                 CasbinRule.ptype == "p",
-                CasbinRule.v1 == perm.resource,
-                CasbinRule.v2 == perm.action,
+                CasbinRule.obj == perm.resource,
+                CasbinRule.act == perm.action,
             )
         )
         await db.delete(perm)
@@ -180,16 +180,16 @@ class RbacService:
             role.name = name
 
             # 角色名是 casbin_rule 的关联键，改名必须同步迁移所有引用，
-            # 否则该角色的权限策略（p.v0）和用户绑定（g.v1）会全部失效，留下孤儿数据
+            # 否则该角色的权限策略（p.sub）和用户绑定（g.obj）会全部失效，留下孤儿数据
             await db.execute(
                 update(CasbinRule)
-                .where(CasbinRule.ptype == "p", CasbinRule.v0 == old_name)
-                .values(v0=name)
+                .where(CasbinRule.ptype == "p", CasbinRule.sub == old_name)
+                .values(sub=name)
             )
             await db.execute(
                 update(CasbinRule)
-                .where(CasbinRule.ptype == "g", CasbinRule.v1 == old_name)
-                .values(v1=name)
+                .where(CasbinRule.ptype == "g", CasbinRule.obj == old_name)
+                .values(obj=name)
             )
 
         if description is not None:
@@ -207,13 +207,13 @@ class RbacService:
             raise AppException(msg="系统内置角色不可删除")
 
         # 精确清理 casbin_rule：
-        #   p 策略的 v0 是角色名（v1 是资源名，不能误删）
-        #   g 关系的 v1 是角色名（v0 是用户ID）
+        #   p 策略的 sub 是角色名（obj 是资源名，不能误删）
+        #   g 关系的 obj 是角色名（sub 是用户ID）
         # 用 ptype 区分，避免角色名恰好与某资源名相同时误删权限策略
         await db.execute(
             delete(CasbinRule).where(
-                ((CasbinRule.ptype == "p") & (CasbinRule.v0 == role.name))
-                | ((CasbinRule.ptype == "g") & (CasbinRule.v1 == role.name))
+                ((CasbinRule.ptype == "p") & (CasbinRule.sub == role.name))
+                | ((CasbinRule.ptype == "g") & (CasbinRule.obj == role.name))
             )
         )
         await db.delete(role)
@@ -234,8 +234,8 @@ class RbacService:
         result = await db.execute(
             select(CasbinRule).where(
                 CasbinRule.ptype == "p",
-                CasbinRule.v0 == role.name,
-                CasbinRule.v2 != "",
+                CasbinRule.sub == role.name,
+                CasbinRule.act != "",
             )
         )
         rules = result.scalars().all()
@@ -245,14 +245,14 @@ class RbacService:
         for r in rules:
             desc_result = await db.execute(
                 select(Permission.description).where(
-                    Permission.resource == r.v1,
-                    Permission.action == r.v2,
+                    Permission.resource == r.obj,
+                    Permission.action == r.act,
                 ).limit(1)
             )
             description = desc_result.scalar_one_or_none()
             items.append({
-                "resource": r.v1,
-                "action": r.v2,
+                "resource": r.obj,
+                "action": r.act,
                 "description": description or "",
             })
         return items
@@ -285,9 +285,9 @@ class RbacService:
         result = await db.execute(
             select(CasbinRule).where(
                 CasbinRule.ptype == "p",
-                CasbinRule.v0 == role.name,
-                CasbinRule.v1 == resource,
-                CasbinRule.v2 == action,
+                CasbinRule.sub == role.name,
+                CasbinRule.obj == resource,
+                CasbinRule.act == action,
             ).limit(1)
         )
         if result.first():
@@ -295,9 +295,9 @@ class RbacService:
 
         rule = CasbinRule(
             ptype="p",
-            v0=role.name,
-            v1=resource,
-            v2=action,
+            sub=role.name,
+            obj=resource,
+            act=action,
         )
         db.add(rule)
         await db.commit()
@@ -315,9 +315,9 @@ class RbacService:
         await db.execute(
             delete(CasbinRule).where(
                 CasbinRule.ptype == "p",
-                CasbinRule.v0 == role.name,
-                CasbinRule.v1 == resource,
-                CasbinRule.v2 == action,
+                CasbinRule.sub == role.name,
+                CasbinRule.obj == resource,
+                CasbinRule.act == action,
             )
         )
         await db.commit()
@@ -333,9 +333,9 @@ class RbacService:
             [{"role_id": 1, "name": "admin", "description": "管理员"}, ...]
         """
         result = await db.execute(
-            select(CasbinRule.v1).where(
+            select(CasbinRule.obj).where(
                 CasbinRule.ptype == "g",
-                CasbinRule.v0 == str(user_id),
+                CasbinRule.sub == str(user_id),
             )
         )
         role_names = [row[0] for row in result.all()]
@@ -362,8 +362,8 @@ class RbacService:
         result = await db.execute(
             select(CasbinRule).where(
                 CasbinRule.ptype == "g",
-                CasbinRule.v0 == str(user_id),
-                CasbinRule.v1 == role.name,
+                CasbinRule.sub == str(user_id),
+                CasbinRule.obj == role.name,
             ).limit(1)
         )
         if result.first():
@@ -371,8 +371,8 @@ class RbacService:
 
         rule = CasbinRule(
             ptype="g",
-            v0=str(user_id),
-            v1=role.name,
+            sub=str(user_id),
+            obj=role.name,
         )
         db.add(rule)
         await db.commit()
@@ -385,8 +385,8 @@ class RbacService:
         await db.execute(
             delete(CasbinRule).where(
                 CasbinRule.ptype == "g",
-                CasbinRule.v0 == str(user_id),
-                CasbinRule.v1 == role.name,
+                CasbinRule.sub == str(user_id),
+                CasbinRule.obj == role.name,
             )
         )
         await db.commit()

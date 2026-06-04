@@ -180,7 +180,7 @@ CREATE TABLE IF NOT EXISTS `auth_permissions` (
 
 CREATE TABLE IF NOT EXISTS `auth_roles` (
     `id`          INT(11)      NOT NULL AUTO_INCREMENT COMMENT '角色ID',
-    `name`        VARCHAR(50)  NOT NULL                 COMMENT '角色名（与 casbin_rule.v0 对应）',
+    `name`        VARCHAR(50)  NOT NULL                 COMMENT '角色名（与 casbin_rule.sub 对应）',
     `description` VARCHAR(255) DEFAULT NULL             COMMENT '角色描述',
     `is_system`   TINYINT(1)   NOT NULL DEFAULT 0       COMMENT '系统内置角色（不可删除）',
     `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -197,15 +197,12 @@ CREATE TABLE IF NOT EXISTS `auth_roles` (
 CREATE TABLE IF NOT EXISTS `auth_casbin_rule` (
     `id`    INT(11)      NOT NULL AUTO_INCREMENT COMMENT '主键',
     `ptype` VARCHAR(10)  NOT NULL                 COMMENT '策略类型：p=权限, g=角色归属',
-    `v0`    VARCHAR(100) NOT NULL                 COMMENT 'sub：主体（角色名 或 用户ID）',
-    `v1`    VARCHAR(100) NOT NULL                 COMMENT 'obj：客体（资源名，或 g 时的角色名）',
-    `v2`    VARCHAR(100) DEFAULT ''               COMMENT 'act：操作（如 list / create / delete）',
-    `v3`    VARCHAR(100) DEFAULT ''               COMMENT '预留字段',
-    `v4`    VARCHAR(100) DEFAULT ''               COMMENT '预留字段',
-    `v5`    VARCHAR(100) DEFAULT ''               COMMENT '预留字段',
+    `sub`   VARCHAR(100) NOT NULL                 COMMENT 'sub：主体（角色名 或 用户ID）',
+    `obj`   VARCHAR(100) NOT NULL                 COMMENT 'obj：客体（资源名，或 g 时的角色名）',
+    `act`   VARCHAR(100) DEFAULT ''               COMMENT 'act：操作（如 list / create / delete）',
     PRIMARY KEY (`id`),
     KEY `idx_ptype` (`ptype`),
-    KEY `idx_v0` (`v0`)
+    KEY `idx_sub` (`sub`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Casbin 策略规则表';
 
 
@@ -243,7 +240,7 @@ ON DUPLICATE KEY UPDATE `id` = `id`;
 
 
 -- admin 角色：分配所有权限
-INSERT INTO `auth_casbin_rule` (`ptype`, `v0`, `v1`, `v2`) VALUES
+INSERT INTO `auth_casbin_rule` (`ptype`, `sub`, `obj`, `act`) VALUES
 ('p', 'admin',   'permission', 'assign'),
 ('p', 'admin',   'permission', 'create'),
 ('p', 'admin',   'permission', 'delete'),
@@ -265,7 +262,7 @@ INSERT INTO `auth_casbin_rule` (`ptype`, `v0`, `v1`, `v2`) VALUES
 ON DUPLICATE KEY UPDATE `id` = `id`;
 
 -- editor 角色：只可查看用户列表和详情
-INSERT INTO `auth_casbin_rule` (`ptype`, `v0`, `v1`, `v2`) VALUES
+INSERT INTO `auth_casbin_rule` (`ptype`, `sub`, `obj`, `act`) VALUES
 ('p', 'editor',  'user',       'list'),
 ('p', 'editor',  'user',       'read')
 ON DUPLICATE KEY UPDATE `id` = `id`;

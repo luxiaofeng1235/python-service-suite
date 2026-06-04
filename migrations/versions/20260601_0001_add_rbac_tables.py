@@ -45,26 +45,23 @@ def upgrade() -> None:
         "auth_casbin_rule",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False, comment="主键"),
         sa.Column("ptype", sa.String(length=10), nullable=False, comment="策略类型：p=权限, g=角色归属"),
-        sa.Column("v0", sa.String(length=100), nullable=False, comment="sub（角色名 或 用户ID）"),
-        sa.Column("v1", sa.String(length=100), nullable=False, comment="obj（资源 或 角色名）"),
-        sa.Column("v2", sa.String(length=100), nullable=False, server_default="", comment="act（动作）"),
-        sa.Column("v3", sa.String(length=100), nullable=False, server_default="", comment="预留"),
-        sa.Column("v4", sa.String(length=100), nullable=False, server_default="", comment="预留"),
-        sa.Column("v5", sa.String(length=100), nullable=False, server_default="", comment="预留"),
+        sa.Column("sub", sa.String(length=100), nullable=False, index=True, comment="sub：主体（角色名 或 用户ID）"),
+        sa.Column("obj", sa.String(length=100), nullable=False, comment="obj：客体（资源名，或 g 时的角色名）"),
+        sa.Column("act", sa.String(length=100), nullable=False, server_default="", comment="act：操作（如 list / create / delete）"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("ptype", "v0", "v1", "v2", "v3", "v4", "v5", name="uk_casbin_rule"),
+        sa.UniqueConstraint("ptype", "sub", "obj", "act", name="uk_casbin_rule"),
         mysql_charset="utf8mb4",
         mysql_collate="utf8mb4_unicode_ci",
         mysql_comment="Casbin 策略规则表",
     )
     op.create_index("idx_ptype", "auth_casbin_rule", ["ptype"])
-    op.create_index("idx_v0", "auth_casbin_rule", ["v0"])
+    op.create_index("idx_sub", "auth_casbin_rule", ["sub"])
 
     # ==================== roles 角色定义表 ====================
     op.create_table(
         "auth_roles",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False, comment="角色ID"),
-        sa.Column("name", sa.String(length=50), nullable=False, comment="角色名（与 casbin_rule.v0 对应）"),
+sa.Column("name", sa.String(length=50), nullable=False, comment="角色名（与 casbin_rule.sub 对应）"),
         sa.Column("description", sa.String(length=255), nullable=True, comment="角色描述"),
         sa.Column("is_system", sa.Boolean(), nullable=False, server_default=sa.text("0"), comment="系统内置角色（不可删除）"),
         sa.Column(
@@ -121,14 +118,14 @@ def upgrade() -> None:
 
     # 3. admin 角色拥有所有权限
     op.execute(
-        "INSERT INTO auth_casbin_rule (ptype, v0, v1, v2) "
+"INSERT INTO auth_casbin_rule (ptype, sub, obj, act) "
         "SELECT 'p', 'admin', resource, action FROM auth_permissions"
     )
 
 
 def downgrade() -> None:
     op.drop_table("auth_roles")
-    op.drop_index("idx_v0", table_name="auth_casbin_rule")
+    op.drop_index("idx_sub", table_name="auth_casbin_rule")
     op.drop_index("idx_ptype", table_name="auth_casbin_rule")
     op.drop_table("auth_casbin_rule")
     op.drop_table("auth_permissions")
