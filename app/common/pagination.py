@@ -47,10 +47,10 @@ class PageParams:
     def __init__(
         self,
         page: int = Query(1, ge=1, description="页码，从 1 开始"),
-        size: int = Query(10, ge=1, le=100, description="每页条数"),
+        page_size: int = Query(10, ge=1, le=100, description="每页条数"),
     ):
         self.page = page
-        self.size = size
+        self.size = page_size
 
     @property
     def offset(self) -> int:
