@@ -79,7 +79,6 @@ class LotteryResult(BaseModel):
     amount: float = Field(default=0, description="金额（现金/积分类）")
     props: Any = Field(default=None, description="附加信息（道具ID/实物信息/优惠券信息等）")
     desc: str = Field(default="", description="描述")
-    record_id: Optional[int] = Field(default=None, description="抽奖记录 ID")
 
 
 class LotteryDrawRequest(BaseModel):
@@ -89,7 +88,6 @@ class LotteryDrawRequest(BaseModel):
     config_key: str = Field(description="配置场景标识，如 default / sign_reward / recharge，对应 DB lottery_configs.scene_key", min_length=1)
     level: int = Field(default=1, ge=1, description="等级（tiered 模式对应 level_rewards 的 key）")
     batch_count: int = Field(default=1, ge=1, le=10, description="批量抽奖次数，默认 1，最多 10")
-    request_id: Optional[str] = Field(default=None, min_length=1, max_length=64, description="客户端请求幂等 ID，可选")
 
 
 class LotteryDrawResponse(BaseModel):

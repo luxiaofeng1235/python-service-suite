@@ -7,7 +7,6 @@
 # 通用奖池（Pool 模式）
 DEFAULT_POOL = {
     "mode": "pool",
-    "daily_limit": 10,
     "reward_pool": [
         {"prize_id": "cash_red_packet", "type": "cash",     "v": 40, "money": [0.5, 5],                                     "desc": "现金红包"},
         {"prize_id": "gift_001",        "type": "prop",     "v": 30, "props": "gift_001",                                   "desc": "金币"},
@@ -20,7 +19,6 @@ DEFAULT_POOL = {
 # 签到奖励（Tiered 模式，含二级嵌套）
 SIGN_REWARD = {
     "mode": "tiered",
-    "daily_limit": 10,
     "level_rewards": {
         1: {
             "odds": [

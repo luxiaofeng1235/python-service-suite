@@ -105,10 +105,6 @@ class Settings(BaseSettings):
     API_ENCRYPT_KEY: str = ""
     """接口加密密钥（开启加密时必填）"""
 
-    # ==================== 抽奖 ====================
-    LOTTERY_ALLOW_FILE_FALLBACK: bool = False
-    """抽奖配置是否允许 DB 不存在时读取本地示例配置；生产环境必须关闭"""
-
     # ==================== CORS ====================
     CORS_ORIGINS: list[str] = ["*"]
     """允许的跨域来源，生产环境建议设为具体域名，如 ["https://example.com"]"""

@@ -27,20 +27,17 @@ async def lottery_draw(
 
         "config_key": "sign_reward", #场景标识
         "level": 1,
-        "batch_count": 1,
-        "request_id": "client-request-id"
+        "batch_count": 1
     }
     """
     opts = {
         "level": req.level,
         "batch_count": req.batch_count,
     }
-    results = await LotteryDrawService.draw_for_user(
+    results = await LotteryDrawService.draw_result(
         db,
         config_key=req.config_key,
-        user_id=None,
         options=opts,
-        request_id=req.request_id,
     )
 
     return Response.success(data=results, msg="抽奖成功")

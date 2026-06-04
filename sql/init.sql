@@ -155,37 +155,12 @@ CREATE TABLE IF NOT EXISTS `lottery_configs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='抽奖配置表';
 
 INSERT INTO `lottery_configs` (`scene_key`, `name`, `config_json`) VALUES
-('default', '通用奖池配置', '{\n  "mode": "pool",\n  "daily_limit": 10,\n  "pool": [\n    {"prize_id": "cash_red_packet", "type": "cash",     "v": 40, "money": [0.5, 5]},\n    {"prize_id": "gift_001",        "type": "prop",     "v": 30, "props": {"id": "gift_001", "name": "金币"}},\n    {"prize_id": "score_pack",      "type": "score",    "v": 20, "money": [10, 100]},\n    {"prize_id": "speaker_001",     "type": "physical", "v": 5,  "props": {"name": "蓝牙音箱", "image": "https://...", "need_address": true}},\n    {"prize_id": "coupon_1001",     "type": "coupon",   "v": 5,  "props": {"coupon_id": 1001, "amount": 10}}\n  ]\n}')
+('default', '通用奖池配置', '{\n  "mode": "pool",\n  "pool": [\n    {"prize_id": "cash_red_packet", "type": "cash",     "v": 40, "money": [0.5, 5]},\n    {"prize_id": "gift_001",        "type": "prop",     "v": 30, "props": {"id": "gift_001", "name": "金币"}},\n    {"prize_id": "score_pack",      "type": "score",    "v": 20, "money": [10, 100]},\n    {"prize_id": "speaker_001",     "type": "physical", "v": 5,  "props": {"name": "蓝牙音箱", "image": "https://...", "need_address": true}},\n    {"prize_id": "coupon_1001",     "type": "coupon",   "v": 5,  "props": {"coupon_id": 1001, "amount": 10}}\n  ]\n}')
 ON DUPLICATE KEY UPDATE `id` = `id`;
 
 
 -- ============================================
--- 9. 抽奖记录表
--- ============================================
-
-CREATE TABLE IF NOT EXISTS `lottery_records` (
-    `id`           INT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    `user_id`      INT          NOT NULL                COMMENT '用户ID',
-    `scene_key`    VARCHAR(100) NOT NULL                COMMENT '抽奖场景标识',
-    `request_id`   VARCHAR(64)  DEFAULT NULL            COMMENT '客户端幂等请求ID',
-    `draw_index`   INT          NOT NULL DEFAULT 0      COMMENT '同一请求内抽奖序号',
-    `prize_type`   VARCHAR(50)  NOT NULL DEFAULT ''     COMMENT '奖励类型',
-    `prize_id`     VARCHAR(100) DEFAULT NULL            COMMENT '具体奖品ID',
-    `amount`       VARCHAR(50)  NOT NULL DEFAULT '0'    COMMENT '奖励金额/数量',
-    `props_json`   TEXT         DEFAULT NULL            COMMENT '附加奖品信息JSON',
-    `result_json`  TEXT         NOT NULL                COMMENT '完整抽奖结果JSON',
-    `grant_status` VARCHAR(20)  NOT NULL DEFAULT 'pending' COMMENT '发奖状态 pending/success/failed',
-    `created_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `updated_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_lottery_record_request_index` (`user_id`, `scene_key`, `request_id`, `draw_index`),
-    KEY `idx_lottery_records_user_scene` (`user_id`, `scene_key`),
-    KEY `idx_lottery_records_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户抽奖记录表';
-
-
--- ============================================
--- 10. RBAC — 权限目录表
+-- 9. RBAC — 权限目录表
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS `auth_permissions` (
@@ -200,7 +175,7 @@ CREATE TABLE IF NOT EXISTS `auth_permissions` (
 
 
 -- ============================================
--- 11. RBAC — 角色定义表
+-- 10. RBAC — 角色定义表
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS `auth_roles` (
@@ -216,7 +191,7 @@ CREATE TABLE IF NOT EXISTS `auth_roles` (
 
 
 -- ============================================
--- 12. RBAC — Casbin 策略规则表
+-- 11. RBAC — Casbin 策略规则表
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS `auth_casbin_rule` (
