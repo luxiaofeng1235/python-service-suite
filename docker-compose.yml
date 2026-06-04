@@ -1,23 +1,20 @@
-version: "3.8"
-
 services:
-  app:
+  ai-server:
     build: .
     image: fastapi-ai-server
     container_name: fastapi-ai
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"
+      - 18000:8000
+      - 13306:3306
+      - 16379:6379
     env_file:
       - .env
     environment:
-      # 容器内访问 Redis 不能使用 localhost，需要使用 docker compose 服务名 redis。
       REDIS_URL: ${DOCKER_REDIS_URL:-redis://redis:6379/0}
     volumes:
-      # Mount logs & uploads for persistence
       - ./logs:/app/logs
       - ./uploads:/app/uploads
-      # Mount SQLite if using dev database
       - ./app.db:/app/app.db
     depends_on:
       mysql:
@@ -32,12 +29,12 @@ services:
     container_name: fastapi-mysql
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
+      LANG: C.UTF-8
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-fastapi_ai}
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
-    ports:
-      - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -53,8 +50,6 @@ services:
     image: redis:7-alpine
     container_name: fastapi-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:

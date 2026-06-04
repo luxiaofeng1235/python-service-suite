@@ -98,11 +98,16 @@ app/
 │   │   ├── ai_controller.py
 │   │   ├── file_controller.py
 │   │   ├── tools_controller.py
-│   │   └── test_controller.py
+│   │   ├── test_controller.py
+│   │   ├── lottery_controller.py
+│   │   └── encrypt_controller.py          # 加解密测试接口
 │   └── services/            # 前台业务逻辑
 │       ├── user_service.py
 │       ├── ai_service.py
 │       └── file_service.py
+│
+├── services/                # 公共业务服务层（跨模块复用）
+│   └── lottery_service.py   # 抽奖服务：加载配置 + 调用引擎
 │
 ├── admin/                   # 后台管理层（面向管理员）
 │   ├── controllers/         # 后台路由控制器
@@ -119,7 +124,8 @@ app/
 │   ├── security.py          # Token 签发/验证/密码加密
 │   ├── dependency.py        # 前台鉴权依赖：get_current_user
 │   ├── admin_auth.py        # 后台鉴权依赖：get_current_admin_user
-│   └── rbac.py              # RBAC 鉴权依赖工厂：require_permission
+│   ├── rbac.py              # RBAC 鉴权依赖工厂：require_permission
+│   └── lottery.py           # 抽奖核心引擎：概率归一化/层级/单层抽取  
 │
 ├── common/                  # 通用工具
 │   ├── response.py          # 统一响应格式 Response.success / Response.fail
@@ -135,7 +141,8 @@ app/
 │   ├── attachment.py        # 文件附件表
 │   ├── rbac.py              # RBAC 权限/角色/CasbinRule 表
 │   ├── auth_admin.py        # 后台管理员表（独立于 users）
-│   └── admin_token.py       # 后台管理员 Token 表
+│   ├── admin_token.py       # 后台管理员 Token 表
+│   └── lottery_config.py    # 抽奖配置表（DB ORM）
 │
 ├── schemas/                 # Pydantic 请求/响应模型
 │   ├── ai.py                # AI 对话请求/响应体
@@ -144,22 +151,33 @@ app/
 │   ├── auth_admin.py        # 管理员登录/注册请求体
 │   ├── rbac.py              # RBAC 请求/响应体
 │   ├── file.py              # 文件上传响应体
-│   └── storage.py           # 存储验证
+│   ├── storage.py           # 存储验证
+│   └── lottery.py           # 抽奖请求/响应体
 │
 ├── storage/                 # 文件存储
 │   └── validation.py        # 文件上传验证规则
 │
 ├── utils/                   # 辅助工具
-│   └── email.py             # SMTP 邮件发送（验证码、通知）
+│   ├── email.py             # SMTP 邮件发送（验证码、通知）
+│   ├── rsa.py               # RSA / AES 加解密工具
+│   ├── crypto.py            # 接口签名验签（SHA256 参数排序 + 签名）
+│   └── time_.py             # 时间工具类（时区/时间戳/日期格式化）
+│
+├── middleware/              # ASGI 中间件
+│   └── encrypt.py           # 接口签名校验中间件
 │
 ├── web/                     # 预留 Web 业务模块
 │   └── README.md
 │
 ├── database.py              # 数据库引擎 & 会话管理
 │
-└── migrations/              # Alembic 迁移脚本
-    ├── versions/
-    └── env.py
+├── migrations/              # Alembic 迁移脚本
+│   ├── versions/
+│   └── env.py
+│
+└── config/                  # 业务配置（JSON 引擎降级用）
+    └── lottery/             # 抽奖 JSON 配置：{key}.json
+        └── default.json
 ```
 
 **新增模块只需四步**：创建 `model`（如需新表）→ 创建 `service` → 创建 `controller` → 在 `routes/api.py` 或 `routes/admin.py` 注册。
@@ -223,11 +241,23 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## Docker 部署
 
-项目提供 Docker 与 docker-compose 一键部署，支持本地 SQLite 开发和生产 MySQL 集群。
+项目提供 Docker 与 docker-compose 一键部署，支持本地 SQLite 开发和生产 MySQL 集群。支持**内网/外网端口分离映射**——容器内统一监听 `8000` 端口，宿主机通过不同端口区分内网和外网访问。
 
 ### 前置条件
 
 - Docker & Docker Compose v2+
+
+### 端口映射说明
+
+```
+宿主机端口 → 容器端口    用途
+─────────────────────    ──────────────────────────
+18000      → 8000       HTTP 服务
+13306      → 3306       数据库
+16379      → 6379       Redis
+```
+
+所有端口统一列在 app 服务的 `ports` 下。内网互通通过 Docker 网络 `app-net`，mysql 和 redis 不单独暴露端口到宿主机。
 
 ### 1. 本地开发（SQLite，无外部依赖）
 
@@ -277,9 +307,11 @@ make docker-clean    # 清理全部（含数据卷）
 ### 4. 验证
 
 ```bash
-curl http://localhost:8000/api/health
+# 健康检查
+curl http://localhost:18000/api/health
+
 # 登录测试
-curl -X POST http://localhost:8000/api/user/login \
+curl -X POST http://localhost:18000/api/user/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"123456"}'
 ```
@@ -530,6 +562,190 @@ curl -H "Authorization: Bearer <token>" http://localhost:8000/api/user/me
 - `DELETE /api/user/delete` 为软删除（标记 `is_deleted=True`），同时清空该用户所有 Token
 - `DELETE /api/user/tokens/expired` 需 `users.is_super=1` 管理员权限
 - 免登录路径由 `.env` 的 `AUTH_WHITE_LIST` 统一配置，逗号分隔
+
+## 抽奖系统
+
+### 架构设计
+
+抽奖模块采用 **引擎 + 服务 + 业务** 三层解耦设计，核心算法与业务流程完全分离：
+
+```
+业务 Service（签到/充值/活动/任务奖励）
+         │
+         ├─ 校验次数 / 库存 / 记录
+         ├─ 调用 draw_result()
+         ├─ 扣库存 / 写中奖记录 / 发奖
+         └─ 返回前端
+               │
+               ▼
+    LotteryDrawService.draw_result()           ← app/services/lottery_service.py
+         │
+         ├─ 加载配置（DB → JSON 降级 → 抛错）
+         ├─ 调用引擎
+         └─ 返回奖品结果
+               │
+               ▼
+        核心引擎（纯函数，无状态）                ← app/core/lottery.py
+         ├─ 最大余额法权重归一化
+         ├─ 单层抽奖（pick_by_weight）
+         ├─ 层级抽奖（draw_tiered）
+         ├─ 批量抽奖（draw_batch）
+         └─ 动态权重修饰器（apply_weight_modifier）
+```
+
+### 各层职责
+
+| 层 | 文件 | 负责 | 不负责 |
+|----|------|------|--------|
+| **引擎** | `app/core/lottery.py` | 概率归一化、随机抽取、层级展开、动态权重 | 配置来源、业务校验 |
+| **服务** | `app/services/lottery_service.py` | 加载奖池配置（DB→JSON→抛错）、调用引擎 | 用户鉴权、次数限制 |
+| **业务 Service** | 各场景自己的 service | 次数/库存/记录/发奖 | 概率算法、配置管理 |
+
+### 配置加载链路
+
+```
+请求抽奖（config_key + level + batch_count）
+    │
+    ├─ ① 查询 DB lottery_configs 表
+    │      └─ 有数据 → 解析 JSON 配置 → 调用引擎
+    │
+    ├─ ② DB 无数据 → 读取 config/lottery/{key}.json
+    │      └─ 文件存在 → 解析 JSON → 回写 DB（缓存）→ 调用引擎
+    │
+    └─ ③ JSON 文件也不存在 → 抛出配置不存在错误
+```
+
+### 抽奖模式
+
+| 模式 | 引擎函数 | 说明 |
+|------|---------|------|
+| **单层** | `draw_pool()` | 一组奖品按权重直接抽取，物品级可嵌套子池（再抽一次） |
+| **层级** | `draw_tiered()` | 先抽奖池层（概率层），再抽层内物品：适用于"抽卡→抽角色→抽取具体道具"的多级场景 |
+| **批量** | `draw_batch()` | 指定次数反复抽，返回抽奖结果列表 |
+
+### 配置格式（JSON）
+
+单层配置示例 (`config/lottery/default.json`)：
+```json
+{
+  "mode": "pool",
+  "total": 100,
+  "items": [
+    { "id": "prize_1", "name": "金币", "v": 50, "type": "coin", "amount": 100, "desc": "100 金币" },
+    { "id": "prize_2", "name": "钻石", "v": 30, "type": "diamond", "amount": 10, "desc": "10 钻石" },
+    { "id": "prize_3", "name": "谢谢参与", "v": 20, "type": "none", "amount": 0 }
+  ]
+}
+```
+
+层级配置示例：
+```json
+{
+  "mode": "tiered",
+  "tiers": [
+    { "name": "稀有", "v": 30, "items": [ ... ] },
+    { "name": "普通", "v": 70, "items": [ ... ] }
+  ]
+}
+```
+
+### 现有接口
+
+| 方法 | 路径 | 说明 | 鉴权 |
+|------|------|------|------|
+| `POST` | `/api/lottery/draw` | 单次/批量抽奖 | 无需登录 |
+
+请求体：
+```json
+{
+  "config_key": "default",
+  "level": 0,
+  "batch_count": 1
+}
+```
+
+返回体：
+```json
+{
+  "amount": 100,
+  "desc": "100 金币",
+  "prize_id": "prize_1",
+  "props": null,
+  "type": "coin"
+}
+```
+
+## 接口加解密签名
+
+### 设计目的
+
+前后端接口防篡改、防重放，前端传 `sign` + `timestamp`，服务端验签通过才处理请求。
+
+### 工作原理
+
+```
+客户端                                   服务端
+   │                                       │
+   ├─ 构造业务参数 {username, password}     │
+   ├─ 生成 13 位毫秒时间戳                  │
+   ├─ 按 key 字典序排序拼接                 │
+   │   password123usernameadmin             │
+   ├─ 末尾追加时间戳                        │
+   │   password123usernameadmin1700000000000 │
+   ├─ 末尾追加密钥 (API_ENCRYPT_KEY)        │
+   │   password123usernameadmin1700000000000mysecret │
+   ├─ sha256 → sign                         │
+   ├─ 发送 {params + sign + timestamp}      │
+   │ ───────────────────────────────────────→ │
+   │                                       ├─ 检查 API_ENCRYPT_ENABLED
+   │                                       ├─ 白名单放行
+   │                                       ├─ 提取 sign + timestamp
+   │                                       ├─ 校验 timestamp 在 5 分钟内
+   │                                       ├─ 去掉 sign，剩余参数排序拼接
+   │                                       ├─ 末尾补 timestamp + secret_key
+   │                                       ├─ sha256 比对 sign
+   │                                       └─ 通过 → 进入路由 / 拒绝 → 403
+```
+
+### 协议约定
+
+| 规则 | 说明 |
+|------|------|
+| 使用场景 | POST / PUT 请求（GET 不验签） |
+| 白名单 | `.env` 的 `AUTH_WHITE_LIST` 配置的路径跳过签名校验 |
+| 参数限制 | 只允许标量（字符串/数字），禁止数组和嵌套对象 |
+| bool 类型 | 禁止直接传 `true`/`false`，需转为 `"1"`/`"0"` 字符串 |
+| 时间戳 | 13 位毫秒，不参与参数排序，追加在拼接串末尾（secret_key 之前） |
+| 时间窗口 | 客户端与服务端时间偏差超过 5 分钟，返回 403 |
+| 密钥位置 | `secret_key` 拼在拼接串最末尾 |
+| 开关 | `.env` 配置 `API_ENCRYPT_ENABLED=true/false`（false 则明文传输） |
+
+### 模块文件
+
+| 文件 | 说明 |
+|------|------|
+| `app/middleware/encrypt.py` | ASGI 中间件：拦截请求、验签、放行或 403 |
+| `app/utils/crypto.py` | `compute_sign()` 计算签名 + `verify_sign()` 验签 |
+| `app/utils/rsa.py` | RSA 公钥加密/私钥解密、AES-ECB/CFB 加解密工具 |
+
+### 签名计算示例
+
+```python
+参数:  {"username": "admin", "password": "123"}
+排序:  password123usernameadmin
+加时间戳:  password123usernameadmin1700000000000
+加密钥:   password123usernameadmin1700000000000mysecret
+签名:    sha256(上述字符串)
+```
+
+### 前端对接要点
+
+1. 对业务参数按 key 字典序排序（排除 `sign`）
+2. 拼接为 `key1value1key2value2...` 格式，不拼接符号
+3. 末尾追加 `timestamp` 再追加 `API_ENCRYPT_KEY`
+4. 计算 `sha256` 作为 `sign` 字段传入
+5. 时间戳使用 `Date.now()`，单位毫秒
+6. 如果关闭加密（`API_ENCRYPT_ENABLED=false`），无需传 `sign` 和 `timestamp`
 
 ## 日志系统
 
