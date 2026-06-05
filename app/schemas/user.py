@@ -38,6 +38,8 @@ class UserLoginRequest(BaseModel):
 
     username: str = Field(..., description="用户名")
     password: str = Field(..., description="密码")
+    captcha_id: str = Field("", description="验证码ID")
+    captcha_code: str = Field("", max_length=10, description="验证码")
 
     model_config = {
         "json_schema_extra": {

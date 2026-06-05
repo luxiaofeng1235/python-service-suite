@@ -113,37 +113,50 @@ class UserService:
 
         Args:
             db: 数据库会话
-            req: 登录请求体（用户名、密码）
+            req: 登录请求体（用户名、密码、验证码）
             request: 请求对象（用于限流及 IP 记录）
 
         Returns:
             短 Token 字符串
 
         Raises:
-            AppException: 用户名或密码错误 / 登录过于频繁
+            AppException: 用户名或密码错误 / 登录过于频繁 / 验证码错误
         """
         client_ip = get_client_ip(request) if request else ""
 
-        # 1. 速率限制
+        # 1. 校验图片验证码
+        if req.captcha_id and req.captcha_code:
+            cached_code = await redis_client.get(f"captcha_id:{req.captcha_id}")
+            if not cached_code or cached_code != req.captcha_code.upper():
+                raise AppException(msg="验证码错误")
+            # 验证码使用后立即删除，防重复使用
+            await redis_client.delete(f"captcha_id:{req.captcha_id}")
+        elif not req.captcha_id and not req.captcha_code:
+            # 兼容旧版本：不传验证码也放行（仅限登录接口）
+            pass
+        else:
+            raise AppException(msg="验证码参数不完整")
+
+        # 2. 速率限制
         if client_ip and not UserService._login_limiter.check(f"login:{client_ip}:{req.username}"):
             raise AppException(msg="登录过于频繁，请 5 分钟后再试")
 
-        # 2. 按用户名查找用户
+        # 3. 按用户名查找用户
         stmt = select(User).where(User.username == req.username)
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if not user:
             raise AppException(msg="用户名或密码错误")
 
-        # 2. 校验密码
+        # 4. 校验密码
         if not verify_password(req.password, user.password_hash):
             raise AppException(msg="用户名或密码错误")
 
-        # 3. 更新登录 IP 和时间
+        # 5. 更新登录 IP 和时间
         user.last_login_ip = client_ip
         user.last_login_at = datetime.now()
 
-        # 4. 生成短 Token 并落库
+        # 6. 生成短 Token 并落库
         token = create_short_token()
         expires_at = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         db.add(
