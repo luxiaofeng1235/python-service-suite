@@ -101,11 +101,14 @@ class LotteryDrawService:
     ) -> list[dict]:
         """纯抽奖入口，只按奖池概率返回奖品结果，不落库。"""
         opts = LotteryDrawService._sanitize_options(options)
+        #加载配置 根据指定的配置来加载，默认DB->config
         config = await LotteryDrawService._load_config(db, config_key)
 
         if opts["batch_count"] > 1:
+            #批量抽奖
             results = draw_batch(config, opts)
         else:
+            #单次抽奖
             result = draw(config, opts)
             results = [result] if result else []
 
