@@ -44,9 +44,9 @@ async def get_current_admin_user(
         .join(AuthAdmin, AuthAdmin.id == AdminToken.admin_id)
         .where(
             AdminToken.token == credentials.credentials,
-            AdminToken.is_active == True,  # noqa: E712
+            AdminToken.is_active,
             AdminToken.expires_at > datetime.now(),
-            AuthAdmin.is_active == True,  # noqa: E712
+            AuthAdmin.is_active,
         )
     )
     row = result.first()

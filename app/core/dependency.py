@@ -79,10 +79,10 @@ async def get_current_user(
         .join(User, User.id == UserToken.user_id)
         .where(
             UserToken.token == credentials.credentials,
-            UserToken.is_active == True,  # noqa: E712
+            UserToken.is_active,
             UserToken.expires_at > datetime.now(),
-            User.is_active == True,  # noqa: E712
-            User.is_deleted == False,  # noqa: E712
+            User.is_active,
+            ~User.is_deleted,
         )
     )
     row = result.first()
@@ -102,6 +102,5 @@ async def get_current_user(
         "token_id": token.id,
         "token": credentials.credentials,
     }
-
 
 
