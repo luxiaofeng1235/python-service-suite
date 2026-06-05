@@ -145,7 +145,7 @@ class UserAdminService:
             AppException: 用户不存在或已注销
         """
         result = await db.execute(
-            select(User).where(User.id == user_id, User.is_deleted == False)  # noqa: E712
+            select(User).where(User.id == user_id, ~User.is_deleted)
         )
         user = result.scalar_one_or_none()
         if not user:
@@ -204,7 +204,7 @@ class UserAdminService:
         from app.models.user import User
 
         result = await db.execute(
-            select(User).where(User.id == user_id, User.is_deleted == False)  # noqa: E712
+            select(User).where(User.id == user_id, ~User.is_deleted)
         )
         user = result.scalar_one_or_none()
         if not user:

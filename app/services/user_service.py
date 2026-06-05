@@ -287,7 +287,7 @@ class UserService:
                 VerificationCode.email == req.email,
                 VerificationCode.code == req.code,
                 VerificationCode.purpose == "password_reset",
-                VerificationCode.used == False,  # noqa: E712
+                ~VerificationCode.used,
                 VerificationCode.expires_at > now,
             )
             .order_by(VerificationCode.id.desc())
@@ -432,7 +432,7 @@ class UserService:
             dict: 提示信息
         """
         # 1. 查找用户
-        result = await db.execute(select(User).where(User.id == user_id, User.is_deleted == False))  # noqa: E712
+        result = await db.execute(select(User).where(User.id == user_id, ~User.is_deleted))
         user = result.scalar_one_or_none()
         if not user:
             raise AppException(msg="用户不存在或已注销")
