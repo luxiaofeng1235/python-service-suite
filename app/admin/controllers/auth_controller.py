@@ -75,6 +75,10 @@ async def logout(
 
 
 @router.get("/info", summary="当前管理员信息")
-async def get_me(current_admin: dict = Depends(get_current_admin_user)):
-    """获取当前登录的管理员信息"""
-    return Response.success(data=current_admin)
+async def get_me(
+    db: AsyncSession = Depends(get_session),
+    current_admin: dict = Depends(get_current_admin_user),
+):
+    """获取当前登录的管理员完整信息"""
+    admin = await AdminAuthService.get_admin_info(db, current_admin["user_id"])
+    return Response.success(data=admin)

@@ -114,3 +114,19 @@ class AdminAuthService:
         )
         await db.commit()
         return {"message": "退出登录成功"}
+
+    @staticmethod
+    async def get_admin_info(db: AsyncSession, admin_id: int) -> AuthAdmin:
+        """
+        获取管理员完整信息
+
+        Raises:
+            AppException: 管理员不存在
+        """
+        result = await db.execute(
+            select(AuthAdmin).where(AuthAdmin.id == admin_id)
+        )
+        admin = result.scalar_one_or_none()
+        if not admin:
+            raise AppException(msg="管理员不存在")
+        return admin

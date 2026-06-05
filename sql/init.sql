@@ -62,11 +62,26 @@ CREATE TABLE IF NOT EXISTS `auth_admins` (
     `nickname`      VARCHAR(50)      NOT NULL DEFAULT ''     COMMENT '昵称',
     `is_super`      TINYINT(1)       NOT NULL DEFAULT 0      COMMENT '是否超管 1-是 0-否',
     `is_active`     TINYINT(1)       NOT NULL DEFAULT 1      COMMENT '是否启用 1-启用 0-禁用',
+    `avatar`        VARCHAR(500)     DEFAULT NULL             COMMENT '头像URL',
+    `mobile`        VARCHAR(20)      DEFAULT ''               COMMENT '手机号',
+    `email`         VARCHAR(255)     DEFAULT ''               COMMENT '邮箱',
+    `sex`           TINYINT(1)       NOT NULL DEFAULT 0       COMMENT '性别 0=保密 1=男 2=女',
+    `remark`        VARCHAR(500)     DEFAULT ''               COMMENT '备注',
     `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='后台管理员表';
+
+-- ============================================
+-- 3b. 兼容迁移（已有表加新字段）
+-- ============================================
+ALTER TABLE `auth_admins`
+    ADD COLUMN IF NOT EXISTS `avatar` VARCHAR(500) DEFAULT NULL COMMENT '头像URL' AFTER `nickname`,
+    ADD COLUMN IF NOT EXISTS `mobile` VARCHAR(20) DEFAULT '' COMMENT '手机号' AFTER `avatar`,
+    ADD COLUMN IF NOT EXISTS `email`  VARCHAR(255) DEFAULT '' COMMENT '邮箱' AFTER `mobile`,
+    ADD COLUMN IF NOT EXISTS `sex`    TINYINT(1) NOT NULL DEFAULT 0 COMMENT '性别 0=保密 1=男 2=女' AFTER `email`,
+    ADD COLUMN IF NOT EXISTS `remark` VARCHAR(500) DEFAULT '' COMMENT '备注' AFTER `sex`;
 
 
 -- ============================================

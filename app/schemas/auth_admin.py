@@ -47,6 +47,23 @@ class AdminUserResponse(BaseModel):
     id: int = Field(..., description="管理员ID")
     username: str = Field(..., description="用户名")
     nickname: str = Field(..., description="昵称")
+    avatar: str | None = Field(None, description="头像URL")
+    mobile: str | None = Field(None, description="手机号")
+    email: str | None = Field(None, description="邮箱")
+    sex: int | None = Field(0, description="性别 0=保密 1=男 2=女")
+    remark: str | None = Field(None, description="备注")
     is_super: bool = Field(False, description="是否超管")
     is_active: bool = Field(True, description="是否启用")
     created_at: str | None = Field(None, description="创建时间")
+    updated_at: str | None = Field(None, description="更新时间")
+
+
+class AdminProfileUpdateRequest(BaseModel):
+    """管理员修改资料请求体"""
+
+    nickname: str | None = Field(None, max_length=50, description="昵称")
+    avatar: str | None = Field(None, max_length=500, description="头像URL")
+    mobile: str | None = Field(None, max_length=20, description="手机号")
+    email: str | None = Field(None, max_length=255, description="邮箱")
+    sex: int | None = Field(None, ge=0, le=2, description="性别 0=保密 1=男 2=女")
+    remark: str | None = Field(None, max_length=500, description="备注")
