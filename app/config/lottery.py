@@ -3,19 +3,6 @@
 抽奖配置 — 示例奖池定义
 ============================================
 """
-
-# 通用奖池（Pool 模式）
-DEFAULT_POOL = {
-    "mode": "pool",
-    "reward_pool": [
-        {"prize_id": "cash_red_packet", "type": "cash",     "v": 40, "money": [0.5, 5],                                     "desc": "现金红包"},
-        {"prize_id": "gift_001",        "type": "prop",     "v": 30, "props": "gift_001",                                   "desc": "金币"},
-        {"prize_id": "score_pack",      "type": "score",    "v": 20, "money": [10, 100],                                    "desc": "积分"},
-        {"prize_id": "speaker_001",     "type": "physical", "v": 5,  "props": {"name": "蓝牙音箱", "image": "https://...", "need_address": True}, "desc": "蓝牙音箱"},
-        {"prize_id": "coupon_1001",     "type": "coupon",   "v": 5,  "props": {"coupon_id": 1001, "amount": 10},            "desc": "10元优惠券"},
-    ],
-}
-
 # 签到奖励（Tiered 模式，含二级嵌套）
 SIGN_REWARD = {
     "mode": "tiered",
