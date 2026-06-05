@@ -146,7 +146,7 @@ class AIService:
                             elif event["type"] == "end":
                                 continue
 
-                # 6. 流结束后将完整对话落库
+                # 6. 流结束后将完整对话落库，正常落库返回
                 await AIService._save_chat_log(
                     db=db,
                     chat=chat,
