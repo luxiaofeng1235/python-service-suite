@@ -116,5 +116,7 @@ async def delete_chat(
     Returns:
         被删除的对话记录
     """
-    data = await AIService.delete_chat_log(db, chat_id, current_user.get("user_id") or 0)
+    #获取当前的用户ID
+    user_id = current_user.get("user_id") or 0
+    data = await AIService.delete_chat_log(db, chat_id, user_id)
     return Response.success(data=data, msg="删除成功")
