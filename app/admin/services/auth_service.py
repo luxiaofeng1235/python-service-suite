@@ -130,3 +130,46 @@ class AdminAuthService:
         if not admin:
             raise AppException(msg="管理员不存在")
         return admin
+
+    @staticmethod
+    async def update_profile(
+        db: AsyncSession, admin_id: int, update_data: dict
+    ) -> AuthAdmin:
+        """
+        修改管理员个人资料
+
+        Raises:
+            AppException: 管理员不存在
+        """
+        result = await db.execute(
+            select(AuthAdmin).where(AuthAdmin.id == admin_id)
+        )
+        admin = result.scalar_one_or_none()
+        if not admin:
+            raise AppException(msg="管理员不存在")
+
+        for field, value in update_data.items():
+            setattr(admin, field, value)
+        await db.commit()
+        await db.refresh(admin)
+        return admin
+
+    @staticmethod
+    async def update_avatar(db: AsyncSession, admin_id: int, avatar_url: str) -> AuthAdmin:
+        """
+        更新管理员头像
+
+        Raises:
+            AppException: 管理员不存在
+        """
+        result = await db.execute(
+            select(AuthAdmin).where(AuthAdmin.id == admin_id)
+        )
+        admin = result.scalar_one_or_none()
+        if not admin:
+            raise AppException(msg="管理员不存在")
+
+        admin.avatar = avatar_url
+        await db.commit()
+        await db.refresh(admin)
+        return admin
