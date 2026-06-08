@@ -99,6 +99,11 @@ class Settings(BaseSettings):
         "/api/file/upload/image,/api/file/upload/video"
     )
 
+    @property
+    def white_list(self) -> list[str]:
+        """解析 AUTH_WHITE_LIST 字符串为路由白名单列表"""
+        return [item.strip() for item in self.AUTH_WHITE_LIST.split(",") if item.strip()]
+
     # ==================== API 加解密 ====================
     API_ENCRYPT_ENABLED: bool = False
     """是否开启接口请求参数加密签名校验（关闭则明文传输）"""

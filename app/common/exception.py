@@ -19,6 +19,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.common.response import Response
+from app.core.config import settings
 from app.pkg.logging import app_logger
 
 # ==================== 自定义异常基类 ====================
@@ -93,7 +94,7 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
     return JSONResponse(
         content={
             "code": -1,
-            "msg": f"服务器内部错误: {exc!s}",
+            "msg": "服务器内部错误" if not settings.DEBUG else f"服务器内部错误: {exc!s}",
             "data": None,
         },
         status_code=500,

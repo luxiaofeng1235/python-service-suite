@@ -27,7 +27,7 @@ def _should_verify(scope: dict[str, Any]) -> bool:
 
     # 白名单路径跳过校验
     path = scope.get("path", scope.get("root_path", ""))
-    white_list = [p.strip() for p in settings.AUTH_WHITE_LIST.split(",") if p.strip()]
+    white_list = settings.white_list
     for prefix in white_list:
         if prefix == "/" or not prefix:
             continue

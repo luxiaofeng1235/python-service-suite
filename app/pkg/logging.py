@@ -25,11 +25,7 @@ LOG_FILES: dict[str, str] = {
     "collect":     "collect.log",       # 采集/爬虫
     "task":        "task.log",          # 定时任务
     "err":         "err.log",           # 错误日志
-    "zssq":        "zssq.log",          # 掌上书趣
-    "nsq":         "nsq.log",           # NSQ 消息队列
-    "update":      "update.log",        # 更新/升级
     "jsonq":       "jsonq.log",         # JSON 查询
-    "sm_click":    "sm_click.log",      # 什么点击
 }
 
 
@@ -100,21 +96,7 @@ task_logger    = logger.bind(biz="task")
 
 # ← Go 版全局 Logger 对应 ↓
 err_logger     = logger.bind(biz="err")
-zssq_logger    = logger.bind(biz="zssq")
-nsq_logger     = logger.bind(biz="nsq")
-update_logger  = logger.bind(biz="update")
 jsonq_logger   = logger.bind(biz="jsonq")
-
-# 采集源 Logger
-xsw_logger        = logger.bind(biz="xsw")
-bqg24_logger      = logger.bind(biz="bqg24")
-siluke520_logger  = logger.bind(biz="siluke520")
-
-# 点击类 Logger
-vivo_click_logger  = logger.bind(biz="vivo_click")
-sm_click_logger    = logger.bind(biz="sm_click")
-baidu_click_logger = logger.bind(biz="baidu_click")
-
 
 def get_logger(name: str | None = None) -> "logger":  # type: ignore[type-arg]
     """供 utils / services 等通用模块使用的简便方法

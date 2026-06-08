@@ -26,9 +26,7 @@ auto_error=False：让依赖自行处理错误，避免白名单路由因无 Tok
 """
 
 # ==================== 白名单配置 ====================
-WHITE_LIST: list[str] = [
-    item.strip() for item in settings.AUTH_WHITE_LIST.split(",") if item.strip()
-]
+WHITE_LIST: list[str] = settings.white_list
 """无需鉴权的白名单路由前缀"""
 
 
