@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.response import Response
+from app.core.admin_auth import get_current_admin_user
 from app.core.rbac import require_permission
 from app.database import get_session
 from app.schemas.rbac import (
@@ -233,7 +234,12 @@ async def remove_admin_role(
     admin_id: int,
     role_id: int,
     db: AsyncSession = Depends(get_session),
+    current_admin: dict = Depends(get_current_admin_user),
 ):
-    """移除管理员的一个角色"""
-    await RbacService.remove_user_role(db, admin_id, role_id)
+    """移除管理员的一个角色（含自残锁 + 超管保护）"""
+    await RbacService.remove_user_role(
+        db, admin_id, role_id,
+        operator_id=current_admin.get("user_id"),
+        operator_is_super=current_admin.get("is_super", False),
+    )
     return Response.success(msg="角色移除成功")

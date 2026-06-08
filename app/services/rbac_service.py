@@ -14,6 +14,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
+from app.models.auth_admin import AuthAdmin
 from app.models.auth_casbin_rule import CasbinRule
 from app.models.auth_permission import Permission
 from app.models.auth_role import Role
@@ -378,9 +379,48 @@ class RbacService:
         await db.commit()
 
     @staticmethod
-    async def remove_user_role(db: AsyncSession, user_id: int, role_id: int) -> None:
-        """移除用户的某个角色"""
+    async def remove_user_role(
+        db: AsyncSession,
+        user_id: int,
+        role_id: int,
+        operator_id: int | None = None,
+        operator_is_super: bool = False,
+    ) -> None:
+        """
+        移除用户的某个角色
+
+        Args:
+            db: 数据库会话
+            user_id: 目标管理员 ID
+            role_id: 要移除的角色 ID
+            operator_id: 操作人 ID（保留，暂未使用）
+            operator_is_super: 操作人是否为超管
+
+        Raises:
+            AppException: 超管或 admin 账户的角色不可移除
+        """
         role = await RbacService.get_role_by_id(db, role_id)
+
+        # 非超管不能移除超管的角色
+        if not operator_is_super:
+            result = await db.execute(
+                select(AuthAdmin).where(
+                    AuthAdmin.id == user_id,
+                    AuthAdmin.is_super == True,  # noqa: E712
+                )
+            )
+            if result.scalar_one_or_none():
+                raise AppException(msg="无权操作超管管理员的角色")
+
+        # admin 账户的角色不可移除
+        result = await db.execute(
+            select(AuthAdmin).where(
+                AuthAdmin.id == user_id,
+                AuthAdmin.username == "admin",
+            )
+        )
+        if result.scalar_one_or_none():
+            raise AppException(msg="admin 账户的角色不可移除")
 
         await db.execute(
             delete(CasbinRule).where(
