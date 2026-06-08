@@ -74,7 +74,7 @@ class UserService:
         """
         # 1. 速率限制
         client_ip = get_client_ip(request) if request else ""
-        if client_ip and not UserService._register_limiter.check(f"register:{client_ip}"):
+        if client_ip and not await UserService._register_limiter.check(f"register:{client_ip}"):
             raise AppException(msg="注册过于频繁，请 10 分钟后再试")
 
         # 2. 检查用户名是否已存在
@@ -138,7 +138,7 @@ class UserService:
             raise AppException(msg="验证码参数不完整")
 
         # 2. 速率限制
-        if client_ip and not UserService._login_limiter.check(f"login:{client_ip}:{req.username}"):
+        if client_ip and not await UserService._login_limiter.check(f"login:{client_ip}:{req.username}"):
             raise AppException(msg="登录过于频繁，请 5 分钟后再试")
 
         # 3. 按用户名查找用户
@@ -216,7 +216,7 @@ class UserService:
         uniform_msg = "如果该邮箱已注册，您将收到一封密码重置邮件"
 
         # 1. 速率限制 — 按邮箱防刷
-        if not UserService._forgot_limiter.check(f"forgot:{req.email}"):
+        if not await UserService._forgot_limiter.check(f"forgot:{req.email}"):
             raise AppException(msg="请求过于频繁，请稍后再试")
 
         # 2. 检查 SMTP 是否配置（全局前置）
@@ -284,7 +284,7 @@ class UserService:
             AppException: 验证码无效/过期 或 用户不存在
         """
         # 1. 速率限制 — 按邮箱防刷
-        if not UserService._reset_limiter.check(f"reset:{req.email}"):
+        if not await UserService._reset_limiter.check(f"reset:{req.email}"):
             raise AppException(msg="操作过于频繁，请稍后再试")
 
         now = datetime.now(UTC)

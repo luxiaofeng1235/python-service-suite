@@ -37,7 +37,7 @@ async def login(
     - 签发独立的后台 Token
     """
     client_ip = request.client.host if request.client else "unknown"
-    if not _admin_login_limiter.check(f"admin_login:{client_ip}:{req.username}"):
+    if not await _admin_login_limiter.check(f"admin_login:{client_ip}:{req.username}"):
         raise AppException(msg="登录过于频繁，请 5 分钟后再试")
 
     token = await AdminAuthService.authenticate(db, req.username, req.password)
