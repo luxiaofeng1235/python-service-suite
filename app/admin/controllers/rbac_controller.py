@@ -236,10 +236,9 @@ async def remove_admin_role(
     db: AsyncSession = Depends(get_session),
     current_admin: dict = Depends(get_current_admin_user),
 ):
-    """移除管理员的一个角色（含自残锁 + 超管保护）"""
+    """移除管理员的一个角色"""
     await RbacService.remove_user_role(
         db, admin_id, role_id,
-        operator_id=current_admin.get("user_id"),
         operator_is_super=current_admin.get("is_super", False),
     )
     return Response.success(msg="角色移除成功")

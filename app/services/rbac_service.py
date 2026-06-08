@@ -383,7 +383,6 @@ class RbacService:
         db: AsyncSession,
         user_id: int,
         role_id: int,
-        operator_id: int | None = None,
         operator_is_super: bool = False,
     ) -> None:
         """
@@ -393,7 +392,6 @@ class RbacService:
             db: 数据库会话
             user_id: 目标管理员 ID
             role_id: 要移除的角色 ID
-            operator_id: 操作人 ID（保留，暂未使用）
             operator_is_super: 操作人是否为超管
 
         Raises:
