@@ -230,7 +230,7 @@ alembic upgrade head
 
 # 4. 启动服务
 cd /mnt/d/python_work/fastapi_server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 表结构变更统一用 Alembic 管理。`AUTO_CREATE_TABLES=True` 仅建议本地临时初始化使用测试。
@@ -331,8 +331,8 @@ make clean           # 清理缓存/tmp/log
 ## API 文档
 
 启动后访问：
-- Swagger UI：http://localhost:8000/docs
-- ReDoc：http://localhost:8000/redoc
+- Swagger UI：http://localhost:8001/docs
+- ReDoc：http://localhost:8001/redoc
 
 ## AI 流式输出
 
@@ -378,7 +378,7 @@ make clean           # 清理缓存/tmp/log
 curl -N \
   -H "Accept: text/event-stream" \
   -H "Content-Type: application/json" \
-  -X POST http://localhost:8000/api/ai/chat/send_stream_sse \
+  -X POST http://localhost:8001/api/ai/chat/send_stream_sse \
   -d '{"model":1,"chat_id":0,"msg":"你好，介绍一下这个服务","restart":0}'
 ```
 
@@ -549,7 +549,7 @@ app/services/
 在 Header 中携带 Token：
 
 ```bash
-curl -H "Authorization: Bearer <token>" http://localhost:8000/api/user/me
+curl -H "Authorization: Bearer <token>" http://localhost:8001/api/user/me
 ```
 
 ### 接口说明
