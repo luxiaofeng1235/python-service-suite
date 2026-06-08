@@ -9,7 +9,7 @@ from app.setup.middleware import register_middleware
 from app.setup.exception import register_exception_handlers
 from app.setup.routes import register_routes, register_root_route, register_static_files
 from app.setup.docs import register_docs
-from app.setup.lifecycle import lifespan, register_lifecycle
+from app.setup.lifecycle import lifespan
 
 __all__ = [
     "register_middleware",
@@ -19,5 +19,4 @@ __all__ = [
     "register_static_files",
     "register_docs",
     "lifespan",
-    "register_lifecycle",
 ]

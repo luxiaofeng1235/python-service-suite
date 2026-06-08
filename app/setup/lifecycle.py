@@ -5,6 +5,7 @@
 使用现代 FastAPI lifespan 模式替代弃用的 on_event。
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -42,22 +43,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     try:
         yield
+    except asyncio.CancelledError:
+        # Ctrl+C 关闭时 asyncio 会抛 CancelledError，静默处理即可
+        pass
     finally:
         # ==================== shutdown ====================
-        await engine.dispose()
-        await redis_client.close()
-        print("  服务正在关闭... 数据库连接已释放")
-
-
-def register_lifecycle(app: FastAPI) -> None:
-    """（兼容旧版）注册 startup / shutdown 事件（已弃用，直接用 lifespan）"""
-    import warnings
-    warnings.warn("register_lifecycle 已弃用，请使用 lifespan 替代", DeprecationWarning, stacklevel=2)
-
-    @app.on_event("startup")
-    async def startup():
-        await lifespan.__wrapped__(app).__aenter__()  # pragma: no cover
-
-    @app.on_event("shutdown")
-    async def shutdown():
-        await lifespan.__wrapped__(app).__aexit__(None, None, None)  # pragma: no cover
+        try:
+            await engine.dispose()
+            await redis_client.close()
+            print("  服务正在关闭... 数据库连接已释放")
+        except asyncio.CancelledError:
+            # 事件循环关闭中，资源释放被中断是预期行为
+            pass
+        except Exception:
+            pass
