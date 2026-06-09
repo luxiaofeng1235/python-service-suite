@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.middleware.request_log import RequestLogMiddleware
 from app.middleware.encrypt import ApiEncryptMiddleware
+from app.middleware.normalize import NotFoundMiddleware
 from app.core.config import settings
 
 
@@ -32,3 +33,6 @@ def register_middleware(app: FastAPI) -> None:
     # 请求加解密（最后注册 = 最外层，最先处理请求，解密后 body 往下传）
     if settings.API_ENCRYPT_ENABLED:
         app.add_middleware(ApiEncryptMiddleware)
+
+    # 404 统一响应（最外层，最早捕获响应中的 404）
+    app.add_middleware(NotFoundMiddleware)

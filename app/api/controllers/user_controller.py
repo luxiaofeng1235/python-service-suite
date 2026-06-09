@@ -162,7 +162,7 @@ async def delete_account(
         user_id=current_user["user_id"],
         username=current_user["username"],
     )
-    return Response.success(data=data, msg="账号已注销")
+    return Response.success(data, "账号已注销")
 
 # ===================获取验证码 ======================
 @router.get("/captcha",summary="获取验证码")
