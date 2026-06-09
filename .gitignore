@@ -74,3 +74,6 @@ temp/
 .atomcode/
 /public/resource/*
 docs/
+
+# AtomCode local-scope configs (machine-specific)
+.atomcode/local/

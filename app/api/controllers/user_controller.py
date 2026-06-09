@@ -119,8 +119,7 @@ async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(g
 @router.get("/list", summary="用户列表（分页）")
 async def list_users(
     page_params: PageParams = Depends(),
-    db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
 ):
     """
     获取用户列表（需登录）
