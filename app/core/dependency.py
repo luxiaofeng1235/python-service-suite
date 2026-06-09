@@ -97,6 +97,8 @@ async def get_current_user(
         "sub": str(user.id),
         "username": user.username,
         "nickname": user.nickname,
+        "email": user.email or "",
+        "created_at": user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else "",
         "token_id": token.id,
         "token": credentials.credentials,
     }
