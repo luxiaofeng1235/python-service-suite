@@ -25,7 +25,7 @@ class Attachment(Base):
     file_size = Column(Integer, nullable=False, comment="文件大小（字节）")
     mime_type = Column(String(100), nullable=False, comment="MIME 类型")
     file_type = Column(String(20), nullable=False, comment="文件分类：image / video / other")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="上传时间")
+    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="上传时间")
 
     def __repr__(self) -> str:
         return f"<Attachment(id={self.id}, original='{self.original_name}', type='{self.file_type}')>"

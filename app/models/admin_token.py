@@ -22,11 +22,11 @@ class AdminToken(Base):
     token = Column(String(64), unique=True, nullable=False, index=True, comment="登录Token")
     expires_at = Column(DateTime, nullable=False, comment="过期时间")
     is_active = Column(Boolean, default=True, nullable=False, comment="是否有效")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="创建时间")
+    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
     updated_at = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=datetime.now,
+        onupdate=datetime.now,
         nullable=False,
         comment="更新时间",
     )

@@ -30,17 +30,33 @@ WHITE_LIST: list[str] = settings.white_list
 """无需鉴权的白名单路由前缀"""
 
 
-def check_white_list(request: Request) -> bool:
-    """检查当前请求路径是否在白名单中"""
-    path = request.url.path
+def match_white_list(path: str) -> bool:
+    """
+    纯路径白名单匹配。
+
+    把传入的 ASGI/HTTP path 与 ``settings.white_list`` 比对：
+    路径完全等于某条配置，或属于该配置的子路径
+    （即 ``prefix.rstrip('/') + '/'`` 是其前缀）时，判定为白名单命中。
+    单独的 ``/`` 条目主动忽略，避免根条目把整个站点放行。
+
+    给 ``check_white_list``（FastAPI Request 依赖使用）和
+    encrypt 中间件（拿到的是裸 ASGI ``scope['path']``）共用，
+    避免两边各写一遍后悄悄走形 —— 缺了 ``/`` 边界，
+    ``/api/user/login`` 会被 ``/api/user/loginabc`` 误命中。
+    """
     for white_path in WHITE_LIST:
+        if not white_path or white_path == "/":
+            continue
         if path == white_path:
             return True
-        if white_path == "/":
-            continue
         if path.startswith(f"{white_path.rstrip('/')}/"):
             return True
     return False
+
+
+def check_white_list(request: Request) -> bool:
+    """检查当前请求路径是否在白名单中"""
+    return match_white_list(request.url.path)
 
 
 async def get_current_user(

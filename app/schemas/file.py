@@ -36,11 +36,15 @@ class AttachmentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_orm(cls, obj, base_url: str) -> "AttachmentResponse":
-        """从 ORM 对象构造，自动计算 url
+    def from_attachment(cls, obj, base_url: str) -> "AttachmentResponse":
+        """从 Attachment ORM 对象构造响应体，自动计算访问 URL。
+
+        注：原方法名 ``from_orm`` 与 Pydantic v1 的 ``BaseModel.from_orm``
+        撞名，容易让人误以为是 v1 API（v2 已改用
+        ``model_config["from_attributes"]``），故重命名为 ``from_attachment``。
 
         用法:
-            AttachmentResponse.from_orm(orm_obj, str(request.base_url))
+            AttachmentResponse.from_attachment(orm_obj, str(request.base_url))
         """
         url = FileService.get_file_url(obj.file_path, base_url)
         data = {

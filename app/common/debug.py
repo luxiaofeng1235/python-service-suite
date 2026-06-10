@@ -15,6 +15,7 @@ import json
 from typing import Any
 
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 
 def debug(*objs: Any) -> JSONResponse:
@@ -55,9 +56,10 @@ def _print(obj: Any, indent: int = 0) -> None:
         col_names = [c.name for c in obj.__table__.columns]
         print(f"{prefix}SQLAlchemy [{type(obj).__name__}] ({len(col_names)} fields):")
         _print({k: getattr(obj, k) for k in col_names}, indent + 1)
-    elif hasattr(obj, "dict"):
+    elif isinstance(obj, BaseModel):
+        # Pydantic v2：使用 model_dump，避免 v1 已弃用的 .dict()
         print(f"{prefix}Pydantic:")
-        _print(obj.dict(), indent + 1)
+        _print(obj.model_dump(), indent + 1)
     elif hasattr(obj, "__dict__"):
         print(f"{prefix}{type(obj).__name__}:")
         _print(obj.__dict__, indent + 1)
@@ -70,8 +72,8 @@ def _to_json(obj: Any) -> Any:
     if hasattr(obj, "_sa_instance_state"):
         col_names = [c.name for c in obj.__table__.columns]
         return _to_json({k: getattr(obj, k) for k in col_names})
-    if hasattr(obj, "dict"):
-        return _to_json(obj.dict())
+    if isinstance(obj, BaseModel):
+        return _to_json(obj.model_dump())
     if hasattr(obj, "__dict__"):
         return _to_json(obj.__dict__)
     if isinstance(obj, (list, tuple)):

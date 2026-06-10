@@ -21,9 +21,9 @@ class AiChatLog(Base):
     user_id = Column(Integer, nullable=False, default=0, comment="用户ID")
     model_id = Column(Integer, nullable=False, default=0, comment="模型类型")
     chat = Column(JSON, nullable=False, default=list, comment="聊天消息JSON")
-    create_time = Column(DateTime, default=datetime.utcnow, comment="创建时间")
+    create_time = Column(DateTime, default=datetime.now, comment="创建时间")
     update_time = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间"
+        DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间"
     )
 
     def __repr__(self) -> str:

@@ -9,12 +9,14 @@
 """
 
 import json
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from loguru import logger
 from starlette.responses import JSONResponse
 
 from app.core.config import settings
+from app.core.dependency import match_white_list
 from app.utils.crypto import verify_sign
 
 
@@ -25,14 +27,11 @@ def _should_verify(scope: dict[str, Any]) -> bool:
     if scope.get("method") not in ("POST", "PUT"):
         return False
 
-    # 白名单路径跳过校验
+    # 白名单路径跳过校验（复用 dependency 的纯路径匹配，
+    # 避免 startswith(prefix) 不带 "/" 边界导致 /api/user/loginabc 被误匹配）
     path = scope.get("path", scope.get("root_path", ""))
-    white_list = settings.white_list
-    for prefix in white_list:
-        if prefix == "/" or not prefix:
-            continue
-        if path == prefix or path.startswith(prefix):
-            return False
+    if match_white_list(path):
+        return False
 
     # 只处理 application/json
     headers = dict(scope.get("headers", []))

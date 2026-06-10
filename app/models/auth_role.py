@@ -20,11 +20,11 @@ class Role(Base):
     name = Column(String(50), unique=True, nullable=False, comment="角色名（与 casbin_rule.sub 对应）")
     description = Column(String(255), nullable=True, comment="角色描述")
     is_system = Column(Boolean, default=False, nullable=False, comment="系统内置角色（不可删除）")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="创建时间")
+    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
     updated_at = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=datetime.now,
+        onupdate=datetime.now,
         nullable=False,
         comment="更新时间",
     )

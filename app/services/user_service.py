@@ -6,10 +6,14 @@
 Controller 通过调用 Service 方法完成业务，不写任何逻辑代码。
 """
 
+import base64
 import random
 import string
-from datetime import UTC, datetime, timedelta
+import uuid
+from datetime import datetime, timedelta
+from io import BytesIO
 
+from captcha.image import ImageCaptcha
 from fastapi import Request
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +22,9 @@ from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
 from app.common.ratelimit import RateLimiter
 from app.core.config import settings
+from app.models.user import User
+from app.models.user_token import UserToken
+from app.models.verification_code import VerificationCode
 from app.pkg.logging import request_logger
 from app.pkg.redis_client import redis_client
 from app.pkg.security import (
@@ -25,9 +32,6 @@ from app.pkg.security import (
     get_password_hash,
     verify_password,
 )
-from app.models.user import User
-from app.models.user_token import UserToken
-from app.models.verification_code import VerificationCode
 from app.schemas.user import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
@@ -198,6 +202,24 @@ class UserService:
         return "".join(random.choices(string.digits, k=length))
 
     @staticmethod
+    async def generate_captcha() -> dict:
+        """生成图片验证码，返回验证码 ID 和 base64 图片。"""
+        code = "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        captcha_id = str(uuid.uuid4())
+
+        await redis_client.set(f"captcha_id:{captcha_id}", code, ex=300)
+
+        image = ImageCaptcha(width=160, height=80)
+        buf = BytesIO()
+        image.write(code, buf)
+        buf.seek(0)
+
+        return {
+            "captcha_id": captcha_id,
+            "image_base64": base64.b64encode(buf.getvalue()).decode(),
+        }
+
+    @staticmethod
     async def forgot_password(db: AsyncSession, req: ForgotPasswordRequest) -> dict:
         """
         忘记密码 — 如邮箱存在则发送验证码邮件
@@ -235,7 +257,7 @@ class UserService:
 
         # 5. 计算过期时间
         expire_minutes = settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-        expires_at = datetime.now(UTC) + timedelta(minutes=expire_minutes)
+        expires_at = datetime.now() + timedelta(minutes=expire_minutes)
 
         # 6. 存储验证码到 Redis；数据库保留一份记录用于审计和兜底
         await UserService._cache_reset_code(user.email, code, expire_minutes * 60)
@@ -287,7 +309,7 @@ class UserService:
         if not await UserService._reset_limiter.check(f"reset:{req.email}"):
             raise AppException(msg="操作过于频繁，请稍后再试")
 
-        now = datetime.now(UTC)
+        now = datetime.now()
 
         # 2. 优先使用 Redis 校验验证码；Redis 不可用或未命中时查数据库兜底
         redis_code = await UserService._get_cached_reset_code(req.email)
@@ -338,7 +360,9 @@ class UserService:
         try:
             await redis_client.set(f"code:{email}", code, ex=ttl)
         except Exception:
-            request_logger.warning("Redis 验证码缓存写入失败 email=%s", email, exc_info=True)
+            request_logger.opt(exception=True).warning(
+                "Redis 验证码缓存写入失败 email={}", email
+            )
 
     @staticmethod
     async def _get_cached_reset_code(email: str) -> str | None:
@@ -346,7 +370,9 @@ class UserService:
         try:
             return await redis_client.get(f"code:{email}")
         except Exception:
-            request_logger.warning("Redis 验证码缓存读取失败 email=%s", email, exc_info=True)
+            request_logger.opt(exception=True).warning(
+                "Redis 验证码缓存读取失败 email={}", email
+            )
             return None
 
     @staticmethod
@@ -355,16 +381,9 @@ class UserService:
         try:
             await redis_client.delete(f"code:{email}")
         except Exception:
-            request_logger.warning("Redis 验证码缓存删除失败 email=%s", email, exc_info=True)
-            return None
-
-    @staticmethod
-    async def _remove_cached_reset_code(email: str) -> None:
-        """删除 Redis 中的重置密码验证码"""
-        try:
-            await redis_client.delete(f"code:{email}")
-        except Exception:
-            request_logger.warning("Redis 验证码缓存删除失败 email=%s", email, exc_info=True)
+            request_logger.opt(exception=True).warning(
+                "Redis 验证码缓存删除失败 email={}", email
+            )
 
     # ==================== 用户列表 ====================
 
@@ -460,7 +479,7 @@ class UserService:
 
         # 4. 记录操作日志
         request_logger.warning(
-            "账号注销 | user_id=%s | username=%s | deleted_at=%s",
+            "账号注销 | user_id={} | username={} | deleted_at={}",
             user_id,
             username,
             now.strftime("%Y-%m-%d %H:%M:%S"),

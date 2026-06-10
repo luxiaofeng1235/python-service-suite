@@ -27,11 +27,11 @@ class User(Base):
     deleted_at = Column(DateTime, nullable=True, comment="注销时间")
     last_login_ip = Column(String(45), nullable=True, comment="最后登录 IP")
     last_login_at = Column(DateTime, nullable=True, comment="最后登录时间")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="创建时间")
+    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
     updated_at = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=datetime.now,
+        onupdate=datetime.now,
         nullable=False,
         comment="更新时间",
     )

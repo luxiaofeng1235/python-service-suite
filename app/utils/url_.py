@@ -1,53 +1,22 @@
 """
 ============================================
-url_ — HTTP 请求、URL 解析、客户端 IP 获取
+url_ — URL 解析与客户端 IP 获取
 ============================================
-提供通用的 HTTP GET/POST 请求封装、基础 URL 解析能力以及客户端 IP 提取。
+提供基础的 URL 解析能力，以及从 HTTP 请求中提取真实客户端 IP。
 文件名带下划线后缀避免与 Python 标准库 urllib 冲突。
+
+注意：同步 requests 调用已移除（会阻塞 FastAPI 事件循环）。
+如需 HTTP 调用请直接使用 httpx.AsyncClient（项目其它位置已统一）。
 """
+
+from urllib.parse import urlparse
 
 from fastapi import Request
 from starlette.requests import Request as StarletteRequest
 
 from app.pkg.logging import get_logger
-from urllib.parse import urlparse
-import requests
 
 logger = get_logger(__name__)
-
-# ── HTTP 请求 ────────────────────────────────
-
-_TIMEOUT = 10  # 默认超时（秒）
-
-
-def get(url: str, timeout: int = _TIMEOUT) -> str:
-    """
-    HTTP GET 请求，返回响应文本。
-    失败时返回空字符串并记日志。
-    """
-
-    try:
-        resp = requests.get(url, timeout=timeout)
-        resp.raise_for_status()
-        return resp.text
-    except Exception as exc:
-        logger.error("GET 失败 url=%s, err=%s", url, exc)
-        return ""
-
-
-def post(url: str, data: dict = None, json: dict = None,
-         timeout: int = _TIMEOUT) -> str:
-    """
-    HTTP POST 请求，返回响应文本。
-    可传 form data 或 json body，失败时返回空字符串。
-    """
-    try:
-        resp = requests.post(url, data=data, json=json, timeout=timeout)
-        resp.raise_for_status()
-        return resp.text
-    except Exception as exc:
-        logger.error("POST 失败 url=%s, err=%s", url, exc)
-        return ""
 
 
 # ── URL 解析 ────────────────────────────────
@@ -61,7 +30,7 @@ def get_domain(link_url: str) -> str:
         parsed = urlparse(link_url)
         return f"{parsed.scheme}://{parsed.hostname}"
     except Exception as exc:
-        logger.error("URL 解析失败: %s", exc)
+        logger.error("URL 解析失败: {}", exc)
         return ""
 
 

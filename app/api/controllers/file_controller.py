@@ -9,11 +9,11 @@
 from fastapi import APIRouter, Depends, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.services.file_service import FileService
+from app.common.pagination import PageParams
 from app.common.response import Response
 from app.database import get_session
 from app.schemas.file import AttachmentResponse
-from app.common.pagination import PageParams
-from app.api.services.file_service import FileService
 
 router = APIRouter(prefix="/api/file", tags=["文件管理"])
 
@@ -35,7 +35,7 @@ async def upload_image(
     - 无需登录
     """
     attachment = await FileService.upload_image_stream(db, user_id=0, file=file)
-    data = AttachmentResponse.from_orm(attachment, str(request.base_url))
+    data = AttachmentResponse.from_attachment(attachment, str(request.base_url))
     return Response.success(data, msg="图片上传成功")
 
 
@@ -56,7 +56,7 @@ async def upload_video(
     - 无需登录
     """
     attachment = await FileService.upload_video_stream(db, user_id=0, file=file)
-    data = AttachmentResponse.from_orm(attachment, str(request.base_url))
+    data = AttachmentResponse.from_attachment(attachment, str(request.base_url))
     return Response.success(data, msg="视频上传成功")
 
 
@@ -81,7 +81,7 @@ async def list_files(
         page_params=page_params,
     )
     items = [
-        AttachmentResponse.from_orm(item, str(request.base_url))
+        AttachmentResponse.from_attachment(item, str(request.base_url))
         for item in data["items"]
     ]
     file_list = {
