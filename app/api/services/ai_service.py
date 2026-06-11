@@ -347,14 +347,11 @@ class AIService:
         """保存聊天记录"""
         # 1. 去掉 system 消息，保留 user<->assistant 历史
         chat_messages = messages[1:]
-        # 2. 追加 assistant 回复（含推理过程）
-        chat_messages.append(
-            {
-                "role": "assistant",
-                "reasoning_content": reasoning_content,
-                "content": assistant_content,
-            }
-        )
+        # 2. 追加 assistant 回复（推理内容非空时才写入）
+        msg: dict[str, Any] = {"role": "assistant", "content": assistant_content}
+        if reasoning_content:
+            msg["reasoning_content"] = reasoning_content
+        chat_messages.append(msg)
         chat.chat = chat_messages
         chat.update_time = datetime.now()
         await db.flush()
