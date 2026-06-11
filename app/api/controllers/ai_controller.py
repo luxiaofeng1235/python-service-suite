@@ -20,22 +20,6 @@ from app.utils.sse import SSEUtil
 router = APIRouter(prefix="/api", tags=["AI 服务"])
 
 
-@router.post("/ai/chat", summary="AI 对话")
-async def chat(
-    req: ChatRequest,
-    db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    AI 对话接口
-
-    - 接收用户消息
-    - 返回完整回复
-    """
-    data = await AIService.chat(db, req, user_id=current_user.get("user_id") or 0)
-    return Response.success(data=data, msg="调用成功")
-
-
 @router.post("/ai/chat/send_stream_sse", summary="AI 流式对话(SSE)")
 async def chat_stream(
     req: ChatRequest,

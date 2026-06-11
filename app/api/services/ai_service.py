@@ -20,7 +20,7 @@ from app.common.pagination import PageParams, paginate
 from app.core.config import settings
 from app.database import async_session
 from app.models.ai_chat_log import AiChatLog
-from app.schemas.ai import ChatRequest, ChatResponse, StreamChunk
+from app.schemas.ai import ChatRequest, StreamChunk
 
 
 class AIService:
@@ -39,44 +39,6 @@ class AIService:
             "enable_search": True,
         },
     }
-
-    @staticmethod
-    async def chat(db: AsyncSession, req: ChatRequest, user_id: int = 0) -> ChatResponse:
-        """普通对话接口，聚合上游完整回复并落库"""
-        # 1. 获取或创建聊天记录
-        chat = await AIService._get_or_create_chat_log(db, req.chat_id, req.model, user_id)
-        # 2. 解析模型配置（含深度思考回退逻辑）
-        config = AIService._resolve_model_config(req.model, req.is_deep_reflection)
-        # 3. 组装消息列表（history + 本轮用户消息）
-        messages = AIService._prepare_messages(chat, req.msg, req.restart, config["system"])
-        # 4. 请求上游 LLM 非流式接口
-        response_data = await AIService._request_completion(
-            messages=messages,
-            upstream_model=config["upstream_model"],
-            enable_search=config["enable_search"],
-            stream=False,
-        )
-        # 5. 解析回复内容与推理过程
-        choice = (response_data.get("choices") or [{}])[0]
-        message = choice.get("message") or {}
-        reply = message.get("content", "")
-        reasoning_content = message.get("reasoning_content", "")
-        # 6. 写入数据库持久化
-        await AIService._save_chat_log(
-            db=db,
-            chat=chat,
-            messages=messages,
-            assistant_content=reply,
-            reasoning_content=reasoning_content,
-        )
-        await db.commit()
-        # 7. 返回结构化响应
-        return ChatResponse(
-            reply=reply,
-            chat_id=chat.id,
-            usage=response_data.get("usage"),
-            reasoning_content=reasoning_content,
-        )
 
     @staticmethod
     async def stream_chat(
@@ -355,35 +317,6 @@ class AIService:
         chat.chat = chat_messages
         chat.update_time = datetime.now()
         await db.flush()
-
-    @staticmethod
-    async def _request_completion(
-        messages: list[dict[str, Any]],
-        upstream_model: str,
-        enable_search: bool,
-        stream: bool,
-    ) -> dict[str, Any]:
-        """请求上游完整响应"""
-        try:
-            # 1. 向上游 LLM 发起 POST 请求
-            async with httpx.AsyncClient(timeout=120.0, trust_env=False) as client:
-                resp = await client.post(
-                    settings.QWEN_CHAT_URL,
-                    headers=AIService._build_headers(),
-                    json={
-                        "model": upstream_model,
-                        "messages": messages,
-                        "stream": stream,
-                        "enable_search": enable_search,
-                    },
-                )
-        except httpx.HTTPError as exc:
-            raise AppException(msg=f"上游接口连接失败: {exc!s}") from exc
-
-        # 2. 检查 HTTP 响应状态码
-        if resp.status_code >= 400:
-            raise AppException(msg=AIService._extract_error_message(resp))
-        return resp.json()
 
     @staticmethod
     def _build_headers() -> dict[str, str]:
