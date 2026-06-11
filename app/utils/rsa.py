@@ -5,6 +5,7 @@ rsa — RSA / AES 加解密工具（对标 Go rsa.go）
 包含 RSA 公钥加密/私钥解密、AES-ECB 加解密、AES-CFB 加解密。
 """
 
+import base64
 import binascii
 from app.pkg.logging import get_logger
 import os
@@ -21,13 +22,11 @@ AES_BLOCK_SIZE = 16
 
 def encode_str_to_base64(s: str) -> str:
     """字符串 → base64 编码（对标 Go EncodeStr2Base64）"""
-    import base64
     return base64.b64encode(s.encode("utf-8")).decode("utf-8")
 
 
 def decode_str_from_base64(s: str) -> str:
     """base64 字符串 → 原文（对标 Go DecodeStrFromBase64）"""
-    import base64
     return base64.b64decode(s).decode("utf-8")
 
 
@@ -180,7 +179,7 @@ def aes_encrypt_cfb(key: str, data: str) -> str | None:
         iv_hex = binascii.hexlify(iv_bytes).decode("ascii")
         return encrypted_hex[:16] + iv_hex + encrypted_hex[16:]
     except Exception as exc:
-        logger.error("AES-CFB 加密失败: %s", exc)
+        logger.error("AES-CFB 加密失败: {}", exc)
         return None
 
 
@@ -210,5 +209,5 @@ def aes_decrypt_cfb(key: str, cipher_text: str) -> str | None:
         decrypted = decryptor.update(content_bytes) + decryptor.finalize()
         return decrypted.decode("utf-8")
     except Exception as exc:
-        logger.error("AES-CFB 解密失败: %s", exc)
+        logger.error("AES-CFB 解密失败: {}", exc)
         return None
