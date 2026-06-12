@@ -20,7 +20,7 @@ Service 用法：
         return await paginate(db, stmt, page_params)
 """
 
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 from fastapi import Query
 from pydantic import BaseModel
@@ -68,10 +68,7 @@ class PageParams:
 
 # ==================== 分页结果 Pydantic 模型 ====================
 
-T = TypeVar("T")
-
-
-class PageResult(BaseModel, Generic[T]):
+class PageResult[T](BaseModel):
     """
     通用分页结果模型
 
@@ -81,13 +78,14 @@ class PageResult(BaseModel, Generic[T]):
             name: str
 
         class MyListResponse(PageResult[MyItem]):
-            pass  # 自动拥有 items: list[MyItem], total, page, size
+            pass  # 自动拥有 items: list[MyItem], total, page, size, total_page
     """
 
     items: list[T]
     total: int
     page: int
     size: int
+    total_page: int
 
 
 # ==================== 通用分页查询函数 ====================
@@ -109,12 +107,12 @@ async def paginate(
         count_stmt: 计数查询语句（不传则自动从 stmt 推导）
 
     Returns:
-        {"items": [ORM 实例列表], "total": int, "page": int, "size": int}
+        {"items": [ORM 实例列表], "total": int, "page": int, "size": int, "total_page": int}
 
     示例:
         stmt = select(User).where(User.is_active == 1).order_by(User.id)
         data = await paginate(db, stmt, PageParams(page=1, size=20))
-        # => {"items": [User(...)], "total": 100, "page": 1, "size": 20}
+        # => {"items": [User(...)], "total": 100, "page": 1, "size": 20, "total_page": 5}
     """
     # 1. 计数
     if count_stmt is None:
@@ -123,6 +121,7 @@ async def paginate(
         )
     total_result = await db.execute(count_stmt)
     total = total_result.scalar() or 0
+    total_page = (total + page_params.size - 1) // page_params.size if total else 0
 
     # 2. 分页取数据
     result = await db.execute(
@@ -135,4 +134,5 @@ async def paginate(
         "total": total,
         "page": page_params.page,
         "size": page_params.size,
+        "total_page": total_page,
     }

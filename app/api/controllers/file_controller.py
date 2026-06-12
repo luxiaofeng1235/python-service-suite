@@ -84,10 +84,4 @@ async def list_files(
         AttachmentResponse.from_attachment(item, str(request.base_url))
         for item in data["items"]
     ]
-    file_list = {
-        "items": items,  # 文件列表
-        "total": data["total"],  # 记录集总数
-        "total_page": data["page"],  # 总页数
-        "size": data["size"],  # 步长
-    }
-    return Response.success(file_list, "文件列表")
+    return Response.success({**data, "items": items}, "文件列表")
