@@ -18,7 +18,9 @@ class Attachment(Base):
     __tablename__ = "attachment"
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment="文件ID")
-    user_id = Column(Integer, nullable=False, index=True, comment="上传用户ID")
+    user_id = Column(Integer, nullable=False, index=True, comment="兼容字段：前台上传用户ID")
+    owner_type = Column(String(20), nullable=False, default="user", index=True, comment="归属类型：user/admin/system")
+    owner_id = Column(Integer, nullable=False, default=0, index=True, comment="归属主体ID")
     original_name = Column(String(255), nullable=False, comment="原始文件名")
     stored_name = Column(String(255), nullable=False, comment="存储文件名")
     file_path = Column(String(500), nullable=False, comment="文件相对路径")

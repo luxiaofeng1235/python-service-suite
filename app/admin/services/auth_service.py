@@ -12,13 +12,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
 from app.core.config import settings
-from app.pkg.security import create_short_token, get_password_hash, verify_password
 from app.models.admin_token import AdminToken
 from app.models.auth_admin import AuthAdmin
+from app.pkg.security import create_short_token, get_password_hash, verify_password
+from app.schemas.auth_admin import AdminUserResponse
 
 
 class AdminAuthService:
     """管理员认证服务"""
+
+    @staticmethod
+    def _to_admin_response(admin: AuthAdmin) -> AdminUserResponse:
+        """序列化管理员响应，避免暴露敏感字段。"""
+        return AdminUserResponse(
+            id=admin.id,
+            username=admin.username,
+            nickname=admin.nickname,
+            avatar=admin.avatar,
+            mobile=admin.mobile,
+            email=admin.email,
+            sex=admin.sex,
+            remark=admin.remark,
+            is_super=bool(admin.is_super),
+            is_active=bool(admin.is_active),
+            created_at=admin.created_at.strftime("%Y-%m-%d %H:%M:%S") if admin.created_at else None,
+            updated_at=admin.updated_at.strftime("%Y-%m-%d %H:%M:%S") if admin.updated_at else None,
+        )
 
     @staticmethod
     async def register(
@@ -132,9 +151,15 @@ class AdminAuthService:
         return admin
 
     @staticmethod
+    async def get_admin_response(db: AsyncSession, admin_id: int) -> AdminUserResponse:
+        """获取管理员响应体。"""
+        admin = await AdminAuthService.get_admin_info(db, admin_id)
+        return AdminAuthService._to_admin_response(admin)
+
+    @staticmethod
     async def update_profile(
         db: AsyncSession, admin_id: int, update_data: dict
-    ) -> AuthAdmin:
+    ) -> AdminUserResponse:
         """
         修改管理员个人资料
 
@@ -152,10 +177,10 @@ class AdminAuthService:
             setattr(admin, field, value)
         await db.commit()
         await db.refresh(admin)
-        return admin
+        return AdminAuthService._to_admin_response(admin)
 
     @staticmethod
-    async def update_avatar(db: AsyncSession, admin_id: int, avatar_url: str) -> AuthAdmin:
+    async def update_avatar(db: AsyncSession, admin_id: int, avatar_url: str) -> AdminUserResponse:
         """
         更新管理员头像
 
@@ -172,4 +197,49 @@ class AdminAuthService:
         admin.avatar = avatar_url
         await db.commit()
         await db.refresh(admin)
-        return admin
+        return AdminAuthService._to_admin_response(admin)
+
+    @staticmethod
+    async def list_admins(
+        db: AsyncSession,
+        page_params,
+    ) -> dict:
+        """分页获取管理员列表。"""
+        from app.common.pagination import paginate
+
+        result = await paginate(
+            db,
+            select(AuthAdmin).order_by(AuthAdmin.id),
+            page_params,
+        )
+        return {
+            **result,
+            "items": [AdminAuthService._to_admin_response(admin) for admin in result["items"]],
+        }
+
+    @staticmethod
+    async def toggle_admin_active(
+        db: AsyncSession,
+        admin_id: int,
+        operator_admin_id: int,
+    ) -> dict:
+        """切换管理员启用状态。"""
+        if operator_admin_id == admin_id:
+            raise AppException(msg="不能对自己操作")
+
+        result = await db.execute(select(AuthAdmin).where(AuthAdmin.id == admin_id))
+        admin = result.scalar_one_or_none()
+        if not admin:
+            raise AppException(msg="管理员不存在")
+
+        if admin.is_super:
+            raise AppException(msg="不能操作超管账号")
+
+        admin.is_active = not admin.is_active
+        await db.commit()
+        await db.refresh(admin)
+
+        return {
+            "is_active": bool(admin.is_active),
+            "status": "启用" if admin.is_active else "禁用",
+        }

@@ -37,6 +37,8 @@ class FileService:
         file_data: bytes,
         original_name: str,
         mime_type: str,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """上传图片（接收完整字节数据）"""
         ext = Path(original_name).suffix.lower()
@@ -59,6 +61,8 @@ class FileService:
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=original_name,
             stored_name=stored_name,
             file_path=f"{sub_path}/{stored_name}",
@@ -77,6 +81,8 @@ class FileService:
         file_data: bytes,
         original_name: str,
         mime_type: str,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """上传视频（接收完整字节数据）"""
         ext = Path(original_name).suffix.lower()
@@ -99,6 +105,8 @@ class FileService:
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=original_name,
             stored_name=stored_name,
             file_path=f"{sub_path}/{stored_name}",
@@ -115,6 +123,8 @@ class FileService:
         db: AsyncSession,
         user_id: int,
         file: UploadFile,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """流式上传图片（Controller 直接传 UploadFile）
 
@@ -133,6 +143,8 @@ class FileService:
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=file.filename or "unknown",
             stored_name=stored_name,
             file_path=f"{sub_path}/{stored_name}",
@@ -147,6 +159,8 @@ class FileService:
         db: AsyncSession,
         user_id: int,
         file: UploadFile,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """流式上传视频（Controller 直接传 UploadFile）
 
@@ -165,6 +179,8 @@ class FileService:
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=file.filename or "unknown",
             stored_name=stored_name,
             file_path=f"{sub_path}/{stored_name}",
@@ -184,6 +200,8 @@ class FileService:
         mime_type: str,
         stored_path: str,
         file_size: int,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """上传图片（文件已由调用方流式写入磁盘）
 
@@ -200,6 +218,8 @@ class FileService:
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=original_name,
             stored_name=Path(stored_path).name,
             file_path=stored_path,
@@ -217,6 +237,8 @@ class FileService:
         mime_type: str,
         stored_path: str,
         file_size: int,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """上传视频（文件已由调用方流式写入磁盘）
 
@@ -233,6 +255,8 @@ class FileService:
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=original_name,
             stored_name=Path(stored_path).name,
             file_path=stored_path,
@@ -248,6 +272,8 @@ class FileService:
         cls,
         db: AsyncSession,
         user_id: int,
+        owner_type: str,
+        owner_id: int | None,
         original_name: str,
         stored_name: str,
         file_path: str,
@@ -256,8 +282,11 @@ class FileService:
         file_type: str,
     ) -> Attachment:
         """创建附件数据库记录"""
+        resolved_owner_id = user_id if owner_id is None else owner_id
         attachment = Attachment(
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=resolved_owner_id,
             original_name=original_name,
             stored_name=stored_name,
             file_path=file_path,
@@ -283,11 +312,10 @@ class FileService:
         Args:
             db: 数据库会话
             user_id: 筛选上传用户（None 查全部）
-            page: 页码
-            size: 每页条数
+            page_params: 分页参数（page + page_size/size）
 
         Returns:
-            {"items": [...], "total": int, "page": int, "size": int}
+            {"items": [...], "total": int, "page": int, "size": int, "total_page": int}
         """
         query = select(Attachment)
         count_query = select(func.count(Attachment.id))

@@ -12,9 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
-from app.pkg.logging import request_logger
 from app.models.user import User
 from app.models.user_token import UserToken
+from app.pkg.logging import request_logger
 from app.schemas.user_admin import AdminUserResponse, AdminUserUpdateRequest
 
 
@@ -38,7 +38,7 @@ class UserAdminService:
             is_deleted: 过滤已注销（None=全部, True=仅已注销, False=仅未注销）
 
         Returns:
-            dict: {"items": [...], "total": N, "page": P, "size": S}
+            dict: {"items": [...], "total": N, "page": P, "size": S, "total_page": TP}
         """
         stmt = select(User).order_by(User.id)
 

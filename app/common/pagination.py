@@ -41,16 +41,18 @@ class PageParams:
 
     Query 参数:
         - page: 页码，从 1 开始（默认 1）
-        - size: 每页条数（默认 10，最大 100）
+        - page_size: 每页条数（默认 10，最大 100）
+        - size: 每页条数别名，优先级高于 page_size
     """
 
     def __init__(
         self,
         page: int = Query(1, ge=1, description="页码，从 1 开始"),
         page_size: int = Query(10, ge=1, le=100, description="每页条数"),
+        size: int | None = Query(None, ge=1, le=100, description="每页条数（兼容别名）"),
     ):
         self.page = page
-        self.size = page_size
+        self.size = size if size is not None else page_size
 
     @property
     def offset(self) -> int:

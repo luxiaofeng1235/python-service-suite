@@ -10,14 +10,17 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.database import Base
 from app.models import (
+    AdminToken,  # noqa: F401
     AiChatLog,  # noqa: F401
+    Attachment,  # noqa: F401
+    AuthAdmin,  # noqa: F401
+    CasbinRule,  # noqa: F401
+    LotteryConfig,  # noqa: F401
+    Permission,  # noqa: F401
+    Role,  # noqa: F401
     User,  # noqa: F401
     UserToken,  # noqa: F401
     VerificationCode,  # noqa: F401
-    Attachment,  # noqa: F401
-    CasbinRule,  # noqa: F401
-    Permission,  # noqa: F401
-    Role,  # noqa: F401
 )
 
 config = context.config

@@ -6,17 +6,16 @@
 路由前缀 /admin/admins，独立于前台用户管理。
 """
 
-from fastapi import APIRouter, Depends, UploadFile, File
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.services.auth_service import AdminAuthService
 from app.api.services.file_service import FileService
+from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.admin_auth import get_current_admin_user
 from app.core.rbac import require_permission
 from app.database import get_session
-from app.models.auth_admin import AuthAdmin
 from app.schemas.auth_admin import AdminProfileUpdateRequest
 
 router = APIRouter(prefix="/admin/admins", tags=["后台-管理员管理"])
@@ -27,12 +26,12 @@ router = APIRouter(prefix="/admin/admins", tags=["后台-管理员管理"])
     summary="管理员列表",
     dependencies=[Depends(require_permission("admin", "list"))],
 )
-async def list_admins(db: AsyncSession = Depends(get_session)):
-    """获取所有管理员账号列表"""
-    result = await db.execute(
-        select(AuthAdmin).order_by(AuthAdmin.id)
-    )
-    admins = result.scalars().all()
+async def list_admins(
+    page_params: PageParams = Depends(),
+    db: AsyncSession = Depends(get_session),
+):
+    """分页获取管理员账号列表"""
+    admins = await AdminAuthService.list_admins(db, page_params)
     return Response.success(admins)
 
 
@@ -53,24 +52,12 @@ async def toggle_admin_active(
       - 不能对自己操作
       - 不能禁用超管
     """
-    # 不能对自己操作
-    if current_admin["user_id"] == admin_id:
-        return Response.fail(msg="不能对自己操作")
-
-    result = await db.execute(select(AuthAdmin).where(AuthAdmin.id == admin_id))
-    admin = result.scalar_one_or_none()
-    if not admin:
-        return Response.fail(msg="管理员不存在")
-
-    # 不能禁用超管
-    if admin.is_super:
-        return Response.fail(msg="不能操作超管账号")
-
-    admin.is_active = not admin.is_active
-    await db.commit()
-    await db.refresh(admin)
-    status = "启用" if admin.is_active else "禁用"
-    return Response.success(data={"is_active": admin.is_active}, msg=f"已{status}")
+    data = await AdminAuthService.toggle_admin_active(
+        db,
+        admin_id=admin_id,
+        operator_admin_id=current_admin["user_id"],
+    )
+    return Response.success(data={"is_active": data["is_active"]}, msg=f"已{data['status']}")
 
 
 @router.put(
@@ -103,7 +90,13 @@ async def upload_avatar(
     current_admin: dict = Depends(get_current_admin_user),
 ):
     """上传管理员头像"""
-    attachment = await FileService.upload_image_stream(db, user_id=0, file=file)
+    attachment = await FileService.upload_image_stream(
+        db,
+        user_id=0,
+        file=file,
+        owner_type="admin",
+        owner_id=current_admin["user_id"],
+    )
     avatar_url = FileService.get_file_url(attachment.file_path)
     await AdminAuthService.update_avatar(db, current_admin["user_id"], avatar_url)
     return Response.success(data={"avatar": avatar_url}, msg="头像上传成功")

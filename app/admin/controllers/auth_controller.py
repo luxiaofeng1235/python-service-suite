@@ -80,5 +80,5 @@ async def get_me(
     current_admin: dict = Depends(get_current_admin_user),
 ):
     """获取当前登录的管理员完整信息"""
-    admin = await AdminAuthService.get_admin_info(db, current_admin["user_id"])
+    admin = await AdminAuthService.get_admin_response(db, current_admin["user_id"])
     return Response.success(data=admin)

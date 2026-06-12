@@ -8,12 +8,12 @@ AI 接口控制器层
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.ai import ChatRequest
 from app.api.services.ai_service import AIService
 from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.dependency import get_current_user
 from app.database import get_session
+from app.schemas.ai import ChatRequest
 from app.utils.sse import SSEUtil
 
 # ==================== 路由定义 ====================
@@ -47,7 +47,7 @@ async def list_chats(
     获取当前登录用户的 AI 对话列表
 
     Args:
-        page_params: 分页参数（page, page_size）
+        page_params: 分页参数（page + page_size/size）
         model_id: 模型类型过滤（1=千问）
 
     Returns:

@@ -397,7 +397,7 @@ class UserService:
             page_params: 分页参数
 
         Returns:
-            dict: {"items": [...], "total": N, "page": P, "size": S}
+            dict: {"items": [...], "total": N, "page": P, "size": S, "total_page": TP}
         """
         stmt = select(User).order_by(User.id)
         data = await paginate(db, stmt, page_params)
