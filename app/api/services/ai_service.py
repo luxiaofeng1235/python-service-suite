@@ -21,6 +21,7 @@ from app.core.config import settings
 from app.database import async_session
 from app.models.ai_chat_log import AiChatLog
 from app.schemas.ai import ChatRequest, StreamChunk
+from app.utils.time_ import TimeUtil
 
 
 class AIService:
@@ -41,9 +42,7 @@ class AIService:
     }
 
     @staticmethod
-    async def stream_chat(
-        req: ChatRequest, user_id: int = 0
-    ) -> AsyncGenerator[str, None]:
+    async def stream_chat(req: ChatRequest, user_id: int = 0) -> AsyncGenerator[str, None]:
         """流式对话接口，自管 DB 事务，按旧协议直接输出文本片段"""
         # 在生成器内部自建独立 session，避免 FastAPI yield 依赖提前 commit/close
         async with async_session() as db:
@@ -85,7 +84,9 @@ class AIService:
                         # 4. 检查上游 HTTP 状态码
                         if resp.status_code >= 400:
                             error_text = await resp.aread()
-                            raise AppException(msg=AIService._extract_error_message(resp, error_text))
+                            raise AppException(
+                                msg=AIService._extract_error_message(resp, error_text)
+                            )
 
                         # 5. 逐行解析 SSE 事件并实时 yield 给客户端
                         async for raw_line in resp.aiter_lines():
@@ -160,11 +161,7 @@ class AIService:
             conditions.append(AiChatLog.model_id == model_id)
 
         # 2. 构建查询语句
-        stmt = (
-            select(AiChatLog)
-            .where(*conditions)
-            .order_by(AiChatLog.id.desc())
-        )
+        stmt = select(AiChatLog).where(*conditions).order_by(AiChatLog.id.desc())
         count_stmt = select(func.count(AiChatLog.id)).where(*conditions)
 
         # 3. 分页查询
@@ -242,12 +239,8 @@ class AIService:
             "user_id": chat.user_id,
             "model_id": chat.model_id,
             "chat": AIService._load_history(chat.chat),
-            "create_time": chat.create_time.strftime("%Y-%m-%d %H:%M:%S")
-            if chat.create_time
-            else None,
-            "update_time": chat.update_time.strftime("%Y-%m-%d %H:%M:%S")
-            if chat.update_time
-            else None,
+            "create_time": TimeUtil.format_datetime(chat.create_time),
+            "update_time": TimeUtil.format_datetime(chat.update_time),
         }
 
     @staticmethod

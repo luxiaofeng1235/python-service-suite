@@ -16,6 +16,7 @@ from app.models.user import User
 from app.models.user_token import UserToken
 from app.pkg.logging import request_logger
 from app.schemas.user_admin import AdminUserResponse, AdminUserUpdateRequest
+from app.utils.time_ import TimeUtil
 
 
 class UserAdminService:
@@ -71,11 +72,10 @@ class UserAdminService:
             username=user.username,
             nickname=user.nickname,
             email=user.email,
-
             is_active=user.is_active,
             is_deleted=user.is_deleted,
-            created_at=user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None,
-            deleted_at=user.deleted_at.strftime("%Y-%m-%d %H:%M:%S") if user.deleted_at else None,
+            created_at=TimeUtil.format_datetime(user.created_at),
+            deleted_at=TimeUtil.format_datetime(user.deleted_at),
         )
 
     # ==================== 更新用户 ====================
@@ -114,11 +114,10 @@ class UserAdminService:
             username=user.username,
             nickname=user.nickname,
             email=user.email,
-
             is_active=user.is_active,
             is_deleted=user.is_deleted,
-            created_at=user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None,
-            deleted_at=user.deleted_at.strftime("%Y-%m-%d %H:%M:%S") if user.deleted_at else None,
+            created_at=TimeUtil.format_datetime(user.created_at),
+            deleted_at=TimeUtil.format_datetime(user.deleted_at),
         )
 
     # ==================== 删除用户（管理员强制注销） ====================
@@ -144,9 +143,7 @@ class UserAdminService:
         Raises:
             AppException: 用户不存在或已注销
         """
-        result = await db.execute(
-            select(User).where(User.id == user_id, ~User.is_deleted)
-        )
+        result = await db.execute(select(User).where(User.id == user_id, ~User.is_deleted))
         user = result.scalar_one_or_none()
         if not user:
             raise AppException(msg="用户不存在或已注销")
@@ -162,12 +159,12 @@ class UserAdminService:
             "管理员强制注销 | user_id={} | operator={} | deleted_at={}",
             user_id,
             operator_username,
-            now.strftime("%Y-%m-%d %H:%M:%S"),
+            TimeUtil.format_datetime(now),
         )
 
         await db.commit()
 
-        return {"deleted": True, "deleted_at": now.strftime("%Y-%m-%d %H:%M:%S")}
+        return {"deleted": True, "deleted_at": TimeUtil.format_datetime(now)}
 
     # ==================== 清理过期 Token ====================
 
@@ -203,9 +200,7 @@ class UserAdminService:
         """
         from app.models.user import User
 
-        result = await db.execute(
-            select(User).where(User.id == user_id, ~User.is_deleted)
-        )
+        result = await db.execute(select(User).where(User.id == user_id, ~User.is_deleted))
         user = result.scalar_one_or_none()
         if not user:
             raise AppException(msg="用户不存在或已注销")
@@ -219,9 +214,8 @@ class UserAdminService:
             username=user.username,
             nickname=user.nickname,
             email=user.email,
-
             is_active=user.is_active,
             is_deleted=user.is_deleted,
-            created_at=user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None,
-            deleted_at=user.deleted_at.strftime("%Y-%m-%d %H:%M:%S") if user.deleted_at else None,
+            created_at=TimeUtil.format_datetime(user.created_at),
+            deleted_at=TimeUtil.format_datetime(user.deleted_at),
         )

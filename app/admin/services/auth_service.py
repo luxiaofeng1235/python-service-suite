@@ -16,6 +16,7 @@ from app.models.admin_token import AdminToken
 from app.models.auth_admin import AuthAdmin
 from app.pkg.security import create_short_token, get_password_hash, verify_password
 from app.schemas.auth_admin import AdminUserResponse
+from app.utils.time_ import TimeUtil
 
 
 class AdminAuthService:
@@ -35,8 +36,8 @@ class AdminAuthService:
             remark=admin.remark,
             is_super=bool(admin.is_super),
             is_active=bool(admin.is_active),
-            created_at=admin.created_at.strftime("%Y-%m-%d %H:%M:%S") if admin.created_at else None,
-            updated_at=admin.updated_at.strftime("%Y-%m-%d %H:%M:%S") if admin.updated_at else None,
+            created_at=TimeUtil.format_datetime(admin.created_at),
+            updated_at=TimeUtil.format_datetime(admin.updated_at),
         )
 
     @staticmethod

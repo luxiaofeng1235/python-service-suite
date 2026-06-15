@@ -9,7 +9,6 @@ from app.utils.time_ import TimeUtil
 
 import calendar
 from datetime import date, datetime, timedelta
-from typing import Tuple
 
 from dateutil.parser import isoparse
 
@@ -33,6 +32,13 @@ class TimeUtil:
     def date_str() -> str:
         """当前日期  YYYY-MM-DD"""
         return datetime.now().strftime("%Y-%m-%d")
+
+    @staticmethod
+    def format_datetime(dt: datetime | None, default: str | None = None) -> str | None:
+        """datetime → YYYY-MM-DD HH:mm:ss"""
+        if dt is None:
+            return default
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
 
     # ==================== 时间戳 ↔ 字符串 ====================
 
@@ -98,7 +104,7 @@ class TimeUtil:
         return int((datetime.now() - timedelta(days=days)).timestamp())
 
     @staticmethod
-    def ago_day_range(days: int) -> Tuple[int, int]:
+    def ago_day_range(days: int) -> tuple[int, int]:
         """N 天前那天的 (00:00:00, 23:59:59)"""
         d = date.today() - timedelta(days=days)
         start = int(datetime(d.year, d.month, d.day).timestamp())
@@ -115,7 +121,7 @@ class TimeUtil:
     # ==================== 月/周范围 ====================
 
     @staticmethod
-    def month_range(month: int) -> Tuple[int, int]:
+    def month_range(month: int) -> tuple[int, int]:
         """指定月份（1-12）的起止 Unix 时间戳"""
         if month < 1 or month > 12:
             return 0, 0
@@ -126,7 +132,7 @@ class TimeUtil:
         return start, end
 
     @staticmethod
-    def week_range() -> Tuple[int, int]:
+    def week_range() -> tuple[int, int]:
         """本周一 00:00:00 ~ 本周日 23:59:59"""
         today = date.today()
         monday = today - timedelta(days=today.weekday())

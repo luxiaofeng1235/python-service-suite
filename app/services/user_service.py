@@ -40,6 +40,7 @@ from app.schemas.user import (
     UserResponse,
 )
 from app.utils.email import EmailUtil
+from app.utils.time_ import TimeUtil
 from app.utils.url_ import get_client_ip
 
 
@@ -47,8 +48,8 @@ class UserService:
     """用户业务逻辑服务"""
 
     # ==================== 速率限制器 ====================
-    _register_limiter = RateLimiter(max_requests=3, window_seconds=600)   # 注册：3次/10分钟
-    _login_limiter = RateLimiter(max_requests=5, window_seconds=300)      # 登录：5次/5分钟
+    _register_limiter = RateLimiter(max_requests=3, window_seconds=600)  # 注册：3次/10分钟
+    _login_limiter = RateLimiter(max_requests=5, window_seconds=300)  # 登录：5次/5分钟
     _forgot_limiter = RateLimiter(
         max_requests=settings.RATE_LIMIT_FORGOT_PASSWORD_MAX,
         window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
@@ -61,7 +62,9 @@ class UserService:
     # ==================== 注册 ====================
 
     @staticmethod
-    async def register(db: AsyncSession, req: UserRegisterRequest, request: Request | None = None) -> UserResponse:
+    async def register(
+        db: AsyncSession, req: UserRegisterRequest, request: Request | None = None
+    ) -> UserResponse:
         """
         用户注册
 
@@ -105,13 +108,15 @@ class UserService:
             nickname=user.nickname,
             email=user.email,
             is_active=user.is_active,
-            created_at=user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None,
+            created_at=TimeUtil.format_datetime(user.created_at),
         )
 
     # ==================== 登录 ====================
 
     @staticmethod
-    async def authenticate(db: AsyncSession, req: UserLoginRequest, request: Request | None = None) -> str:
+    async def authenticate(
+        db: AsyncSession, req: UserLoginRequest, request: Request | None = None
+    ) -> str:
         """
         用户登录认证
 
@@ -142,7 +147,9 @@ class UserService:
             raise AppException(msg="验证码参数不完整")
 
         # 2. 速率限制
-        if client_ip and not await UserService._login_limiter.check(f"login:{client_ip}:{req.username}"):
+        if client_ip and not await UserService._login_limiter.check(
+            f"login:{client_ip}:{req.username}"
+        ):
             raise AppException(msg="登录过于频繁，请 5 分钟后再试")
 
         # 3. 按用户名查找用户
@@ -360,9 +367,7 @@ class UserService:
         try:
             await redis_client.set(f"code:{email}", code, ex=ttl)
         except Exception:
-            request_logger.opt(exception=True).warning(
-                "Redis 验证码缓存写入失败 email={}", email
-            )
+            request_logger.opt(exception=True).warning("Redis 验证码缓存写入失败 email={}", email)
 
     @staticmethod
     async def _get_cached_reset_code(email: str) -> str | None:
@@ -370,9 +375,7 @@ class UserService:
         try:
             return await redis_client.get(f"code:{email}")
         except Exception:
-            request_logger.opt(exception=True).warning(
-                "Redis 验证码缓存读取失败 email={}", email
-            )
+            request_logger.opt(exception=True).warning("Redis 验证码缓存读取失败 email={}", email)
             return None
 
     @staticmethod
@@ -381,9 +384,7 @@ class UserService:
         try:
             await redis_client.delete(f"code:{email}")
         except Exception:
-            request_logger.opt(exception=True).warning(
-                "Redis 验证码缓存删除失败 email={}", email
-            )
+            request_logger.opt(exception=True).warning("Redis 验证码缓存删除失败 email={}", email)
 
     # ==================== 用户列表 ====================
 
@@ -409,7 +410,7 @@ class UserService:
                 nickname=u.nickname,
                 email=u.email,
                 is_active=u.is_active,
-                created_at=u.created_at.strftime("%Y-%m-%d %H:%M:%S") if u.created_at else None,
+                created_at=TimeUtil.format_datetime(u.created_at),
             )
             for u in data["items"]
         ]
@@ -441,7 +442,7 @@ class UserService:
             nickname=user.nickname,
             email=user.email,
             is_active=user.is_active,
-            created_at=user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None,
+            created_at=TimeUtil.format_datetime(user.created_at),
         )
 
     # ==================== 账号注销 ====================
@@ -482,9 +483,9 @@ class UserService:
             "账号注销 | user_id={} | username={} | deleted_at={}",
             user_id,
             username,
-            now.strftime("%Y-%m-%d %H:%M:%S"),
+            TimeUtil.format_datetime(now),
         )
 
         await db.commit()
 
-        return {"deleted": True, "deleted_at": now.strftime("%Y-%m-%d %H:%M:%S")}
+        return {"deleted": True, "deleted_at": TimeUtil.format_datetime(now)}
