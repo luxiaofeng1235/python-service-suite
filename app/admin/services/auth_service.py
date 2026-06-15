@@ -59,9 +59,7 @@ class AdminAuthService:
             AppException: 用户名已存在
         """
         # 检查用户名是否已存在
-        result = await db.execute(
-            select(AuthAdmin).where(AuthAdmin.username == username)
-        )
+        result = await db.execute(select(AuthAdmin).where(AuthAdmin.username == username))
         if result.scalar_one_or_none():
             raise AppException(msg="用户名已存在")
 
@@ -94,9 +92,7 @@ class AdminAuthService:
             AppException: 用户名或密码错误 / 账号已禁用
         """
         # 1. 按用户名查找管理员
-        result = await db.execute(
-            select(AuthAdmin).where(AuthAdmin.username == username)
-        )
+        result = await db.execute(select(AuthAdmin).where(AuthAdmin.username == username))
         admin = result.scalar_one_or_none()
         if not admin:
             raise AppException(msg="用户名或密码错误")
@@ -142,9 +138,7 @@ class AdminAuthService:
         Raises:
             AppException: 管理员不存在
         """
-        result = await db.execute(
-            select(AuthAdmin).where(AuthAdmin.id == admin_id)
-        )
+        result = await db.execute(select(AuthAdmin).where(AuthAdmin.id == admin_id))
         admin = result.scalar_one_or_none()
         if not admin:
             raise AppException(msg="管理员不存在")
@@ -166,9 +160,10 @@ class AdminAuthService:
         Raises:
             AppException: 管理员不存在
         """
-        result = await db.execute(
-            select(AuthAdmin).where(AuthAdmin.id == admin_id)
-        )
+        if not update_data:
+            raise AppException(msg="没有需要修改的字段")
+
+        result = await db.execute(select(AuthAdmin).where(AuthAdmin.id == admin_id))
         admin = result.scalar_one_or_none()
         if not admin:
             raise AppException(msg="管理员不存在")
@@ -187,9 +182,7 @@ class AdminAuthService:
         Raises:
             AppException: 管理员不存在
         """
-        result = await db.execute(
-            select(AuthAdmin).where(AuthAdmin.id == admin_id)
-        )
+        result = await db.execute(select(AuthAdmin).where(AuthAdmin.id == admin_id))
         admin = result.scalar_one_or_none()
         if not admin:
             raise AppException(msg="管理员不存在")

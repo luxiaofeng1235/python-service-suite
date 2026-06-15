@@ -34,12 +34,11 @@ async def upload_image(
     - 最大大小：从配置读取（默认 10 MB）
     - 无需登录
     """
-    attachment = await FileService.upload_image_stream(
+    attachment = await FileService.upload_image_stream_for_owner(
         db,
-        user_id=0,
-        file=file,
         owner_type="user",
         owner_id=0,
+        file=file,
     )
     data = AttachmentResponse.from_attachment(attachment, str(request.base_url))
     return Response.success(data, msg="图片上传成功")
@@ -61,12 +60,11 @@ async def upload_video(
     - 最大大小：从配置读取（默认 200 MB）
     - 无需登录
     """
-    attachment = await FileService.upload_video_stream(
+    attachment = await FileService.upload_video_stream_for_owner(
         db,
-        user_id=0,
-        file=file,
         owner_type="user",
         owner_id=0,
+        file=file,
     )
     data = AttachmentResponse.from_attachment(attachment, str(request.base_url))
     return Response.success(data, msg="视频上传成功")
@@ -93,7 +91,6 @@ async def list_files(
         page_params=page_params,
     )
     items = [
-        AttachmentResponse.from_attachment(item, str(request.base_url))
-        for item in data["items"]
+        AttachmentResponse.from_attachment(item, str(request.base_url)) for item in data["items"]
     ]
     return Response.success({**data, "items": items}, "文件列表")

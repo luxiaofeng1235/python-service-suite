@@ -27,6 +27,16 @@ from app.storage.validation import (
 class FileService:
     """文件上传业务逻辑"""
 
+    LEGACY_USER_ID = 0
+    OWNER_USER = "user"
+    OWNER_ADMIN = "admin"
+    OWNER_SYSTEM = "system"
+
+    @staticmethod
+    def _legacy_user_id(owner_type: str, owner_id: int) -> int:
+        """Map new ownership fields to the legacy user_id column."""
+        return owner_id if owner_type == FileService.OWNER_USER else FileService.LEGACY_USER_ID
+
     # ==================== 图片上传（字节数据）====================
 
     @classmethod
@@ -133,16 +143,30 @@ class FileService:
             user_id: 上传用户 ID
             file: FastAPI UploadFile 对象
         """
+        return await cls.upload_image_stream_for_owner(
+            db=db,
+            owner_type=owner_type,
+            owner_id=user_id if owner_id is None else owner_id,
+            file=file,
+        )
+
+    @classmethod
+    async def upload_image_stream_for_owner(
+        cls,
+        db: AsyncSession,
+        owner_type: str,
+        owner_id: int,
+        file: UploadFile,
+    ) -> Attachment:
+        """按统一归属字段流式上传图片。"""
         ext = Path(file.filename or "image").suffix.lower()
         validate_image(ext, 0)
 
-        sub_path, stored_name, file_size = await write_stream(
-            file, IMAGE_MAX_SIZE, "images"
-        )
+        sub_path, stored_name, file_size = await write_stream(file, IMAGE_MAX_SIZE, "images")
 
         return await cls._create_attachment(
             db=db,
-            user_id=user_id,
+            user_id=cls._legacy_user_id(owner_type, owner_id),
             owner_type=owner_type,
             owner_id=owner_id,
             original_name=file.filename or "unknown",
@@ -169,16 +193,30 @@ class FileService:
             user_id: 上传用户 ID
             file: FastAPI UploadFile 对象
         """
+        return await cls.upload_video_stream_for_owner(
+            db=db,
+            owner_type=owner_type,
+            owner_id=user_id if owner_id is None else owner_id,
+            file=file,
+        )
+
+    @classmethod
+    async def upload_video_stream_for_owner(
+        cls,
+        db: AsyncSession,
+        owner_type: str,
+        owner_id: int,
+        file: UploadFile,
+    ) -> Attachment:
+        """按统一归属字段流式上传视频。"""
         ext = Path(file.filename or "video").suffix.lower()
         validate_video(ext, 0)
 
-        sub_path, stored_name, file_size = await write_stream(
-            file, VIDEO_MAX_SIZE, "videos"
-        )
+        sub_path, stored_name, file_size = await write_stream(file, VIDEO_MAX_SIZE, "videos")
 
         return await cls._create_attachment(
             db=db,
-            user_id=user_id,
+            user_id=cls._legacy_user_id(owner_type, owner_id),
             owner_type=owner_type,
             owner_id=owner_id,
             original_name=file.filename or "unknown",

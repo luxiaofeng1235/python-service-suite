@@ -72,9 +72,6 @@ async def update_profile(
 ):
     """管理员修改自己的资料"""
     update_data = req.model_dump(exclude_none=True)
-    if not update_data:
-        return Response.fail(msg="没有需要修改的字段")
-
     admin = await AdminAuthService.update_profile(db, current_admin["user_id"], update_data)
     return Response.success(admin, msg="修改成功")
 
@@ -90,12 +87,11 @@ async def upload_avatar(
     current_admin: dict = Depends(get_current_admin_user),
 ):
     """上传管理员头像"""
-    attachment = await FileService.upload_image_stream(
+    attachment = await FileService.upload_image_stream_for_owner(
         db,
-        user_id=0,
-        file=file,
         owner_type="admin",
         owner_id=current_admin["user_id"],
+        file=file,
     )
     avatar_url = FileService.get_file_url(attachment.file_path)
     await AdminAuthService.update_avatar(db, current_admin["user_id"], avatar_url)
