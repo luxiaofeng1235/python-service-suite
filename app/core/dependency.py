@@ -87,7 +87,7 @@ async def get_current_user(
             detail="未提供认证凭证，请先登录",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
+    #执行异步任务的修改
     result = await db.execute(
         select(UserToken, User)
         .join(User, User.id == UserToken.user_id)
