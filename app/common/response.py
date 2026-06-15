@@ -63,12 +63,10 @@ class Response:
     def success(data: Any = None, msg: str = "ok") -> JSONResponse:
         """
         成功响应
-
         Args:
             data: 返回的数据（自动处理 Pydantic 模型序列化）
             msg: 成功消息
-
-        Returns:
+        Return:
             JSONResponse: {"code": 1, "msg": "ok", "data": ...}
         """
         return JSONResponse(
@@ -85,12 +83,10 @@ class Response:
     def fail(msg: str = "fail", code: int = FAIL_CODE, data: Any = None) -> JSONResponse:
         """
         业务失败响应（如：用户名已存在、余额不足等）
-
         Args:
             msg: 失败描述
             code: 业务错误码（默认 0）
             data: 附加数据（可选）
-
         Returns:
             JSONResponse: {"code": 0, "msg": "...", "data": ...}
         """
@@ -109,11 +105,9 @@ class Response:
     def error(msg: str = "服务器内部错误", code: int = ERROR_CODE) -> JSONResponse:
         """
         系统错误响应（如：数据库异常、IO 错误等）
-
         Args:
             msg: 错误描述
-            code: 错误码（默认 -1）
-
+            code: 错误码（默认 -1）、
         Returns:
             JSONResponse: {"code": -1, "msg": "..."}
         """
