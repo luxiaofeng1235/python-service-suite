@@ -20,11 +20,8 @@ from pydantic import BaseModel
 
 def debug(*objs: Any) -> JSONResponse:
     """
-    PHP var_dump + exit 复刻。
-
     终端打印变量结构，浏览器返回 JSON 展示。
     FastAPI 里直接 return debug(variable1, variable2, ...) 即可。
-
     Args:
         *objs: 一个或多个任意 Python 变量
 
