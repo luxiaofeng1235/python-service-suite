@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
@@ -20,10 +20,8 @@ from app.pkg.logging import app_logger
 from app.schemas.cms import (
     ArticleCategory,
     ArticleCreateRequest,
-    ArticleResponse,
     ArticleUpdateRequest,
     TagCreateRequest,
-    TagResponse,
     TagUpdateRequest,
 )
 
@@ -238,71 +236,42 @@ class CmsArticleService:
         return {"id": article_id, "message": "删除成功"}
 
     @staticmethod
-    async def publish_article(db: AsyncSession, article_id: int) -> CmsArticle:
+    async def toggle_article_status(db: AsyncSession, article_id: int) -> CmsArticle:
         """
-        发布文章
+        Toggle article status.
+
+        Status flow: draft(0) → published(1) → offline(2) → published(1).
+
+        Args:
+            db: Database session.
+            article_id: Article ID.
+
+        Returns:
+            Updated article.
 
         Raises:
-            AppException: 文章不存在 / 已发布
+            AppException: Article not found.
         """
         article = await CmsArticleService.get_article_by_id(db, article_id)
 
-        if article.status == 1:
-            raise AppException(msg="文章已发布")
-
-        article.status = 1
-        article.published_at = datetime.now()
+        if article.status == 0:
+            # 草稿 → 发布
+            article.status = 1
+            article.published_at = datetime.now()
+        elif article.status == 1:
+            # 发布 → 下架
+            article.status = 2
+            article.published_at = None
+        else:
+            # 下架 → 发布
+            article.status = 1
+            article.published_at = datetime.now()
 
         await db.commit()
         await db.refresh(article)
 
-        app_logger.info("发布文章成功: id={}, title={}", article.id, article.title)
+        app_logger.info("切换文章状态: id={}, title={}, status={}", article.id, article.title, article.status)
         return article
-
-    @staticmethod
-    async def unpublish_article(db: AsyncSession, article_id: int) -> CmsArticle:
-        """
-        下架文章
-
-        Raises:
-            AppException: 文章不存在 / 未发布
-        """
-        article = await CmsArticleService.get_article_by_id(db, article_id)
-
-        if article.status != 1:
-            raise AppException(msg="文章未发布")
-
-        article.status = 2
-        article.published_at = None
-
-        await db.commit()
-        await db.refresh(article)
-
-        app_logger.info("下架文章成功: id={}, title={}", article.id, article.title)
-        return article
-
-    @staticmethod
-    async def increment_view_count(db: AsyncSession, article_id: int) -> None:
-        """增加文章浏览次数"""
-        await db.execute(
-            update(CmsArticle)
-            .where(CmsArticle.id == article_id)
-            .values(view_count=CmsArticle.view_count + 1)
-        )
-        await db.commit()
-
-    @staticmethod
-    async def attach_article_tags(
-        article_resp: ArticleResponse, db: AsyncSession
-    ) -> None:
-        """从 tag_ids 查询标签名，填充到 ArticleResponse.tags 字段"""
-        if not article_resp.tag_ids:
-            return
-        result = await db.execute(
-            select(CmsTag).where(CmsTag.id.in_(article_resp.tag_ids))
-        )
-        tags = result.scalars().all()
-        article_resp.tags = [TagResponse.model_validate(t) for t in tags]
 
 
 class CmsTagService:

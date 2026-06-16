@@ -58,10 +58,8 @@ async def create_article(
 ):
     """创建新文章"""
     article = await CmsArticleService.create_article(db, req)
-    resp = ArticleResponse.model_validate(article)
-    await CmsArticleService.attach_article_tags(resp, db)
     return Response.success(
-        data=resp,
+        data=ArticleResponse.model_validate(article),
         msg="文章创建成功",
     )
 
@@ -83,8 +81,6 @@ async def list_articles(
         db, page_params, category_id, status, keyword
     )
     items = [ArticleResponse.model_validate(item) for item in data["items"]]
-    for item in items:
-        await CmsArticleService.attach_article_tags(item, db)
     return Response.success(
         data={
             "items": items,
@@ -102,17 +98,12 @@ async def list_articles(
 )
 async def get_article(
     article_id: int,
-    preview: bool = Query(False, description="预览时增加浏览次数"),
     db: AsyncSession = Depends(get_session),
 ):
     """根据ID获取文章详情"""
-    if preview:
-        await CmsArticleService.increment_view_count(db, article_id)
     article = await CmsArticleService.get_article_by_id(db, article_id)
-    resp = ArticleResponse.model_validate(article)
-    await CmsArticleService.attach_article_tags(resp, db)
     return Response.success(
-        data=resp,
+        data=ArticleResponse.model_validate(article),
         msg="获取成功",
     )
 
@@ -129,10 +120,8 @@ async def update_article(
 ):
     """更新文章信息"""
     article = await CmsArticleService.update_article(db, article_id, req)
-    resp = ArticleResponse.model_validate(article)
-    await CmsArticleService.attach_article_tags(resp, db)
     return Response.success(
-        data=resp,
+        data=ArticleResponse.model_validate(article),
         msg="更新成功",
     )
 
@@ -152,40 +141,26 @@ async def delete_article(
 
 
 @router.post(
-    "/articles/{article_id}/publish",
-    summary="发布文章",
+    "/articles/{article_id}/toggle-status",
+    summary="切换文章状态",
     dependencies=[Depends(require_permission("cms", "update"))],
 )
-async def publish_article(
+async def toggle_article_status(
     article_id: int,
     db: AsyncSession = Depends(get_session),
 ):
-    """发布文章（状态改为已发布）"""
-    article = await CmsArticleService.publish_article(db, article_id)
-    resp = ArticleResponse.model_validate(article)
-    await CmsArticleService.attach_article_tags(resp, db)
-    return Response.success(
-        data=resp,
-        msg="发布成功",
-    )
+    """
+    切换文章状态（草稿↔发布↔下架）
 
-
-@router.post(
-    "/articles/{article_id}/unpublish",
-    summary="下架文章",
-    dependencies=[Depends(require_permission("cms", "update"))],
-)
-async def unpublish_article(
-    article_id: int,
-    db: AsyncSession = Depends(get_session),
-):
-    """下架文章（状态改为下架）"""
-    article = await CmsArticleService.unpublish_article(db, article_id)
-    resp = ArticleResponse.model_validate(article)
-    await CmsArticleService.attach_article_tags(resp, db)
+    - 草稿(0) → 发布(1)
+    - 发布(1) → 下架(2)
+    - 下架(2) → 发布(1)
+    """
+    article = await CmsArticleService.toggle_article_status(db, article_id)
+    status_text = {0: "草稿", 1: "已发布", 2: "已下架"}
     return Response.success(
-        data=resp,
-        msg="下架成功",
+        data=ArticleResponse.model_validate(article),
+        msg=f"状态已切换为：{status_text.get(article.status, '未知')}",
     )
 
 
