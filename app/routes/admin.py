@@ -11,6 +11,7 @@ from starlette.responses import RedirectResponse
 from app.admin.controllers import (
     admin_controller,
     auth_controller,
+    cms_article_controller,
     rbac_controller,
     user_admin_controller,
 )
@@ -46,3 +47,6 @@ admin_router.include_router(user_admin_controller.router)
 
 # 后台 RBAC 权限管理接口
 admin_router.include_router(rbac_controller.router)
+
+# 后台 CMS 文章管理接口
+admin_router.include_router(cms_article_controller.router)
