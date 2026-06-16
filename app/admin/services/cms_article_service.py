@@ -203,7 +203,8 @@ class CmsArticleService:
         # 发布状态变更时更新发布时间
         if "status" in update_data:
             if update_data["status"] == 1 and article.status != 1:
-                update_data["published_at"] = datetime.now()
+                if article.published_at is None:  # 只首次发布时设，已发布过的重新发布不覆盖
+                    update_data["published_at"] = datetime.now()
             elif update_data["status"] != 1:
                 update_data["published_at"] = None
 
