@@ -102,9 +102,12 @@ async def list_articles(
 )
 async def get_article(
     article_id: int,
+    preview: bool = Query(False, description="预览时增加浏览次数"),
     db: AsyncSession = Depends(get_session),
 ):
     """根据ID获取文章详情"""
+    if preview:
+        await CmsArticleService.increment_view_count(db, article_id)
     article = await CmsArticleService.get_article_by_id(db, article_id)
     resp = ArticleResponse.model_validate(article)
     await CmsArticleService.attach_article_tags(resp, db)
