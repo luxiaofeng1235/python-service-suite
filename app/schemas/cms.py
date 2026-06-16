@@ -41,6 +41,7 @@ class ArticleCreateRequest(BaseModel):
     summary: str | None = Field(None, max_length=500, description="文章摘要")
     content: str = Field(..., min_length=1, description="文章正文内容")
     cover_image: str | None = Field(None, max_length=255, description="封面图URL")
+    tag_ids: list[int] | None = Field(None, description="关联标签ID列表")
     status: int = Field(0, ge=0, le=2, description="状态: 0-草稿, 1-已发布, 2-下架")
 
     model_config = {
@@ -71,6 +72,7 @@ class ArticleUpdateRequest(BaseModel):
     summary: str | None = Field(None, max_length=500, description="文章摘要")
     content: str | None = Field(None, min_length=1, description="文章正文")
     cover_image: str | None = Field(None, max_length=255, description="封面图URL")
+    tag_ids: list[int] | None = Field(None, description="关联标签ID列表")
     status: int | None = Field(None, ge=0, le=2, description="状态")
 
     model_config = {
@@ -83,45 +85,6 @@ class ArticleUpdateRequest(BaseModel):
             ]
         }
     }
-
-
-# ==================== 文章响应体 ====================
-
-
-class ArticleResponse(BaseModel):
-    """文章详情响应体"""
-
-    id: int = Field(..., description="文章ID")
-    title: str = Field(..., description="文章标题")
-    slug: str = Field(..., description="URL别名")
-    category_id: int = Field(..., description="所属分类ID")
-    author: str | None = Field(None, description="作者")
-    summary: str | None = Field(None, description="文章摘要")
-    content: str = Field(..., description="文章正文")
-    cover_image: str | None = Field(None, description="封面图URL")
-    status: int = Field(..., description="状态: 0-草稿, 1-已发布, 2-下架")
-    view_count: int = Field(0, description="浏览次数")
-    published_at: datetime | None = Field(None, description="发布时间")
-    created_at: datetime | None = Field(None, description="创建时间")
-    updated_at: datetime | None = Field(None, description="更新时间")
-
-    @field_serializer("published_at", "created_at", "updated_at")
-    def serialize_datetime(self, dt: datetime | None) -> str | None:
-        """将 datetime 序列化为字符串"""
-        if dt is None:
-            return None
-        return dt.strftime("%Y-%m-%d %H:%M:%S")
-
-    model_config = {"from_attributes": True}
-
-
-class ArticleListResponse(BaseModel):
-    """文章列表响应体"""
-
-    items: list[ArticleResponse] = Field(..., description="文章列表")
-    total: int = Field(..., description="总记录数")
-    page: int = Field(..., description="当前页码")
-    size: int = Field(..., description="每页条数")
 
 
 # ==================== 标签请求/响应体 ====================
@@ -170,6 +133,47 @@ class TagListResponse(BaseModel):
     """标签列表响应体"""
 
     items: list[TagResponse] = Field(..., description="标签列表")
+    total: int = Field(..., description="总记录数")
+    page: int = Field(..., description="当前页码")
+    size: int = Field(..., description="每页条数")
+
+
+# ==================== 文章响应体 ====================
+
+
+class ArticleResponse(BaseModel):
+    """文章详情响应体"""
+
+    id: int = Field(..., description="文章ID")
+    title: str = Field(..., description="文章标题")
+    slug: str = Field(..., description="URL别名")
+    category_id: int = Field(..., description="所属分类ID")
+    author: str | None = Field(None, description="作者")
+    summary: str | None = Field(None, description="文章摘要")
+    content: str = Field(..., description="文章正文")
+    cover_image: str | None = Field(None, description="封面图URL")
+    status: int = Field(..., description="状态: 0-草稿, 1-已发布, 2-下架")
+    view_count: int = Field(0, description="浏览次数")
+    tag_ids: list[int] | None = Field(None, description="关联标签ID列表")
+    tags: list[TagResponse] | None = Field(None, description="关联标签列表（含name）")
+    published_at: datetime | None = Field(None, description="发布时间")
+    created_at: datetime | None = Field(None, description="创建时间")
+    updated_at: datetime | None = Field(None, description="更新时间")
+
+    @field_serializer("published_at", "created_at", "updated_at")
+    def serialize_datetime(self, dt: datetime | None) -> str | None:
+        """将 datetime 序列化为字符串"""
+        if dt is None:
+            return None
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    model_config = {"from_attributes": True}
+
+
+class ArticleListResponse(BaseModel):
+    """文章列表响应体"""
+
+    items: list[ArticleResponse] = Field(..., description="文章列表")
     total: int = Field(..., description="总记录数")
     page: int = Field(..., description="当前页码")
     size: int = Field(..., description="每页条数")

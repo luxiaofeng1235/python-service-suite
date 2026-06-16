@@ -20,8 +20,10 @@ from app.pkg.logging import app_logger
 from app.schemas.cms import (
     ArticleCategory,
     ArticleCreateRequest,
+    ArticleResponse,
     ArticleUpdateRequest,
     TagCreateRequest,
+    TagResponse,
     TagUpdateRequest,
 )
 
@@ -101,6 +103,7 @@ class CmsArticleService:
             summary=req.summary,
             content=req.content,
             cover_image=req.cover_image,
+            tag_ids=req.tag_ids,
             status=req.status,
             view_count=0,
             published_at=datetime.now() if req.status == 1 else None,
@@ -287,6 +290,19 @@ class CmsArticleService:
             .values(view_count=CmsArticle.view_count + 1)
         )
         await db.commit()
+
+    @staticmethod
+    async def attach_article_tags(
+        article_resp: ArticleResponse, db: AsyncSession
+    ) -> None:
+        """从 tag_ids 查询标签名，填充到 ArticleResponse.tags 字段"""
+        if not article_resp.tag_ids:
+            return
+        result = await db.execute(
+            select(CmsTag).where(CmsTag.id.in_(article_resp.tag_ids))
+        )
+        tags = result.scalars().all()
+        article_resp.tags = [TagResponse.model_validate(t) for t in tags]
 
 
 class CmsTagService:

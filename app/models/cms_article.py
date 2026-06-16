@@ -7,7 +7,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Column, DateTime, Integer, SmallInteger, String, Text
+from sqlalchemy import BigInteger, Column, DateTime, Integer, JSON, SmallInteger, String, Text
 
 from app.database import Base
 
@@ -27,6 +27,7 @@ class CmsArticle(Base):
     cover_image = Column(String(255), nullable=True, comment="封面图URL")
     status = Column(SmallInteger, nullable=False, default=0, comment="状态: 0-草稿, 1-已发布, 2-下架")
     view_count = Column(Integer, nullable=False, default=0, comment="浏览次数")
+    tag_ids = Column(JSON, nullable=True, comment="关联标签ID列表")
     published_at = Column(DateTime, nullable=True, comment="实际发布时间")
     created_at = Column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
     updated_at = Column(

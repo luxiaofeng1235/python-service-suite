@@ -58,8 +58,10 @@ async def create_article(
 ):
     """创建新文章"""
     article = await CmsArticleService.create_article(db, req)
+    resp = ArticleResponse.model_validate(article)
+    await CmsArticleService.attach_article_tags(resp, db)
     return Response.success(
-        data=ArticleResponse.model_validate(article),
+        data=resp,
         msg="文章创建成功",
     )
 
@@ -70,19 +72,19 @@ async def create_article(
     dependencies=[Depends(require_permission("cms", "list"))],
 )
 async def list_articles(
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(10, ge=1, le=100, description="每页条数"),
+    page_params: PageParams = Depends(),
     category_id: int | None = Query(None, description="分类ID筛选"),
     status: int | None = Query(None, ge=0, le=2, description="状态筛选"),
     keyword: str | None = Query(None, description="关键词搜索"),
     db: AsyncSession = Depends(get_session),
 ):
     """分页获取文章列表"""
-    page_params = PageParams(page=page, size=page_size)
     data = await CmsArticleService.get_article_list(
         db, page_params, category_id, status, keyword
     )
     items = [ArticleResponse.model_validate(item) for item in data["items"]]
+    for item in items:
+        await CmsArticleService.attach_article_tags(item, db)
     return Response.success(
         data={
             "items": items,
@@ -104,8 +106,10 @@ async def get_article(
 ):
     """根据ID获取文章详情"""
     article = await CmsArticleService.get_article_by_id(db, article_id)
+    resp = ArticleResponse.model_validate(article)
+    await CmsArticleService.attach_article_tags(resp, db)
     return Response.success(
-        data=ArticleResponse.model_validate(article),
+        data=resp,
         msg="获取成功",
     )
 
@@ -122,8 +126,10 @@ async def update_article(
 ):
     """更新文章信息"""
     article = await CmsArticleService.update_article(db, article_id, req)
+    resp = ArticleResponse.model_validate(article)
+    await CmsArticleService.attach_article_tags(resp, db)
     return Response.success(
-        data=ArticleResponse.model_validate(article),
+        data=resp,
         msg="更新成功",
     )
 
@@ -153,8 +159,10 @@ async def publish_article(
 ):
     """发布文章（状态改为已发布）"""
     article = await CmsArticleService.publish_article(db, article_id)
+    resp = ArticleResponse.model_validate(article)
+    await CmsArticleService.attach_article_tags(resp, db)
     return Response.success(
-        data=ArticleResponse.model_validate(article),
+        data=resp,
         msg="发布成功",
     )
 
@@ -170,8 +178,10 @@ async def unpublish_article(
 ):
     """下架文章（状态改为下架）"""
     article = await CmsArticleService.unpublish_article(db, article_id)
+    resp = ArticleResponse.model_validate(article)
+    await CmsArticleService.attach_article_tags(resp, db)
     return Response.success(
-        data=ArticleResponse.model_validate(article),
+        data=resp,
         msg="下架成功",
     )
 
@@ -202,12 +212,10 @@ async def create_tag(
     dependencies=[Depends(require_permission("cms", "list"))],
 )
 async def list_tags(
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(10, ge=1, le=100, description="每页条数"),
+    page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_session),
 ):
     """分页获取标签列表"""
-    page_params = PageParams(page=page, size=page_size)
     data = await CmsTagService.get_tag_list(db, page_params)
     items = [TagResponse.model_validate(item) for item in data["items"]]
     return Response.success(
