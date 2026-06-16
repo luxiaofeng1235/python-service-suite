@@ -13,7 +13,7 @@ from app.database import Base
 
 
 class AiChatLog(Base):
-    """AI 对话日志表 ORM 模型"""
+    """AI 对话日志表 ORM 模型1"""
 
     __tablename__ = "ai_chat_log"
 
