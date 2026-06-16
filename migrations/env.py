@@ -15,6 +15,8 @@ from app.models import (
     Attachment,  # noqa: F401
     AuthAdmin,  # noqa: F401
     CasbinRule,  # noqa: F401
+    CmsArticle,  # noqa: F401
+    CmsTag,  # noqa: F401
     LotteryConfig,  # noqa: F401
     Permission,  # noqa: F401
     Role,  # noqa: F401
