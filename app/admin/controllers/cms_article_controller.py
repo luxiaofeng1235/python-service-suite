@@ -12,6 +12,7 @@ from app.admin.services.cms_article_service import CmsArticleService, CmsTagServ
 from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.admin_auth import get_current_admin_user
+from app.core.permissions import Perm
 from app.core.rbac import require_permission
 from app.database import get_session
 from app.schemas.cms import (
@@ -49,7 +50,7 @@ async def get_categories():
 @router.post(
     "/articles",
     summary="创建文章",
-    dependencies=[Depends(require_permission("cms", "create"))],
+    dependencies=[Depends(require_permission(Perm.CMS_CREATE))],
 )
 async def create_article(
     req: ArticleCreateRequest,
@@ -67,7 +68,7 @@ async def create_article(
 @router.get(
     "/articles",
     summary="文章列表（分页）",
-    dependencies=[Depends(require_permission("cms", "list"))],
+    dependencies=[Depends(require_permission(Perm.CMS_LIST))],
 )
 async def list_articles(
     page_params: PageParams = Depends(),
@@ -94,7 +95,7 @@ async def list_articles(
 @router.get(
     "/articles/{article_id}",
     summary="文章详情",
-    dependencies=[Depends(require_permission("cms", "read"))],
+    dependencies=[Depends(require_permission(Perm.CMS_READ))],
 )
 async def get_article(
     article_id: int,
@@ -111,7 +112,7 @@ async def get_article(
 @router.put(
     "/articles/{article_id}",
     summary="更新文章",
-    dependencies=[Depends(require_permission("cms", "update"))],
+    dependencies=[Depends(require_permission(Perm.CMS_UPDATE))],
 )
 async def update_article(
     article_id: int,
@@ -129,7 +130,7 @@ async def update_article(
 @router.delete(
     "/articles/{article_id}",
     summary="删除文章",
-    dependencies=[Depends(require_permission("cms", "delete"))],
+    dependencies=[Depends(require_permission(Perm.CMS_DELETE))],
 )
 async def delete_article(
     article_id: int,
@@ -143,7 +144,7 @@ async def delete_article(
 @router.post(
     "/articles/{article_id}/toggle-status",
     summary="切换文章状态",
-    dependencies=[Depends(require_permission("cms", "update"))],
+    dependencies=[Depends(require_permission(Perm.CMS_UPDATE))],
 )
 async def toggle_article_status(
     article_id: int,
@@ -170,7 +171,7 @@ async def toggle_article_status(
 @router.post(
     "/tags",
     summary="创建标签",
-    dependencies=[Depends(require_permission("cms", "create"))],
+    dependencies=[Depends(require_permission(Perm.CMS_CREATE))],
 )
 async def create_tag(
     req: TagCreateRequest,
@@ -187,7 +188,7 @@ async def create_tag(
 @router.get(
     "/tags",
     summary="标签列表（分页）",
-    dependencies=[Depends(require_permission("cms", "list"))],
+    dependencies=[Depends(require_permission(Perm.CMS_LIST))],
 )
 async def list_tags(
     page_params: PageParams = Depends(),
@@ -209,7 +210,7 @@ async def list_tags(
 @router.get(
     "/tags/{tag_id}",
     summary="标签详情",
-    dependencies=[Depends(require_permission("cms", "read"))],
+    dependencies=[Depends(require_permission(Perm.CMS_READ))],
 )
 async def get_tag(
     tag_id: int,
@@ -223,7 +224,7 @@ async def get_tag(
 @router.put(
     "/tags/{tag_id}",
     summary="更新标签",
-    dependencies=[Depends(require_permission("cms", "update"))],
+    dependencies=[Depends(require_permission(Perm.CMS_UPDATE))],
 )
 async def update_tag(
     tag_id: int,
@@ -241,7 +242,7 @@ async def update_tag(
 @router.delete(
     "/tags/{tag_id}",
     summary="删除标签",
-    dependencies=[Depends(require_permission("cms", "delete"))],
+    dependencies=[Depends(require_permission(Perm.CMS_DELETE))],
 )
 async def delete_tag(
     tag_id: int,

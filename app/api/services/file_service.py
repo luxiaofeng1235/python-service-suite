@@ -375,10 +375,14 @@ class FileService:
         Args:
             file_path: 文件相对路径
             base_url: 当前请求的基础 URL（例如 http://localhost:8000/），
-                      不传则返回相对路径
+                      不传则优先使用 settings.FILE_BASE_URL，再退化为相对路径
         """
+        from app.core.config import settings
+
         # 统一为正斜杠，兼容 Windows 环境 Path 可能产生的反斜杠
         normalized_path = file_path.replace("\\", "/")
+        if not base_url:
+            base_url = settings.FILE_BASE_URL
         if base_url:
             base_url = base_url.rstrip("/")
             return f"{base_url}/uploads/{normalized_path}"

@@ -76,6 +76,9 @@ class Settings(BaseSettings):
     FILE_VIDEO_MAX_SIZE: int = FILE_VIDEO["max_size"]
     """视频最大允许大小（字节）"""
 
+    FILE_BASE_URL: str = ""
+    """文件访问基础URL，为空时从请求 base_url 自动拼接"""
+
     # ==================== 邮件（SMTP）配置 ====================
     SMTP_HOST: str = SMTP_HOST
     SMTP_PORT: int = SMTP_PORT

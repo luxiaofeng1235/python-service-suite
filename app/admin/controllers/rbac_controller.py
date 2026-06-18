@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.response import Response
 from app.core.admin_auth import get_current_admin_user
+from app.core.permissions import Perm
 from app.core.rbac import require_permission
 from app.database import get_session
 from app.schemas.rbac import (
@@ -31,7 +32,7 @@ router = APIRouter(prefix="/admin", tags=["后台-RBAC 权限管理"])
 @router.get(
     "/permissions",
     summary="权限目录列表",
-    dependencies=[Depends(require_permission("permission", "list"))],
+    dependencies=[Depends(require_permission(Perm.PERMISSION_LIST))],
 )
 async def list_permissions(
     db: AsyncSession = Depends(get_session),
@@ -44,7 +45,7 @@ async def list_permissions(
 @router.post(
     "/permissions",
     summary="创建权限目录条目",
-    dependencies=[Depends(require_permission("permission", "create"))],
+    dependencies=[Depends(require_permission(Perm.PERMISSION_CREATE))],
 )
 async def create_permission(
     req: PermissionCreateRequest,
@@ -60,7 +61,7 @@ async def create_permission(
 @router.delete(
     "/permissions/{permission_id}",
     summary="删除权限目录条目",
-    dependencies=[Depends(require_permission("permission", "delete"))],
+    dependencies=[Depends(require_permission(Perm.PERMISSION_DELETE))],
 )
 async def delete_permission(
     permission_id: int,
@@ -77,7 +78,7 @@ async def delete_permission(
 @router.post(
     "/roles",
     summary="创建角色",
-    dependencies=[Depends(require_permission("role", "create"))],
+    dependencies=[Depends(require_permission(Perm.ROLE_CREATE))],
 )
 async def create_role(
     req: RoleCreateRequest,
@@ -91,7 +92,7 @@ async def create_role(
 @router.get(
     "/roles",
     summary="角色列表",
-    dependencies=[Depends(require_permission("role", "list"))],
+    dependencies=[Depends(require_permission(Perm.ROLE_LIST))],
 )
 async def list_roles(
     db: AsyncSession = Depends(get_session),
@@ -104,7 +105,7 @@ async def list_roles(
 @router.get(
     "/roles/{role_id}",
     summary="角色详情",
-    dependencies=[Depends(require_permission("role", "read"))],
+    dependencies=[Depends(require_permission(Perm.ROLE_READ))],
 )
 async def get_role(
     role_id: int,
@@ -118,7 +119,7 @@ async def get_role(
 @router.put(
     "/roles/{role_id}",
     summary="更新角色",
-    dependencies=[Depends(require_permission("role", "update"))],
+    dependencies=[Depends(require_permission(Perm.ROLE_UPDATE))],
 )
 async def update_role(
     role_id: int,
@@ -135,7 +136,7 @@ async def update_role(
 @router.delete(
     "/roles/{role_id}",
     summary="删除角色",
-    dependencies=[Depends(require_permission("role", "delete"))],
+    dependencies=[Depends(require_permission(Perm.ROLE_DELETE))],
 )
 async def delete_role(
     role_id: int,
@@ -152,7 +153,7 @@ async def delete_role(
 @router.get(
     "/roles/{role_id}/permissions",
     summary="角色权限列表",
-    dependencies=[Depends(require_permission("permission", "list"))],
+    dependencies=[Depends(require_permission(Perm.PERMISSION_LIST))],
 )
 async def get_role_permissions(
     role_id: int,
@@ -166,7 +167,7 @@ async def get_role_permissions(
 @router.post(
     "/roles/{role_id}/permissions",
     summary="为角色分配权限",
-    dependencies=[Depends(require_permission("permission", "assign"))],
+    dependencies=[Depends(require_permission(Perm.PERMISSION_ASSIGN))],
 )
 async def add_role_permission(
     role_id: int,
@@ -181,7 +182,7 @@ async def add_role_permission(
 @router.delete(
     "/roles/{role_id}/permissions",
     summary="移除角色权限",
-    dependencies=[Depends(require_permission("permission", "assign"))],
+    dependencies=[Depends(require_permission(Perm.PERMISSION_ASSIGN))],
 )
 async def remove_role_permission(
     role_id: int,
@@ -199,7 +200,7 @@ async def remove_role_permission(
 @router.get(
     "/admins/{admin_id}/roles",
     summary="管理员的角色列表",
-    dependencies=[Depends(require_permission("user_role", "list"))],
+    dependencies=[Depends(require_permission(Perm.USER_ROLE_LIST))],
 )
 async def get_admin_roles(
     admin_id: int,
@@ -213,7 +214,7 @@ async def get_admin_roles(
 @router.post(
     "/admins/{admin_id}/roles",
     summary="为管理员分配角色",
-    dependencies=[Depends(require_permission("user_role", "assign"))],
+    dependencies=[Depends(require_permission(Perm.USER_ROLE_ASSIGN))],
 )
 async def assign_admin_role(
     admin_id: int,
@@ -228,7 +229,7 @@ async def assign_admin_role(
 @router.delete(
     "/admins/{admin_id}/roles/{role_id}",
     summary="移除管理员的角色",
-    dependencies=[Depends(require_permission("user_role", "assign"))],
+    dependencies=[Depends(require_permission(Perm.USER_ROLE_ASSIGN))],
 )
 async def remove_admin_role(
     admin_id: int,

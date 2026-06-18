@@ -14,6 +14,7 @@ from app.api.services.file_service import FileService
 from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.admin_auth import get_current_admin_user
+from app.core.permissions import Perm
 from app.core.rbac import require_permission
 from app.database import get_session
 from app.schemas.auth_admin import AdminProfileUpdateRequest
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/admin/admins", tags=["后台-管理员管理"])
 @router.get(
     "/list",
     summary="管理员列表",
-    dependencies=[Depends(require_permission("admin", "list"))],
+    dependencies=[Depends(require_permission(Perm.ADMIN_LIST))],
 )
 async def list_admins(
     page_params: PageParams = Depends(),
@@ -38,7 +39,7 @@ async def list_admins(
 @router.post(
     "/{admin_id}/toggle-active",
     summary="禁用/启用切换",
-    dependencies=[Depends(require_permission("admin", "toggle"))],
+    dependencies=[Depends(require_permission(Perm.ADMIN_TOGGLE))],
 )
 async def toggle_admin_active(
     admin_id: int,

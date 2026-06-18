@@ -17,6 +17,7 @@ from app.schemas.user_admin import AdminUserUpdateRequest
 from app.admin.services.user_admin_service import UserAdminService
 from app.common.pagination import PageParams
 from app.common.response import Response
+from app.core.permissions import Perm
 from app.core.rbac import require_permission
 from app.database import get_session
 
@@ -30,7 +31,7 @@ router = APIRouter(prefix="/admin/users", tags=["后台-用户管理"])
 @router.get(
     "/list",
     summary="用户列表（后台）",
-    dependencies=[Depends(require_permission("user", "list"))],
+    dependencies=[Depends(require_permission(Perm.USER_LIST))],
 )
 async def list_users(
     page_params: PageParams = Depends(),
@@ -57,7 +58,7 @@ async def list_users(
 @router.get(
     "/{user_id}",
     summary="用户详情（后台）",
-    dependencies=[Depends(require_permission("user", "read"))],
+    dependencies=[Depends(require_permission(Perm.USER_READ))],
 )
 async def get_user(
     user_id: int,
@@ -78,7 +79,7 @@ async def get_user(
 @router.put(
     "/{user_id}",
     summary="更新用户（后台）",
-    dependencies=[Depends(require_permission("user", "update"))],
+    dependencies=[Depends(require_permission(Perm.USER_UPDATE))],
 )
 async def update_user(
     user_id: int,
@@ -104,7 +105,7 @@ async def update_user(
 async def delete_user(
     user_id: int,
     db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(require_permission("user", "delete")),
+    current_user: dict = Depends(require_permission(Perm.USER_DELETE)),
 ):
     """
     管理员强制注销用户（需 user:delete 权限）
@@ -126,7 +127,7 @@ async def delete_user(
 @router.post(
     "/{user_id}/disable",
     summary="禁用用户",
-    dependencies=[Depends(require_permission("user", "disable"))],
+    dependencies=[Depends(require_permission(Perm.USER_DISABLE))],
 )
 async def disable_user(
     user_id: int,
@@ -145,7 +146,7 @@ async def disable_user(
 @router.post(
     "/{user_id}/enable",
     summary="启用用户",
-    dependencies=[Depends(require_permission("user", "enable"))],
+    dependencies=[Depends(require_permission(Perm.USER_ENABLE))],
 )
 async def enable_user(
     user_id: int,
@@ -167,7 +168,7 @@ async def enable_user(
 @router.post(
     "/tokens/cleanup",
     summary="清理过期 Token（后台）",
-    dependencies=[Depends(require_permission("user", "cleanup"))],
+    dependencies=[Depends(require_permission(Perm.USER_CLEANUP))],
 )
 async def cleanup_expired_tokens(
     db: AsyncSession = Depends(get_session),
