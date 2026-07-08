@@ -13,7 +13,7 @@ async def test():
     测试参数流程
     """
     items = {
-        "test": "test",
+        "test": "test11",
         "age": 1,
         "name": "张三",
         "status": True,
