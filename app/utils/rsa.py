@@ -12,7 +12,7 @@ import os
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding, serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding as asym_padding
-
+import base64
 logger = get_logger(__name__)
 
 AES_BLOCK_SIZE = 16
@@ -21,7 +21,7 @@ AES_BLOCK_SIZE = 16
 
 def encode_str_to_base64(s: str) -> str:
     """字符串 → base64 编码（对标 Go EncodeStr2Base64）"""
-    import base64
+
     return base64.b64encode(s.encode("utf-8")).decode("utf-8")
 
 
