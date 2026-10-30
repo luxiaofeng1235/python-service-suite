@@ -1,0 +1,34 @@
+{
+  "categories": [
+    {
+      "id": 1,
+      "name": "技术文章",
+      "slug": "tech",
+      "description": "技术分享、开发教程、编程技巧"
+    },
+    {
+      "id": 2,
+      "name": "产品动态",
+      "slug": "product",
+      "description": "产品更新、功能发布、版本说明"
+    },
+    {
+      "id": 3,
+      "name": "行业资讯",
+      "slug": "news",
+      "description": "行业新闻、市场动态、趋势分析"
+    },
+    {
+      "id": 4,
+      "name": "公司新闻",
+      "slug": "company",
+      "description": "公司公告、团队动态、企业文化"
+    },
+    {
+      "id": 5,
+      "name": "帮助文档",
+      "slug": "help",
+      "description": "使用指南、FAQ、常见问题解答"
+    }
+  ]
+}

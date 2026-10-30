@@ -14,6 +14,7 @@ from app.common.exception import AppException
 from app.common.ratelimit import RateLimiter
 from app.common.response import Response
 from app.core.admin_auth import get_current_admin_user
+from app.core.permissions import Perm
 from app.core.rbac import require_permission
 from app.database import get_session
 from app.schemas.auth_admin import AdminLoginRequest, AdminRegisterRequest
@@ -50,7 +51,7 @@ async def login(
 @router.post(
     "/register",
     summary="创建管理员（需超管）",
-    dependencies=[Depends(require_permission("admin", "create"))],
+    dependencies=[Depends(require_permission(Perm.ADMIN_CREATE))],
 )
 async def register(
     req: AdminRegisterRequest,
@@ -80,5 +81,5 @@ async def get_me(
     current_admin: dict = Depends(get_current_admin_user),
 ):
     """获取当前登录的管理员完整信息"""
-    admin = await AdminAuthService.get_admin_info(db, current_admin["user_id"])
+    admin = await AdminAuthService.get_admin_response(db, current_admin["user_id"])
     return Response.success(data=admin)

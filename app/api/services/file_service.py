@@ -27,6 +27,16 @@ from app.storage.validation import (
 class FileService:
     """文件上传业务逻辑"""
 
+    LEGACY_USER_ID = 0
+    OWNER_USER = "user"
+    OWNER_ADMIN = "admin"
+    OWNER_SYSTEM = "system"
+
+    @staticmethod
+    def _legacy_user_id(owner_type: str, owner_id: int) -> int:
+        """Map new ownership fields to the legacy user_id column."""
+        return owner_id if owner_type == FileService.OWNER_USER else FileService.LEGACY_USER_ID
+
     # ==================== 图片上传（字节数据）====================
 
     @classmethod
@@ -37,6 +47,8 @@ class FileService:
         file_data: bytes,
         original_name: str,
         mime_type: str,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """上传图片（接收完整字节数据）"""
         ext = Path(original_name).suffix.lower()
@@ -59,6 +71,8 @@ class FileService:
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=original_name,
             stored_name=stored_name,
             file_path=f"{sub_path}/{stored_name}",
@@ -77,6 +91,8 @@ class FileService:
         file_data: bytes,
         original_name: str,
         mime_type: str,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """上传视频（接收完整字节数据）"""
         ext = Path(original_name).suffix.lower()
@@ -99,6 +115,8 @@ class FileService:
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=original_name,
             stored_name=stored_name,
             file_path=f"{sub_path}/{stored_name}",
@@ -115,6 +133,8 @@ class FileService:
         db: AsyncSession,
         user_id: int,
         file: UploadFile,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """流式上传图片（Controller 直接传 UploadFile）
 
@@ -123,16 +143,32 @@ class FileService:
             user_id: 上传用户 ID
             file: FastAPI UploadFile 对象
         """
+        return await cls.upload_image_stream_for_owner(
+            db=db,
+            owner_type=owner_type,
+            owner_id=user_id if owner_id is None else owner_id,
+            file=file,
+        )
+
+    @classmethod
+    async def upload_image_stream_for_owner(
+        cls,
+        db: AsyncSession,
+        owner_type: str,
+        owner_id: int,
+        file: UploadFile,
+    ) -> Attachment:
+        """按统一归属字段流式上传图片。"""
         ext = Path(file.filename or "image").suffix.lower()
         validate_image(ext, 0)
 
-        sub_path, stored_name, file_size = await write_stream(
-            file, IMAGE_MAX_SIZE, "images"
-        )
+        sub_path, stored_name, file_size = await write_stream(file, IMAGE_MAX_SIZE, "images")
 
         return await cls._create_attachment(
             db=db,
-            user_id=user_id,
+            user_id=cls._legacy_user_id(owner_type, owner_id),
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=file.filename or "unknown",
             stored_name=stored_name,
             file_path=f"{sub_path}/{stored_name}",
@@ -147,6 +183,8 @@ class FileService:
         db: AsyncSession,
         user_id: int,
         file: UploadFile,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """流式上传视频（Controller 直接传 UploadFile）
 
@@ -155,16 +193,32 @@ class FileService:
             user_id: 上传用户 ID
             file: FastAPI UploadFile 对象
         """
+        return await cls.upload_video_stream_for_owner(
+            db=db,
+            owner_type=owner_type,
+            owner_id=user_id if owner_id is None else owner_id,
+            file=file,
+        )
+
+    @classmethod
+    async def upload_video_stream_for_owner(
+        cls,
+        db: AsyncSession,
+        owner_type: str,
+        owner_id: int,
+        file: UploadFile,
+    ) -> Attachment:
+        """按统一归属字段流式上传视频。"""
         ext = Path(file.filename or "video").suffix.lower()
         validate_video(ext, 0)
 
-        sub_path, stored_name, file_size = await write_stream(
-            file, VIDEO_MAX_SIZE, "videos"
-        )
+        sub_path, stored_name, file_size = await write_stream(file, VIDEO_MAX_SIZE, "videos")
 
         return await cls._create_attachment(
             db=db,
-            user_id=user_id,
+            user_id=cls._legacy_user_id(owner_type, owner_id),
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=file.filename or "unknown",
             stored_name=stored_name,
             file_path=f"{sub_path}/{stored_name}",
@@ -184,6 +238,8 @@ class FileService:
         mime_type: str,
         stored_path: str,
         file_size: int,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """上传图片（文件已由调用方流式写入磁盘）
 
@@ -200,6 +256,8 @@ class FileService:
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=original_name,
             stored_name=Path(stored_path).name,
             file_path=stored_path,
@@ -217,6 +275,8 @@ class FileService:
         mime_type: str,
         stored_path: str,
         file_size: int,
+        owner_type: str = "user",
+        owner_id: int | None = None,
     ) -> Attachment:
         """上传视频（文件已由调用方流式写入磁盘）
 
@@ -233,6 +293,8 @@ class FileService:
         return await cls._create_attachment(
             db=db,
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
             original_name=original_name,
             stored_name=Path(stored_path).name,
             file_path=stored_path,
@@ -248,6 +310,8 @@ class FileService:
         cls,
         db: AsyncSession,
         user_id: int,
+        owner_type: str,
+        owner_id: int | None,
         original_name: str,
         stored_name: str,
         file_path: str,
@@ -256,8 +320,11 @@ class FileService:
         file_type: str,
     ) -> Attachment:
         """创建附件数据库记录"""
+        resolved_owner_id = user_id if owner_id is None else owner_id
         attachment = Attachment(
             user_id=user_id,
+            owner_type=owner_type,
+            owner_id=resolved_owner_id,
             original_name=original_name,
             stored_name=stored_name,
             file_path=file_path,
@@ -283,11 +350,10 @@ class FileService:
         Args:
             db: 数据库会话
             user_id: 筛选上传用户（None 查全部）
-            page: 页码
-            size: 每页条数
+            page_params: 分页参数（page + page_size/size）
 
         Returns:
-            {"items": [...], "total": int, "page": int, "size": int}
+            {"items": [...], "total": int, "page": int, "size": int, "total_page": int}
         """
         query = select(Attachment)
         count_query = select(func.count(Attachment.id))
@@ -309,10 +375,14 @@ class FileService:
         Args:
             file_path: 文件相对路径
             base_url: 当前请求的基础 URL（例如 http://localhost:8000/），
-                      不传则返回相对路径
+                      不传则优先使用 settings.FILE_BASE_URL，再退化为相对路径
         """
+        from app.core.config import settings
+
         # 统一为正斜杠，兼容 Windows 环境 Path 可能产生的反斜杠
         normalized_path = file_path.replace("\\", "/")
+        if not base_url:
+            base_url = settings.FILE_BASE_URL
         if base_url:
             base_url = base_url.rstrip("/")
             return f"{base_url}/uploads/{normalized_path}"

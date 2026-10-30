@@ -29,12 +29,12 @@ def remove_trailing_eq(s: str) -> str:
     n = len(s)
     if n > 1 and s[n - 2] == "=" and s[n - 1] == "=":
         new_str = s[: n - 2]
-        logger.debug("移除末尾两个 =: %s -> %s", s, new_str)
+        logger.debug("移除末尾两个 =: {} -> {}", s, new_str)
         return new_str
     if s[n - 1] == "=":
         new_str = s[: n - 1]
-        logger.debug("移除末尾一个 =: %s -> %s", s, new_str)
+        logger.debug("移除末尾一个 =: {} -> {}", s, new_str)
         return new_str
 
-    logger.debug("无尾部 = 号: %s", s)
+    logger.debug("无尾部 = 号: {}", s)
     return s

@@ -8,19 +8,28 @@ RBAC 鉴权依赖
 超管（is_super=True）自动跳过权限校验。
 """
 
+from typing import Literal
+
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.admin_auth import get_current_admin_user
+from app.core.permissions import Perm
 from app.database import get_session
 from app.services.rbac_service import RbacService
 
 
-def require_permission(resource: str, action: str):
+def require_permission(resource: str | Perm, action: str | None = None):
     """
     权限校验依赖工厂
 
     用法：
+        # 使用 Perm 枚举（推荐）
+        @router.get("/admin/users/list",
+            dependencies=[Depends(require_permission(Perm.USER_LIST))],
+        )
+
+        # 使用字符串（兼容旧用法）
         @router.get("/admin/users/list",
             dependencies=[Depends(require_permission("user", "list"))],
         )
@@ -28,12 +37,14 @@ def require_permission(resource: str, action: str):
     鉴权走后台管理员表（auth_admins），不走前台 users 表。
 
     Args:
-        resource: 资源名（如 "user"、"role"、"permission"）
-        action: 操作名（如 "list"、"create"、"delete"）
-
-    Returns:
-        FastAPI Depends 可调用对象
+        resource: 资源名或 Perm 枚举
+        action: 操作名（resource 为 Perm 枚举时可不传）
     """
+
+    # 如果传的是 Perm 枚举，自动解包
+    if isinstance(resource, Perm):
+        action = resource.action
+        resource = resource.resource
 
     async def _check(
         current_admin: dict = Depends(get_current_admin_user),

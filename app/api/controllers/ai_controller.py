@@ -8,32 +8,16 @@ AI 接口控制器层
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.ai import ChatRequest
 from app.api.services.ai_service import AIService
 from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.dependency import get_current_user
 from app.database import get_session
+from app.schemas.ai import ChatRequest
 from app.utils.sse import SSEUtil
 
 # ==================== 路由定义 ====================
 router = APIRouter(prefix="/api", tags=["AI 服务"])
-
-
-@router.post("/ai/chat", summary="AI 对话")
-async def chat(
-    req: ChatRequest,
-    db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    AI 对话接口
-
-    - 接收用户消息
-    - 返回完整回复
-    """
-    data = await AIService.chat(db, req, user_id=current_user.get("user_id") or 0)
-    return Response.success(data=data, msg="调用成功")
 
 
 @router.post("/ai/chat/send_stream_sse", summary="AI 流式对话(SSE)")
@@ -63,7 +47,7 @@ async def list_chats(
     获取当前登录用户的 AI 对话列表
 
     Args:
-        page_params: 分页参数（page, page_size）
+        page_params: 分页参数（page + page_size/size）
         model_id: 模型类型过滤（1=千问）
 
     Returns:

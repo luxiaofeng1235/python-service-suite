@@ -18,14 +18,24 @@ class Attachment(Base):
     __tablename__ = "attachment"
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment="文件ID")
-    user_id = Column(Integer, nullable=False, index=True, comment="上传用户ID")
+    user_id = Column(Integer, nullable=False, index=True, comment="兼容字段：前台上传用户ID")
+    owner_type = Column(
+        String(20),
+        nullable=False,
+        default="user",
+        index=True,
+        comment="归属类型：user/admin/system",
+    )
+    owner_id = Column(Integer, nullable=False, default=0, index=True, comment="归属主体ID")
     original_name = Column(String(255), nullable=False, comment="原始文件名")
     stored_name = Column(String(255), nullable=False, comment="存储文件名")
     file_path = Column(String(500), nullable=False, comment="文件相对路径")
     file_size = Column(Integer, nullable=False, comment="文件大小（字节）")
     mime_type = Column(String(100), nullable=False, comment="MIME 类型")
     file_type = Column(String(20), nullable=False, comment="文件分类：image / video / other")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="上传时间")
+    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="上传时间")
 
     def __repr__(self) -> str:
-        return f"<Attachment(id={self.id}, original='{self.original_name}', type='{self.file_type}')>"
+        return (
+            f"<Attachment(id={self.id}, original='{self.original_name}', type='{self.file_type}')>"
+        )

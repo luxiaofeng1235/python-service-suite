@@ -9,11 +9,11 @@
 from fastapi import APIRouter, Depends, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.services.file_service import FileService
+from app.common.pagination import PageParams
 from app.common.response import Response
 from app.database import get_session
 from app.schemas.file import AttachmentResponse
-from app.common.pagination import PageParams
-from app.api.services.file_service import FileService
 
 router = APIRouter(prefix="/api/file", tags=["文件管理"])
 
@@ -34,8 +34,13 @@ async def upload_image(
     - 最大大小：从配置读取（默认 10 MB）
     - 无需登录
     """
-    attachment = await FileService.upload_image_stream(db, user_id=0, file=file)
-    data = AttachmentResponse.from_orm(attachment, str(request.base_url))
+    attachment = await FileService.upload_image_stream_for_owner(
+        db,
+        owner_type="user",
+        owner_id=0,
+        file=file,
+    )
+    data = AttachmentResponse.from_attachment(attachment, str(request.base_url))
     return Response.success(data, msg="图片上传成功")
 
 
@@ -55,8 +60,13 @@ async def upload_video(
     - 最大大小：从配置读取（默认 200 MB）
     - 无需登录
     """
-    attachment = await FileService.upload_video_stream(db, user_id=0, file=file)
-    data = AttachmentResponse.from_orm(attachment, str(request.base_url))
+    attachment = await FileService.upload_video_stream_for_owner(
+        db,
+        owner_type="user",
+        owner_id=0,
+        file=file,
+    )
+    data = AttachmentResponse.from_attachment(attachment, str(request.base_url))
     return Response.success(data, msg="视频上传成功")
 
 
@@ -81,13 +91,6 @@ async def list_files(
         page_params=page_params,
     )
     items = [
-        AttachmentResponse.from_orm(item, str(request.base_url))
-        for item in data["items"]
+        AttachmentResponse.from_attachment(item, str(request.base_url)) for item in data["items"]
     ]
-    file_list = {
-        "items": items,  # 文件列表
-        "total": data["total"],  # 记录集总数
-        "total_page": data["page"],  # 总页数
-        "size": data["size"],  # 步长
-    }
-    return Response.success(file_list, "文件列表")
+    return Response.success({**data, "items": items}, "文件列表")

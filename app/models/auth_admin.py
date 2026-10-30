@@ -28,11 +28,11 @@ class AuthAdmin(Base):
     remark = Column(String(500), nullable=True, default="", comment="备注")
     is_super = Column(Boolean, default=False, nullable=False, comment="是否超管")
     is_active = Column(Boolean, default=True, nullable=False, comment="是否启用")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="创建时间")
+    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
     updated_at = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=datetime.now,
+        onupdate=datetime.now,
         nullable=False,
         comment="更新时间",
     )

@@ -9,7 +9,6 @@ from app.schemas.ai import (
     ChatLogListResponse,
     ChatLogResponse,
     ChatRequest,
-    ChatResponse,
     StreamChunk,
 )
 from app.schemas.user import (
@@ -26,7 +25,6 @@ __all__ = [
     "ChatLogListResponse",
     "ChatLogResponse",
     "ChatRequest",
-    "ChatResponse",
     "ChatLogResponse",
     "StreamChunk",
     "ForgotPasswordRequest",

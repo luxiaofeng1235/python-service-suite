@@ -5,26 +5,20 @@
 职责：只负责路由定义、接收请求、参数校验、返回响应。
 严禁在此写任何业务逻辑——所有业务逻辑下沉到 Service 层。
 """
-import random
-import string
-import uuid
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.pkg.redis_client import redis_client
+from app.common.pagination import PageParams
+from app.common.response import Response
+from app.core.dependency import get_current_user
+from app.database import get_session
 from app.schemas.user import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
     UserLoginRequest,
     UserRegisterRequest,
 )
-from app.common.pagination import PageParams
-from app.common.response import Response
-from app.core.dependency import get_current_user
-from app.database import get_session
 from app.services.user_service import UserService
-from io import BytesIO
-from captcha.image import ImageCaptcha
 
 # ==================== 路由定义 ====================
 router = APIRouter(prefix="/api/user", tags=["用户管理"])
@@ -119,7 +113,8 @@ async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(g
 @router.get("/list", summary="用户列表（分页）")
 async def list_users(
     page_params: PageParams = Depends(),
-    db: AsyncSession = Depends(get_session)
+    db: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     获取用户列表（需登录）
@@ -164,25 +159,8 @@ async def delete_account(
     return Response.success(data, "账号已注销")
 
 # ===================获取验证码 ======================
-@router.get("/captcha",summary="获取验证码")
+@router.get("/captcha", summary="获取验证码")
 async def captcha():
-    """生成图片验证码，返回 base64 图片和 captcha_id"""
-    code = "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
-    # 生成一个唯一 ID
-    captcha_id = str(uuid.uuid4())
-
-    # 存 Redis 5分钟过期
-    await  redis_client.set(f"captcha_id:{captcha_id}", code,300)
-
-    # 生成图片
-    image = ImageCaptcha(width=160,height=80)
-
-    buf =BytesIO()
-    image.write(code , buf) #默认用png来进行填充
-    buf.seek(0)
-    import base64
-    returnRes = {
-        "captcha_id": captcha_id,
-        "image_base64": base64.b64encode(buf.getvalue()).decode(),
-    }
-    return Response.success(data=returnRes,msg ="获取验证码")
+    """Get image captcha."""
+    data = await UserService.generate_captcha()
+    return Response.success(data=data, msg="获取验证码")

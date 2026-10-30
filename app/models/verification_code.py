@@ -23,7 +23,7 @@ class VerificationCode(Base):
     purpose = Column(String(50), nullable=False, default="password_reset", comment="用途")
     expires_at = Column(DateTime, nullable=False, comment="过期时间")
     used = Column(Boolean, default=False, nullable=False, comment="是否已使用")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="创建时间")
+    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
 
     def __repr__(self) -> str:
         return f"<VerificationCode(id={self.id}, email='{self.email}', used={self.used})>"

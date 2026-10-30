@@ -57,6 +57,8 @@ class AdminUserResponse(BaseModel):
     created_at: str | None = Field(None, description="创建时间")
     updated_at: str | None = Field(None, description="更新时间")
 
+    model_config = {"from_attributes": True}
+
 
 class AdminProfileUpdateRequest(BaseModel):
     """管理员修改资料请求体"""

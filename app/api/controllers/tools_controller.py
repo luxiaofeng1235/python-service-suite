@@ -10,8 +10,8 @@ from fastapi import APIRouter
 from app.common.health_check import HealthChecker
 from app.common.response import Response
 from app.core.config import settings
-from app.pkg.redis_client import redis_client
 from app.database import engine
+from app.pkg.redis_client import redis_client
 
 # ==================== 路由定义 ====================
 router = APIRouter(prefix="/api", tags=["工具接口"])
@@ -40,7 +40,7 @@ async def health_check():
     return Response.success(
         data={
             "status": "running" if all_healthy else "degraded",
-            "version": "1.0.0",
+            "version": settings.VERSION,
             "service": "FastAPI AI Service",
             **checks,
         },

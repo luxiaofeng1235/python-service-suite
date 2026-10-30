@@ -37,6 +37,17 @@ from app.models import (  # noqa: E402
     User,  # noqa: F401
     UserToken,  # noqa: F401
     VerificationCode,  # noqa: F401
+    # 后台管理
+    AdminToken,  # noqa: F401
+    AuthAdmin,  # noqa: F401
+    CmsArticle,  # noqa: F401
+    CmsTag,  # noqa: F401
+    # RBAC 权限
+    CasbinRule,  # noqa: F401
+    Permission,  # noqa: F401
+    Role,  # noqa: F401
+    # 其他
+    LotteryConfig,  # noqa: F401
 )
 
 
