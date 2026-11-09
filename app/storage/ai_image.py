@@ -17,9 +17,7 @@ from app.core.config import settings
 from app.storage.oss import OSSStorage
 
 
-async def save_generated_image(
-    url: str, task_id: str, index: int
-) -> str:
+async def save_generated_image(url: str, task_id: str, index: int) -> str:
     """Download an image unchanged and return its upload path."""
     # 文件名使用任务 ID 的安全形式，避免上游任务标识影响本地目录。
     safe_id = uuid.uuid5(uuid.NAMESPACE_URL, task_id).hex

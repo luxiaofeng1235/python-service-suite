@@ -14,7 +14,6 @@ from pydantic_settings import BaseSettings
 
 from config import (
     UPLOAD_DIR,
-    AI_IMAGE_WATERMARK_PATH,
     FILE_BASE_URL,
     FILE_IMAGE,
     FILE_VIDEO,
@@ -84,9 +83,6 @@ class Settings(BaseSettings):
     """允许上传的视频格式"""
     FILE_VIDEO_MAX_SIZE: int = FILE_VIDEO["max_size"]
     """视频最大允许大小（字节）"""
-
-    AI_IMAGE_WATERMARK_PATH: str = AI_IMAGE_WATERMARK_PATH
-    """AI 图片水印文件路径，相对路径基于项目根目录"""
 
     FILE_BASE_URL: str = FILE_BASE_URL
     """文件访问基础URL，支持 .env 覆盖，留空可使用相对路径"""

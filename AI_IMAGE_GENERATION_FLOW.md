@@ -1,6 +1,6 @@
 # AI 文生图完整逻辑梳理（已更新）
 
-OSS 上传已接入：`getImage → save_generated_image → OSSStorage.upload_file`。先下载、叠加本地水印，再上传到 `OSS_BUCKET` 的 `uploads/ai_images/...`；全部上传成功后才设置任务成功。域名使用 `.env` 中的 `OSS_VIEW_DOMAIN`。历史已完成任务在查询时检查 OSS，对缺失对象从现有本地文件补传；仅拼接 `FILE_BASE_URL` 不会上传文件。公共文件、字节和远程 URL 上传方法见 `app/storage/oss.py`。
+OSS 上传已接入：`getImage → save_generated_image → OSSStorage.upload_file`。按千问返回内容原样下载，再上传到 `OSS_BUCKET` 的 `uploads/ai_images/...`；全部上传成功后才设置任务成功。水印与 PHP 一致，仅在 `toImage` 将 `watermark=1/2` 转换为千问的布尔参数，下载与上传时不叠加本地 PNG；无水印请求传 `watermark=2`。域名使用 `.env` 中的 `OSS_VIEW_DOMAIN`。历史已完成任务在查询时检查 OSS，对缺失对象从现有本地文件补传；仅拼接 `FILE_BASE_URL` 不会上传文件。公共文件、字节和远程 URL 上传方法见 `app/storage/oss.py`。
 
 ## 📊 整体架构
 
@@ -27,7 +27,7 @@ OSS 上传已接入：`getImage → save_generated_image → OSSStorage.upload_f
 │                       │                                          │
 │  ┌────────────────────▼──────────────────────────────────────┐  │
 │  │ Storage (ai_image.py)                                     │  │
-│  │ - save_generated_image(): 下载、添加水印并上传 OSS        │  │
+│  │ - save_generated_image(): 下载原图并上传 OSS              │  │
 │  └────────────────────┬──────────────────────────────────────┘  │
 │                       │                                          │
 │  ┌────────────────────▼──────────────────────────────────────┐  │
@@ -47,7 +47,7 @@ OSS 上传已接入：`getImage → save_generated_image → OSSStorage.upload_f
 ┌──────────────────────▼──────────────────────────────────────────┐
 │                    宿主机文件系统                                  │
 │  uploads/ai_images/<uuid>_1.png                                  │
-│  uploads/ai_images/<uuid>_2.png (带水印)                         │
+│  uploads/ai_images/<uuid>_2.png                                 │
 │  ...                                                             │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -194,7 +194,7 @@ async def to_image(cls, db: AsyncSession, req: ImageRequest, user_id: int) -> st
             "parameters": {
                 "size": f"{req.size[0]}*{req.size[1]}",
                 "n": req.n,
-                "watermark": False,
+                "watermark": req.watermark == 1,
             },
         },
     )
@@ -287,11 +287,6 @@ async def get_image(
     
     # 3b. 生成完成 - 下载图片
     if status == "SUCCEEDED":
-        params = task.params
-        if isinstance(params, str):
-            params = json.loads(params)
-        
-        watermark = params.get("watermark") in (1, "1")
         urls: list[str] = []
         
         for index, item in enumerate(output.get("results") or [], start=1):
@@ -302,7 +297,6 @@ async def get_image(
                 item["url"],
                 task_id,
                 index,
-                watermark=watermark
             )
             
             prefix = settings.FILE_BASE_URL.rstrip("/")

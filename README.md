@@ -370,7 +370,7 @@ curl -N \
 - `GET /api/ai/get_image`：通过查询参数 `task_id` 获取生成进度和结果。
 - 两个接口均需要项目登录 Token，用户 ID 由后端从 Token 获取，前端无需传 `user_id`。任务保存和查询始终限定当前登录用户。千问密钥仍由后端读取。
 - 提交参数全部必传：`model`（1或2）、`prompt`（1～500字符）、`size`（如 `1024~1024`）、`n`（1～4）、`watermark`（1开启、2关闭）。宽高各为720～1440整数，总像素不超过200万。
-- `watermark=1` 时，下载后由本地叠加 `public/watermark.png`，右下角等比缩放（宽度最多占原图25%，边距为短边2%），保留透明通道；`watermark=2` 不加水印。上游默认水印统一关闭。可用 `.env` 的 `AI_IMAGE_WATERMARK_PATH` 覆盖水印文件路径，相对路径从项目根目录解析。已完成任务仍直接返回此前缓存的图片。
+- 水印与 PHP 一致：`watermark=1` 请求千问添加默认水印，`watermark=2` 关闭。`getImage` 仅下载原图并上传 OSS，不再叠加本地 `public/watermark.png`。需要无水印图片时传 `watermark=2`；历史已完成图片仍返回原有结果。
 
 ```bash
 curl -X POST 'http://127.0.0.1:8001/api/ai/to_image' \
@@ -391,7 +391,7 @@ curl -G 'http://127.0.0.1:8001/api/ai/get_image' \
 - 已有你提供的 `ai_to_work` 表可直接复用；没有此表时执行 `sql/migrate_ai_to_work.sql` 创建。该脚本不会自动执行，也不会修改已有表或重置自增序号。
 - 认证复用后端 `.env` 的 `QWEN_API_KEY`。`QWEN_IMAGE_URL` 和 `QWEN_TASK_URL` 默认使用 PHP 中的 DashScope 地址，可通过 `.env` 覆盖。
 - 模型沿用 PHP：`model=1` 为 `wanx2.1-t2i-turbo`，`model=2` 为 `wanx2.1-t2i-plus`。
-- 图片先下载到 `UPLOAD_DIR/ai_images/` 并处理水印。启用 `OSS_ENABLED=True` 后，再通过公共 `app/storage/oss.py` 上传至 `OSS_BUCKET` 的 `uploads/ai_images/...`，所有图片上传成功后才保存作品地址并设置 `status=1`。返回域名使用 `OSS_VIEW_DOMAIN`，只填写域名，不包含 `/uploads`。
+- 图片按千问返回内容原样下载到 `UPLOAD_DIR/ai_images/`。启用 `OSS_ENABLED=True` 后，再通过公共 `app/storage/oss.py` 上传至 `OSS_BUCKET` 的 `uploads/ai_images/...`，所有图片上传成功后才保存作品地址并设置 `status=1`。返回域名使用 `OSS_VIEW_DOMAIN`，只填写域名，不包含 `/uploads`。
 - 已完成任务查询时会检查本站图片是否存在于 OSS：存在则直接复用；缺失且本地文件还在时自动补传，无需重新生成。上传或查询异常不会伪装成成功，也不会把已有本地文件删除。
 - 关闭 OSS 时仍保留原本地存储方式，访问域名前缀使用 `FILE_BASE_URL`；这个前缀只用于拼接 URL，本身不会上传文件。只有域名正确映射到本地目录时才能直接访问。
 

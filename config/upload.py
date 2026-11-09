@@ -31,5 +31,3 @@ UPLOAD_DIR = "./uploads"
 # 文件访问域名，可通过 .env 的 FILE_BASE_URL 覆盖
 FILE_BASE_URL = "https://static.jsss999.com"
 
-# AI 生图本地水印（相对项目根目录）
-AI_IMAGE_WATERMARK_PATH = "public/watermark.png"

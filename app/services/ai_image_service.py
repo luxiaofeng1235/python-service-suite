@@ -102,14 +102,6 @@ class AIImageService:
             return task_id
         if status == "SUCCEEDED":
             # 对应 PHP getImage：先下载图片，再保存地址，后续查询不再请求上游。
-            params = task.params
-            if isinstance(params, str):
-                try:
-                    params = json.loads(params)
-                except json.JSONDecodeError as exc:
-                    raise AppException(msg="图片任务参数格式错误") from exc
-            if not isinstance(params, dict):
-                raise AppException(msg="图片任务参数格式错误")
             urls: list[str] = []
             for index, item in enumerate(output.get("results") or [], start=1):
                 if not isinstance(item, dict) or not item.get("url"):
