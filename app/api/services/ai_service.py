@@ -1,8 +1,8 @@
 """
 ============================================
-AI API Service - compatibility facade
+AI 接口服务 - 聊天记录管理与流式转发
 ============================================
-Keeps API-specific chat-log queries while delegating streaming to the common AI service.
+负责当前用户的聊天记录查询和删除，流式对话交由公共 AI 服务处理。
 """
 
 from collections.abc import AsyncGenerator
@@ -20,11 +20,12 @@ from app.utils.time_ import TimeUtil
 
 
 class AIService(CoreAIService):
-    """API facade for the common AI conversation service."""
+    """供接口调用的 AI 服务，复用公共服务的流式对话能力。"""
 
     @staticmethod
     async def stream_chat(req: ChatRequest, user_id: int = 0) -> AsyncGenerator[str, None]:
-        """Stream a chat using the shared conversation workflow."""
+        """调用公共 AI 服务，逐段向接口返回流式内容。"""
+        # 模型请求、历史消息处理和回复保存由公共服务完成，此处收到一段就转发一段。
         async for chunk in CoreAIService.stream_chat(req, user_id):
             yield chunk
 
@@ -35,11 +36,10 @@ class AIService(CoreAIService):
         page_params: PageParams,
         model_id: int | None = None,
     ) -> dict[str, Any]:
-        """Get the current user's paginated chat logs."""
+        """分页查询当前用户的聊天记录，可按模型筛选，按记录 ID 倒序返回。"""
         conditions = [AiChatLog.user_id == user_id]
         if model_id is not None:
             conditions.append(AiChatLog.model_id == model_id)
-
         stmt = select(AiChatLog).where(*conditions).order_by(AiChatLog.id.desc())
         count_stmt = select(func.count(AiChatLog.id)).where(*conditions)
         data = await paginate(db, stmt, page_params, count_stmt)
@@ -52,13 +52,14 @@ class AIService(CoreAIService):
         chat_id: int,
         user_id: int,
     ) -> dict[str, Any]:
-        """Get one chat log owned by the current user."""
+        """查询聊天记录详情，仅允许访问当前用户自己的记录。"""
         chat = await AIService._get_existing_chat_log(db, chat_id, user_id)
         return AIService._serialize_chat_log(chat)
 
     @staticmethod
     async def delete_chat_log(db: AsyncSession, chat_id: int, user_id: int) -> dict[str, int]:
-        """Delete one chat log owned by the current user."""
+        """删除当前用户的指定聊天记录，并提交数据库事务。"""
+        # 先校验记录归属，执行删除时仍限定用户，避免删除其他用户的记录。
         await AIService._get_existing_chat_log(db, chat_id, user_id)
         await db.execute(
             delete(AiChatLog).where(AiChatLog.id == chat_id, AiChatLog.user_id == user_id)
@@ -72,7 +73,7 @@ class AIService(CoreAIService):
         chat_id: int,
         user_id: int,
     ) -> AiChatLog:
-        """Get one chat log and enforce ownership."""
+        """按记录 ID 和用户 ID 查询；记录不存在或不属于当前用户时统一报错。"""
         result = await db.execute(
             select(AiChatLog).where(AiChatLog.id == chat_id, AiChatLog.user_id == user_id)
         )
@@ -83,11 +84,12 @@ class AIService(CoreAIService):
 
     @staticmethod
     def _serialize_chat_log(chat: AiChatLog) -> dict[str, Any]:
-        """Serialize a chat log for API responses."""
+        """将聊天记录转换为接口数据，统一处理消息内容和时间格式。"""
         return {
             "id": chat.id,
             "user_id": chat.user_id,
             "model_id": chat.model_id,
+            # 兼容 JSON 列表和 JSON 字符串，将聊天内容统一转换为消息列表。
             "chat": CoreAIService._load_history(chat.chat),
             "create_time": TimeUtil.format_datetime(chat.create_time),
             "update_time": TimeUtil.format_datetime(chat.update_time),
