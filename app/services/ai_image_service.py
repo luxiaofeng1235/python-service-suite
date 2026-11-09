@@ -42,8 +42,8 @@ class AIImageService:
                 "parameters": {
                     "size": f"{req.size[0]}*{req.size[1]}",
                     "n": req.n,
-                    # 自定义水印在下载落盘时叠加，上游关闭其默认水印。
-                    "watermark": False,
+                    # 与 PHP toImage 一致，由千问处理默认水印。
+                    "watermark": req.watermark == 1,
                 },
             },
         )
@@ -110,12 +110,11 @@ class AIImageService:
                     raise AppException(msg="图片任务参数格式错误") from exc
             if not isinstance(params, dict):
                 raise AppException(msg="图片任务参数格式错误")
-            watermark = params.get("watermark") in (1, "1")
             urls: list[str] = []
             for index, item in enumerate(output.get("results") or [], start=1):
                 if not isinstance(item, dict) or not item.get("url"):
                     continue
-                path = await save_generated_image(item["url"], task_id, index, watermark=watermark)
+                path = await save_generated_image(item["url"], task_id, index)
                 urls.append(f"/uploads/{path}")
             if not urls:
                 await cls._fail_task(db, task, "未返回可用图片")
