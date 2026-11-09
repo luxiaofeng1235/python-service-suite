@@ -4,7 +4,7 @@ Quick local connectivity test for database and Redis.
 Usage:
     python test_python.py
 
-The script reads project settings from .env through app.core.config.settings.
+The script reads project settings from .env through app.core.constants.settings.
 It does not start FastAPI.
 """
 

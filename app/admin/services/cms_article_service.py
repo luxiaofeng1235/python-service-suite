@@ -30,7 +30,7 @@ class CmsArticleService:
     """文章管理业务服务"""
 
     # 分类配置文件路径
-    _category_config_path = Path(__file__).parent.parent.parent / "config" / "cms" / "categories.json"
+    _category_config_path = Path(__file__).parent.parent.parent / "constants" / "cms" / "categories.json"
 
     @staticmethod
     def _load_categories() -> list[ArticleCategory]:

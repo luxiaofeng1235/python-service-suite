@@ -458,7 +458,7 @@ result = await AIService.get_image(db, task_id, user_id)
 AI 地址、默认模型、水印文件、视频访问域名、FFmpeg 路径和超时统一维护在 `config/ai.py`；AI 相关 `.env` 配置只维护 `QWEN_API_KEY`。修改配置后重启服务。Docker 已补充 FFmpeg，部署时需要重新构建镜像。
 
 ```python
-# config/ai.py
+# constants/ai.py
 QWEN_VIDEO_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
 QWEN_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks"
 AI_VIDEO_WATERMARK_PATH = "./public/watermark.png"

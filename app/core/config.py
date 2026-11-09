@@ -3,10 +3,10 @@
 配置管理模块 — 项目所有配置统一入口
 ============================================
 敏感信息（密钥、数据库连接串等）统一走 .env，不清真明文到代码中。
-所有配置默认值维护在 config/ 目录下（目前：upload / smtp），
+所有配置默认值维护在 constants/ 目录下（目前：upload / smtp），
 Settings 汇聚后支持 .env 环境变量覆盖。
 使用方式：
-    from app.core.config import settings
+    from app.core.constants import settings
     settings.DATABASE_URL
 """
 
