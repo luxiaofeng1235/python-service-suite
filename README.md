@@ -367,24 +367,23 @@ curl -N \
 按 `AiLogic.php` 的 `toImage` / `getImage` 移植，接口沿用 PHP 的参数格式：
 
 - `POST /api/ai/to_image`：提交文生图任务，支持 JSON、URL 编码表单和 multipart 表单。
-- `GET /api/ai/get_image`：通过查询参数 `user_id`、`task_id` 获取生成进度和结果。
-- 两个接口均需要项目登录 Token，参数 `user_id` 必传且须与登录用户一致。千问密钥仍由后端读取。
-- 提交参数全部必传：`user_id`、`model`（1或2）、`prompt`（1～500字符）、`size`（如 `1024~1024`）、`n`（1～4）、`watermark`（1开启、2关闭）。宽高各为720～1440整数，总像素不超过200万。
+- `GET /api/ai/get_image`：通过查询参数 `task_id` 获取生成进度和结果。
+- 两个接口均需要项目登录 Token，用户 ID 由后端从 Token 获取，前端无需传 `user_id`。任务保存和查询始终限定当前登录用户。千问密钥仍由后端读取。
+- 提交参数全部必传：`model`（1或2）、`prompt`（1～500字符）、`size`（如 `1024~1024`）、`n`（1～4）、`watermark`（1开启、2关闭）。宽高各为720～1440整数，总像素不超过200万。
 - `watermark=1` 时，下载后由本地叠加 `public/watermark.png`，右下角等比缩放（宽度最多占原图25%，边距为短边2%），保留透明通道；`watermark=2` 不加水印。上游默认水印统一关闭。可用 `.env` 的 `AI_IMAGE_WATERMARK_PATH` 覆盖水印文件路径，相对路径从项目根目录解析。已完成任务仍直接返回此前缓存的图片。
 
 ```bash
 curl -X POST 'http://127.0.0.1:8001/api/ai/to_image' \
   -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
-  -d '{"user_id":7,"model":1,"prompt":"一只小猫","size":"1024~1024","n":1,"watermark":2}'
+  -d '{"model":1,"prompt":"一只小猫","size":"1024~1024","n":1,"watermark":2}'
 
 curl -G 'http://127.0.0.1:8001/api/ai/get_image' \
   -H 'Authorization: Bearer <token>' \
-  --data-urlencode 'user_id=7' \
   --data-urlencode 'task_id=<提交时返回的任务ID>'
 ```
 
-将示例的 `user_id=7` 替换为实际登录用户 ID。提交成功及生成中返回 `{"code":1,"msg":"图片生成中","data":"任务ID"}`；成功后返回 `{"code":1,"msg":"图片生成成功","data":{"image":[...],"iamge":[...]}}`。
+提交成功及生成中返回 `{"code":1,"msg":"图片生成中","data":"任务ID"}`；成功后返回 `{"code":1,"msg":"图片生成成功","data":{"image":[...],"iamge":[...]}}`。
 
 - `app/services/ai_image_service.py`：提交任务、按用户查询任务、下载生成图片和缓存结果。
 - `app/api/services/ai_service.py`：提供 `to_image(db, req, user_id)`、`get_image(db, task_id, user_id)` 调用入口。
@@ -392,7 +391,34 @@ curl -G 'http://127.0.0.1:8001/api/ai/get_image' \
 - 已有你提供的 `ai_to_work` 表可直接复用；没有此表时执行 `sql/migrate_ai_to_work.sql` 创建。该脚本不会自动执行，也不会修改已有表或重置自增序号。
 - 认证复用后端 `.env` 的 `QWEN_API_KEY`。`QWEN_IMAGE_URL` 和 `QWEN_TASK_URL` 默认使用 PHP 中的 DashScope 地址，可通过 `.env` 覆盖。
 - 模型沿用 PHP：`model=1` 为 `wanx2.1-t2i-turbo`，`model=2` 为 `wanx2.1-t2i-plus`。
-- 图片保存在 `UPLOAD_DIR/ai_images/`，返回 `/uploads/ai_images/...` 地址；配置 `FILE_BASE_URL` 后返回完整访问地址。不会使用原 PHP 项目的固定 CDN 域名。
+- 图片先下载到 `UPLOAD_DIR/ai_images/` 并处理水印。启用 `OSS_ENABLED=True` 后，再通过公共 `app/storage/oss.py` 上传至 `OSS_BUCKET` 的 `uploads/ai_images/...`，所有图片上传成功后才保存作品地址并设置 `status=1`。返回域名使用 `OSS_VIEW_DOMAIN`，只填写域名，不包含 `/uploads`。
+- 已完成任务查询时会检查本站图片是否存在于 OSS：存在则直接复用；缺失且本地文件还在时自动补传，无需重新生成。上传或查询异常不会伪装成成功，也不会把已有本地文件删除。
+- 关闭 OSS 时仍保留原本地存储方式，访问域名前缀使用 `FILE_BASE_URL`；这个前缀只用于拼接 URL，本身不会上传文件。只有域名正确映射到本地目录时才能直接访问。
+
+公共 OSS 配置写入后端 `.env`，密钥不要写入源码或提交到 Git：
+
+```env
+OSS_ENABLED=True
+OSS_ACCESS_KEY_ID=your-oss-access-key-id
+OSS_ACCESS_KEY_SECRET=your-oss-access-key-secret
+OSS_ENDPOINT=oss-cn-shanghai.aliyuncs.com
+OSS_REGION=cn-shanghai
+OSS_BUCKET=static-nine-world
+OSS_VIEW_DOMAIN=https://static.jsss999.com/
+```
+
+配置默认值在 `config/oss.py`，统一通过 `settings` 读取。`OSS_ROLEARN`、`OSS_TOKENEXPIRETIME`、`OSS_POLICYFILE` 保留给后续 STS 临时授权，当前服务端上传直接使用后端 AccessKey，不签发前端临时凭证，也不读取 PolicyFile。新增的 `oss2` 依赖需要在部署时安装，Docker 需要重新构建。
+
+公共上传方法（均为异步，成功返回完整访问 URL，失败抛出统一 `AppException`）：
+
+```python
+from app.storage.oss import OSSStorage
+
+url = await OSSStorage.upload_file("./uploads/example.png", "uploads/images/example.png")
+url = await OSSStorage.upload_bytes(content, "uploads/images/example.png", content_type="image/png")
+url = await OSSStorage.upload_url(source_url, "uploads/images/example.png", max_size=10 * 1024 * 1024)
+exists = await OSSStorage.object_exists("uploads/images/example.png")
+```
 
 调用示例（`db` 为异步数据库会话，`user_id` 为已认证用户 ID）：
 
@@ -405,7 +431,7 @@ task_id = await AIService.to_image(db, req, user_id)
 result = await AIService.get_image(db, task_id, user_id)
 ```
 
-生成中返回任务 ID；成功返回 `{"image": [...], "iamge": [...]}`，保留旧 PHP 的两个字段。失败抛出项目统一的 `AppException`。成功和明确失败的任务会入库缓存，后续查询不再访问上游。网络或图片下载异常保留待处理状态，可以重试查询。
+生成中返回任务 ID；成功返回 `{"image": [...], "iamge": [...]}`，保留旧 PHP 的两个字段。失败抛出项目统一的 `AppException`。成功和明确失败的任务会入库缓存，后续查询不再访问千问。网络、下载或 OSS 上传异常保留待处理状态，可以重试查询。
 
 ## LLM / RAG 待开发规划
 

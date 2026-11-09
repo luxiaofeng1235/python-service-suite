@@ -14,6 +14,7 @@ from PIL import Image, ImageChops, ImageDraw
 from app.common.exception import AppException
 from app.core.config import settings
 from app.storage import ai_image
+from app.storage.oss import OSSStorage
 
 
 def png_bytes(size=(1024, 768), color=(30, 90, 150)):
@@ -101,3 +102,38 @@ async def test_relative_watermark_path_is_resolved_from_project_root(image_downl
     monkeypatch.chdir(tmp_path / "public")
     path = await ai_image.save_generated_image("https://images.test/generated.png", "task", 1, watermark=True)
     assert (tmp_path / "uploads" / path).is_file()
+
+
+async def test_oss_upload_receives_the_watermarked_image(image_download, monkeypatch):
+    tmp_path, _, content, _ = image_download
+    monkeypatch.setattr(settings, "OSS_ENABLED", True)
+    uploads = []
+
+    async def upload(path, key, *, content_type=None):
+        data = path.read_bytes()
+        uploads.append((key, content_type, data))
+        with Image.open(path) as image:
+            assert image.format == "PNG"
+            assert image.size == (1024, 768)
+        assert data != content[0]
+        return f"https://static.test/{key}"
+
+    monkeypatch.setattr(OSSStorage, "upload_file", upload)
+    path = await ai_image.save_generated_image("https://images.test/generated.png", "task", 1, watermark=True)
+    assert len(uploads) == 1
+    assert uploads[0][:2] == (f"uploads/{path}", "image/png")
+    assert (tmp_path / "uploads" / path).read_bytes() == uploads[0][2]
+
+
+async def test_oss_failure_keeps_processed_local_image_for_retry(image_download, monkeypatch):
+    tmp_path, _, _, _ = image_download
+    monkeypatch.setattr(settings, "OSS_ENABLED", True)
+
+    async def upload(*args, **kwargs):
+        raise AppException(msg="OSS 上传失败")
+
+    monkeypatch.setattr(OSSStorage, "upload_file", upload)
+    with pytest.raises(AppException, match="OSS 上传失败"):
+        await ai_image.save_generated_image("https://images.test/generated.png", "task", 1, watermark=True)
+    assert len(list((tmp_path / "uploads").rglob("*.png"))) == 1
+    assert list((tmp_path / "uploads").rglob("*.tmp")) == []

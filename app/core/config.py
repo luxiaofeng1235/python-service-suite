@@ -15,8 +15,16 @@ from pydantic_settings import BaseSettings
 from config import (
     UPLOAD_DIR,
     AI_IMAGE_WATERMARK_PATH,
+    FILE_BASE_URL,
     FILE_IMAGE,
     FILE_VIDEO,
+    OSS_ENABLED,
+    OSS_ENDPOINT,
+    OSS_REGION,
+    OSS_BUCKET,
+    OSS_VIEW_DOMAIN,
+    OSS_TOKENEXPIRETIME,
+    OSS_POLICYFILE,
     SMTP_HOST,
     SMTP_PORT,
     SMTP_SENDER,
@@ -80,8 +88,21 @@ class Settings(BaseSettings):
     AI_IMAGE_WATERMARK_PATH: str = AI_IMAGE_WATERMARK_PATH
     """AI 图片水印文件路径，相对路径基于项目根目录"""
 
-    FILE_BASE_URL: str = ""
-    """文件访问基础URL，为空时从请求 base_url 自动拼接"""
+    FILE_BASE_URL: str = FILE_BASE_URL
+    """文件访问基础URL，支持 .env 覆盖，留空可使用相对路径"""
+
+    # ==================== 阿里云 OSS ====================
+    OSS_ENABLED: bool = OSS_ENABLED
+    """是否将 AI 生成图片同步到 OSS"""
+    OSS_ACCESS_KEY_ID: str = ""
+    OSS_ACCESS_KEY_SECRET: str = ""
+    OSS_ENDPOINT: str = OSS_ENDPOINT
+    OSS_REGION: str = OSS_REGION
+    OSS_BUCKET: str = OSS_BUCKET
+    OSS_VIEW_DOMAIN: str = OSS_VIEW_DOMAIN
+    OSS_ROLEARN: str = ""
+    OSS_TOKENEXPIRETIME: int = OSS_TOKENEXPIRETIME
+    OSS_POLICYFILE: str = OSS_POLICYFILE
 
     # ==================== 邮件（SMTP）配置 ====================
     SMTP_HOST: str = SMTP_HOST

@@ -17,7 +17,8 @@ from app.common.exception import AppException
 from app.core.config import settings
 from app.models.ai_to_work import AiToWork
 from app.schemas.ai import ImageRequest
-from app.storage.ai_image import save_generated_image
+from app.storage.ai_image import save_generated_image, sync_generated_images
+from app.storage.oss import OSSStorage
 
 
 class AIImageService:
@@ -29,6 +30,8 @@ class AIImageService:
     @classmethod
     async def to_image(cls, db: AsyncSession, req: ImageRequest, user_id: int) -> str:
         """Submit an image task and persist its parameters, returning the task ID."""
+        if settings.OSS_ENABLED:
+            OSSStorage.validate_config()
         # 对应 PHP toImage：异步提交后只保存任务，不在请求中等待图片生成。
         data = await cls._request(
             "POST",
@@ -78,7 +81,9 @@ class AIImageService:
         if task is None or task.status == 3:
             raise AppException(msg="任务不存在")
         if task.status == 1:
-            return cls._image_result(cls._load_work(task.work))
+            images = cls._image_result(cls._load_work(task.work))
+            await sync_generated_images(images["image"])
+            return images
         if task.status == 2:
             work = cls._load_work(task.work)
             message = "服务错误，请稍后再试"
@@ -111,10 +116,10 @@ class AIImageService:
                 if not isinstance(item, dict) or not item.get("url"):
                     continue
                 path = await save_generated_image(item["url"], task_id, index, watermark=watermark)
-                prefix = settings.FILE_BASE_URL.rstrip("/")
-                urls.append(f"{prefix}/uploads/{path}")
+                urls.append(f"/uploads/{path}")
             if not urls:
                 await cls._fail_task(db, task, "未返回可用图片")
+            urls = cls._image_result(urls)["image"]
             task.work = urls
             task.status = 1
             await db.commit()
@@ -155,6 +160,10 @@ class AIImageService:
         """Keep both spellings from the PHP response for compatibility."""
         if not isinstance(urls, list) or not all(isinstance(url, str) for url in urls):
             raise AppException(msg="图片任务记录格式错误")
+        # 历史任务可能缓存相对路径，返回时补齐当前配置的文件访问域名。
+        prefix = (settings.OSS_VIEW_DOMAIN if settings.OSS_ENABLED else settings.FILE_BASE_URL).rstrip("/")
+        if prefix:
+            urls = [f"{prefix}{url}" if url.startswith("/uploads/") else url for url in urls]
         return {"iamge": urls, "image": urls}
 
     @classmethod

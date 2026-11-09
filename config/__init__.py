@@ -6,5 +6,6 @@
 
 from .upload import *
 from .smtp import *
+from .oss import *
 
 __all__ = [k for k in dir() if k.isupper()]

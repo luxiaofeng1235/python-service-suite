@@ -70,7 +70,7 @@ async def image_api(monkeypatch):
 
 
 def payload(**changes):
-    return {"user_id": 7, "model": 1, "prompt": "一只小猫", "size": "1024~1024",
+    return {"model": 1, "prompt": "一只小猫", "size": "1024~1024",
             "n": 1, "watermark": 2} | changes
 
 
@@ -102,7 +102,7 @@ async def test_php_image_submission_progress_success_and_cache(image_api, encodi
         task = (await db.execute(select(AiToWork))).scalar_one()
         assert (task.user_id, task.status, task.work) == (7, 0, None)
         assert task.params == payload(size=[1024, 1024])
-    query = {"user_id": 7, "task_id": "image-task-1"}
+    query = {"task_id": "image-task-1"}
     pending = await client.get("/api/ai/get_image", params=query)
     assert pending.json() == submitted.json()
     finished = await client.get("/api/ai/get_image", params=query)
@@ -114,6 +114,66 @@ async def test_php_image_submission_progress_success_and_cache(image_api, encodi
     cached = await client.get("/api/ai/get_image", params=query)
     assert cached.json() == finished.json()
     assert len(requests) == 3
+
+
+async def test_four_images_are_saved_and_returned_as_a_url_array(image_api, monkeypatch):
+    _, client, requests, responses, sessions = image_api
+    task_id = "72ddf3a4-0aa9-4e8e-bee3-12ccf10d487d"
+    prefix = "https://static.jsss999.com"
+    monkeypatch.setattr(settings, "FILE_BASE_URL", prefix)
+    upstream_urls = [f"https://images.test/{index}.png" for index in range(1, 5)]
+    responses.extend([
+        httpx.Response(200, json={"output": {"task_id": task_id}}),
+        httpx.Response(200, json={"output": {
+            "task_status": "SUCCEEDED", "results": [{"url": url} for url in upstream_urls],
+        }}),
+    ])
+    downloads = []
+
+    async def save_image(url, image_task_id, index, *, watermark=False):
+        downloads.append((url, image_task_id, index, watermark))
+        return f"ai_images/{image_task_id}_{index}.png"
+
+    monkeypatch.setattr("app.services.ai_image_service.save_generated_image", save_image)
+    submitted = await client.post("/api/ai/to_image", json=payload(n=4, watermark=1))
+    assert submitted.json() == {"code": 1, "msg": "图片生成中", "data": task_id}
+    assert json.loads(requests[0].content)["parameters"]["n"] == 4
+
+    finished = await client.get("/api/ai/get_image", params={"task_id": task_id})
+    urls = [f"{prefix}/uploads/ai_images/{task_id}_{index}.png" for index in range(1, 5)]
+    assert finished.json() == {
+        "code": 1, "msg": "图片生成成功", "data": {"image": urls, "iamge": urls},
+    }
+    assert downloads == [(url, task_id, index, True) for index, url in enumerate(upstream_urls, 1)]
+    async with sessions() as db:
+        task = (await db.execute(select(AiToWork))).scalar_one()
+        assert task.status == 1
+        assert task.params["n"] == 4
+        assert task.work == urls
+
+    cached = await client.get("/api/ai/get_image", params={"task_id": task_id})
+    assert cached.json() == finished.json()
+    assert len(requests) == 2
+    assert len(downloads) == 4
+
+
+@pytest.mark.parametrize("legacy_json", [False, True])
+async def test_php_four_image_array_is_compatible_with_cached_queries(image_api, legacy_json):
+    _, client, requests, _, sessions = image_api
+    task_id = "72ddf3a4-0aa9-4e8e-bee3-12ccf10d487d"
+    urls = [f"https://static.jsss999.com/uploads/ai_images/{task_id}_{index}.png" for index in range(1, 5)]
+    async with sessions() as db:
+        db.add(AiToWork(
+            user_id=7, task_id=task_id, params={"n": 4}, type=1, status=1,
+            work=json.dumps(urls) if legacy_json else urls,
+        ))
+        await db.commit()
+
+    response = await client.get("/api/ai/get_image", params={"task_id": task_id})
+    assert response.json() == {
+        "code": 1, "msg": "图片生成成功", "data": {"image": urls, "iamge": urls},
+    }
+    assert requests == []
 
 
 @pytest.mark.parametrize("size", ["720~1280", "1440~720"])
@@ -134,7 +194,7 @@ async def test_php_size_boundaries_and_watermark_enabled(image_api, size):
     {"size": "1024"}, {"size": "1024~1024~1024"}, {"size": "a~1024"},
     {"size": "720.5~1024"}, {"size": "719~1024"}, {"size": "1024~1441"},
     {"size": "1440~1440"}, {"size": [1024, 1024]},
-    {"n": 0}, {"n": 5}, {"watermark": 0}, {"watermark": 3}, {"user_id": 0},
+    {"n": 0}, {"n": 5}, {"watermark": 0}, {"watermark": 3},
 ])
 async def test_invalid_php_parameters_return_unified_validation_errors(image_api, change):
     _, client, requests, _, _ = image_api
@@ -145,7 +205,7 @@ async def test_invalid_php_parameters_return_unified_validation_errors(image_api
     assert requests == []
 
 
-@pytest.mark.parametrize("missing", ["user_id", "model", "prompt", "size", "n", "watermark"])
+@pytest.mark.parametrize("missing", ["model", "prompt", "size", "n", "watermark"])
 async def test_submission_requires_all_php_fields(image_api, missing):
     _, client, requests, _, _ = image_api
     body = payload()
@@ -155,9 +215,8 @@ async def test_submission_requires_all_php_fields(image_api, missing):
     assert requests == []
 
 
-@pytest.mark.parametrize("query", [{}, {"user_id": 7}, {"task_id": "task"},
-                                  {"user_id": 7, "task_id": ""}])
-async def test_progress_requires_user_id_and_task_id(image_api, query):
+@pytest.mark.parametrize("query", [{}, {"task_id": ""}, {"task_id": "t" * 256}])
+async def test_progress_requires_valid_task_id(image_api, query):
     _, client, requests, _, _ = image_api
     response = await client.get("/api/ai/get_image", params=query)
     assert response.status_code == 422
@@ -165,13 +224,32 @@ async def test_progress_requires_user_id_and_task_id(image_api, query):
     assert requests == []
 
 
-async def test_rejects_mismatched_user_id_on_both_routes(image_api):
-    _, client, requests, _, _ = image_api
+async def test_submission_uses_token_user_even_with_extra_user_id(image_api):
+    _, client, requests, responses, sessions = image_api
+    responses.append(httpx.Response(200, json={"output": {"task_id": "image-task-1"}}))
     submitted = await client.post("/api/ai/to_image", json=payload(user_id=99))
-    progress = await client.get("/api/ai/get_image", params={"user_id": 99, "task_id": "task"})
-    for response in (submitted, progress):
-        assert response.json()["code"] == 0
-        assert "当前登录用户不一致" in response.json()["msg"]
+    assert submitted.json()["code"] == 1
+    async with sessions() as db:
+        task = (await db.execute(select(AiToWork))).scalar_one()
+        assert task.user_id == 7
+        assert "user_id" not in task.params
+    assert len(requests) == 1
+
+
+async def test_progress_is_scoped_to_token_user_even_with_extra_user_id(image_api):
+    _, client, requests, _, sessions = image_api
+    async with sessions() as db:
+        db.add_all([
+            AiToWork(user_id=7, task_id="own-task", params={}, type=1, status=1,
+                     work=["/uploads/own.png"]),
+            AiToWork(user_id=99, task_id="other-task", params={}, type=1, status=1,
+                     work=["/uploads/other.png"]),
+        ])
+        await db.commit()
+    own = await client.get("/api/ai/get_image", params={"user_id": 99, "task_id": "own-task"})
+    assert own.json()["data"]["image"] == ["/uploads/own.png"]
+    other = await client.get("/api/ai/get_image", params={"user_id": 99, "task_id": "other-task"})
+    assert other.json() == {"code": 0, "msg": "任务不存在", "data": None}
     assert requests == []
 
 
@@ -179,7 +257,7 @@ async def test_routes_require_login(image_api):
     app, client, requests, _, _ = image_api
     del app.dependency_overrides[get_current_user]
     submitted = await client.post("/api/ai/to_image", json=payload())
-    progress = await client.get("/api/ai/get_image", params={"user_id": 7, "task_id": "task"})
+    progress = await client.get("/api/ai/get_image", params={"task_id": "task"})
     assert submitted.status_code == progress.status_code == 401
     assert requests == []
 
@@ -191,7 +269,7 @@ async def test_generation_failure_uses_unified_business_response(image_api):
         httpx.Response(200, json={"output": {"task_status": "FAILED", "code": "DataInspectionFailed"}}),
     ])
     await client.post("/api/ai/to_image", json=payload())
-    query = {"user_id": 7, "task_id": "image-task-1"}
+    query = {"task_id": "image-task-1"}
     failed = await client.get("/api/ai/get_image", params=query)
     assert failed.json() == {"code": 0, "msg": "图片生成失败，敏感内容，生成失败", "data": None}
     assert (await client.get("/api/ai/get_image", params=query)).json() == failed.json()
@@ -207,6 +285,12 @@ async def test_malformed_json_returns_validation_response(image_api):
 
 async def test_openapi_documents_php_size_and_both_submission_formats(image_api):
     app, _, _, _, _ = image_api
-    body = app.openapi()["paths"]["/api/ai/to_image"]["post"]["requestBody"]
+    paths = app.openapi()["paths"]
+    body = paths["/api/ai/to_image"]["post"]["requestBody"]
     for media_type in ("application/json", "application/x-www-form-urlencoded", "multipart/form-data"):
-        assert body["content"][media_type]["schema"]["properties"]["size"]["type"] == "string"
+        schema = body["content"][media_type]["schema"]
+        assert schema["properties"]["size"]["type"] == "string"
+        assert "user_id" not in schema["properties"]
+        assert "user_id" not in schema["required"]
+    parameters = paths["/api/ai/get_image"]["get"]["parameters"]
+    assert [parameter["name"] for parameter in parameters] == ["task_id"]

@@ -28,11 +28,8 @@ class AIService(CoreAIService):
         db: AsyncSession,
         req: ImageRequest,
         user_id: int,
-        request_user_id: int | None = None,
     ) -> str:
         """提交文生图任务，返回任务 ID，对应 PHP 的 toImage。"""
-        if request_user_id is not None and request_user_id != user_id:
-            raise AppException(msg="user_id与当前登录用户不一致")
         return await AIImageService.to_image(db, req, user_id)
 
     @staticmethod
@@ -40,11 +37,8 @@ class AIService(CoreAIService):
         db: AsyncSession,
         task_id: str,
         user_id: int,
-        request_user_id: int | None = None,
     ) -> dict[str, list[str]] | str:
         """查询文生图结果，生成中返回任务 ID，对应 PHP 的 getImage。"""
-        if request_user_id is not None and request_user_id != user_id:
-            raise AppException(msg="user_id与当前登录用户不一致")
         return await AIImageService.get_image(db, task_id, user_id)
 
     @staticmethod

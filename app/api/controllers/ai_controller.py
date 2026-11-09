@@ -71,14 +71,12 @@ async def to_image(
         db,
         req,
         user_id=current_user["user_id"],
-        request_user_id=req.user_id,
     )
     return Response.success(data=task_id, msg="图片生成中")
 
 
 @router.get("/ai/get_image", summary="获取AI生图进度和结果")
 async def get_image(
-    user_id: int = Query(..., ge=1, description="用户ID，须与当前登录用户一致"),
     task_id: str = Query(..., min_length=1, max_length=255, description="文生图任务ID"),
     db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
@@ -88,7 +86,6 @@ async def get_image(
         db,
         task_id,
         user_id=current_user["user_id"],
-        request_user_id=user_id,
     )
     return Response.success(
         data=result,

@@ -7,13 +7,15 @@ Downloads generated images and optionally applies the platform PNG watermark.
 
 import asyncio
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from urllib.parse import unquote, urlsplit
 
 import httpx
 from PIL import Image, ImageOps
 
 from app.common.exception import AppException
 from app.core.config import settings
+from app.storage.oss import OSSStorage
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -82,4 +84,34 @@ async def save_generated_image(
         raise AppException(msg="生成图片下载失败，请稍后重试") from exc
     finally:
         await asyncio.to_thread(temporary_path.unlink, missing_ok=True)
+    if settings.OSS_ENABLED:
+        # 必须先完成水印处理和 OSS 上传，业务层才能将任务标记为成功。
+        await OSSStorage.upload_file(file_path, f"uploads/{relative_path}", content_type="image/png")
     return relative_path
+
+
+async def sync_generated_images(urls: list[str]) -> None:
+    """Repair cached local-only images without regenerating them or overwriting OSS objects."""
+    if not settings.OSS_ENABLED:
+        return
+    allowed_hosts = {urlsplit(settings.OSS_VIEW_DOMAIN).netloc, urlsplit(settings.FILE_BASE_URL).netloc}
+    root = Path(settings.UPLOAD_DIR).resolve()
+    for url in urls:
+        parsed = urlsplit(url)
+        if parsed.netloc and parsed.netloc not in allowed_hosts:
+            continue
+        path = unquote(parsed.path)
+        if not path.startswith("/uploads/ai_images/"):
+            continue
+        relative = path.removeprefix("/uploads/")
+        if ".." in PurePosixPath(relative).parts or "\\" in relative:
+            raise AppException(msg="图片文件路径格式错误")
+        local_path = (root / relative).resolve()
+        if not local_path.is_relative_to(root):
+            raise AppException(msg="图片文件路径格式错误")
+        key = f"uploads/{relative}"
+        if await OSSStorage.object_exists(key):
+            continue
+        if not await asyncio.to_thread(local_path.is_file):
+            raise AppException(msg="图片未上传到 OSS，且本地文件不存在，无法补传")
+        await OSSStorage.upload_file(local_path, key, content_type="image/png")

@@ -74,7 +74,6 @@ class ImageRequest(BaseModel):
 class ToImageRequest(ImageRequest):
     """PHP-compatible image API parameters, normalized for the core service."""
 
-    user_id: int = Field(..., ge=1, description="User ID; must match the authenticated user")
     size: Annotated[
         tuple[int, int],
         WithJsonSchema({"type": "string", "examples": ["1024~1024"]}),
