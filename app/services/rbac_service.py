@@ -10,7 +10,7 @@ RBAC 业务逻辑层
   5. 用户-角色绑定
 """
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select, update, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
@@ -241,20 +241,27 @@ class RbacService:
         )
         rules = result.scalars().all()
 
-        # 关联 permissions 表获取中文描述
+        # 一次性查询所有权限描述（避免 N+1 查询）
+        if not rules:
+            return []
+
+        # 构建查询条件：(resource, action) IN [(r1, a1), (r2, a2), ...]
+        permission_pairs = [(r.obj, r.act) for r in rules]
+        perm_result = await db.execute(
+            select(Permission.resource, Permission.action, Permission.description).where(
+                tuple_(Permission.resource, Permission.action).in_(permission_pairs)
+            )
+        )
+        # 构建字典：{(resource, action): description}
+        perm_map = {(row.resource, row.action): row.description for row in perm_result}
+
+        # 组装返回数据
         items = []
         for r in rules:
-            desc_result = await db.execute(
-                select(Permission.description).where(
-                    Permission.resource == r.obj,
-                    Permission.action == r.act,
-                ).limit(1)
-            )
-            description = desc_result.scalar_one_or_none()
             items.append({
                 "resource": r.obj,
                 "action": r.act,
-                "description": description or "",
+                "description": perm_map.get((r.obj, r.act), ""),
             })
         return items
 
