@@ -1,4 +1,4 @@
-.PHONY: dev build docker-up docker-down docker-logs clean test alembic-init alembic-migrate alembic-upgrade help
+.PHONY: dev build docker-up docker-down docker-restart docker-logs docker-shell docker-clean clean test alembic-init alembic-migrate alembic-upgrade help
 
 APP_NAME = fastapi-ai
 PORT = 8000
@@ -16,7 +16,7 @@ install:  ## 安装依赖
 build:  ## 构建 Docker 镜像
 	docker compose build
 
-docker-up:  ## 启动所有 Docker 服务（后台）
+docker-up:  ## 启动 FastAPI 和 Redis（后台，MySQL 使用宿主机实例）
 	docker compose up -d
 
 docker-down:  ## 停止并移除所有 Docker 服务
@@ -25,14 +25,13 @@ docker-down:  ## 停止并移除所有 Docker 服务
 docker-restart: docker-down docker-up  ## 重启 Docker 服务
 
 docker-logs:  ## 查看 Docker 日志
-	docker compose logs -f app
+	docker compose logs -f ai-server
 
 docker-shell:  ## 进入运行中的 app 容器
 	docker exec -it fastapi-ai /bin/bash
 
-docker-clean:  ## 清理 Docker 资源（停止 + 删卷）
+docker-clean:  ## 停止当前项目并删除 Redis 数据卷
 	docker compose down -v
-	docker system prune -f
 
 ## —— Database (Alembic) ——
 

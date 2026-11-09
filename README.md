@@ -15,7 +15,7 @@
 | **SSE 流式输出** | 标准 Server-Sent Events，兼容旧协议，前端直接对接 |
 | **对话管理** | 完整 CRUD + 上下文清除 + 重生成，按用户隔离 |
 | **数据库迁移** | Alembic 管理表结构变更，开发用 SQLite，生产切 MySQL |
-| **Docker 一键部署** | 本地 SQLite 开发 / 生产 MySQL 集群，Makefile 一条命令搞定 |
+| **Docker 一键部署** | FastAPI + Redis 容器运行，连接宿主机 MySQL |
 | **统一响应格式** | 所有接口返回统一 JSON 结构，前端对接无歧义 |
 | **日志系统** | 基于 loguru 按业务域分流，对标 Go 版多全局 Logger 的写法，开箱即用 |
 
@@ -241,47 +241,37 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 
 ## Docker 部署
 
-项目提供 Docker 与 docker-compose 一键部署，支持本地 SQLite 开发和生产 MySQL 集群。支持**内网/外网端口分离映射**——容器内统一监听 `8000` 端口，宿主机通过不同端口区分内网和外网访问。
+Docker Compose 启动 FastAPI 和 Redis；MySQL 使用宿主机上已运行的实例，不会作为容器启动。应用容器内监听 `8000`，默认从宿主机 `18000` 端口访问，Redis 默认映射到宿主机 `16379`。
 
 ### 前置条件
 
 - Docker & Docker Compose v2+
+- 宿主机 MySQL 已启动，数据库已创建，并允许来自 Docker 网络的连接
 
 
-### 1. 本地开发（SQLite，无外部依赖）
+### Docker 启动（连接本机 MySQL）
 
 ```bash
-# 1. 构建镜像
+# 1. 首次部署且尚无 .env 时，从模板创建配置
+cp .env.example .env
+# DATABASE_URL 用于宿主机直接运行；DOCKER_DATABASE_URL 用于容器连接宿主机 MySQL
+# DOCKER_DATABASE_URL=mysql+aiomysql://用户名:密码@host.docker.internal:3306/数据库名?charset=utf8mb4
+
+# 2. 构建镜像
 make build
 
-# 2. 启动（仅 app 服务）
-docker compose up -d app --no-deps
-
-# 3. 初始化数据库
-make alembic-upgrade
-```
-
-> 本地 SQLite 开发无需 MySQL/Redis，用 `--no-deps` 跳过依赖服务。
-
-### 2. 生产部署（MySQL + Redis）
-
-```bash
-# 1. 修改 .env 数据库连接为 MySQL
-# DATABASE_URL=mysql+aiomysql://root:root123@mysql:3306/fastapi_ai?charset=utf8mb4
-
-# 2. 启动全套服务
+# 3. 启动 FastAPI 和 Redis（不会启动 MySQL 容器）
 make docker-up
 
-# 3. 初始化数据库（首次）
-make alembic-upgrade
-
-# 4. 查看日志
-make docker-logs
+# 4. 首次部署时执行数据库迁移
+docker compose exec ai-server alembic upgrade head
 ```
 
-> MySQL 首次启动会自动执行 `sql/init.sql` 初始化库表（如果卷为空）。
+`host.docker.internal` 在 Compose 中映射到宿主机网关。若 MySQL 有网络访问限制，还需确认它监听 Docker 可达的地址，并允许对应来源连接。
 
-### 3. 常用 Docker 命令
+本机直接运行服务时使用 `.env` 中的 `DATABASE_URL`；容器启动时 Compose 用 `DOCKER_DATABASE_URL` 覆盖它。两者可以分别使用 `127.0.0.1` 和 `host.docker.internal`，避免影响本机开发。
+
+### 常用 Docker 命令
 
 ```bash
 make build           # 构建镜像
@@ -290,10 +280,10 @@ make docker-down     # 停止服务
 make docker-restart  # 重启
 make docker-logs     # 查看日志
 make docker-shell    # 进入容器
-make docker-clean    # 清理全部（含数据卷）
+make docker-clean    # 删除当前项目容器和 Redis 数据卷
 ```
 
-### 4. 验证
+### 验证
 
 ```bash
 # 健康检查

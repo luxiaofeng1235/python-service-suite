@@ -17,9 +17,8 @@ FROM python:3.12-slim AS runtime
 
 WORKDIR /app
 
-# Install runtime system deps (mysql client for production)
+# Install runtime system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    default-mysql-client \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

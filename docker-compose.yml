@@ -5,44 +5,22 @@ services:
     container_name: fastapi-ai
     restart: unless-stopped
     ports:
-      - 18000:8000
-      - 13306:3306
-      - 16379:6379
+      - "18000:8000"
+      - "16379:6379"
     env_file:
       - .env
     environment:
+      DATABASE_URL: ${DOCKER_DATABASE_URL:?请在 .env 中配置 DOCKER_DATABASE_URL，指向本机 MySQL}
+      PORT: 8000
       REDIS_URL: ${DOCKER_REDIS_URL:-redis://redis:6379/0}
     volumes:
       - ./logs:/app/logs
       - ./uploads:/app/uploads
-      - ./app.db:/app/app.db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      mysql:
-        condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - app-net
-
-  mysql:
-    image: mysql:8.0
-    container_name: fastapi-mysql
-    restart: unless-stopped
-    environment:
-      TZ: Asia/Shanghai
-      LANG: C.UTF-8
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-fastapi_ai}
-      MYSQL_CHARSET: utf8mb4
-      MYSQL_COLLATION: utf8mb4_unicode_ci
-    volumes:
-      - mysql-data:/var/lib/mysql
-      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     networks:
       - app-net
 
@@ -61,7 +39,6 @@ services:
       - app-net
 
 volumes:
-  mysql-data:
   redis-data:
 
 networks:
