@@ -342,7 +342,7 @@ make clean           # 清理缓存/tmp/log
 说明：
 
 - 上游使用 OpenAI 兼容协议，当前流程按千问模型与联网搜索策略处理
-- 后端从 `.env` 读取 `QWEN_API_KEY` 和 `QWEN_CHAT_URL`，调用千问时自动附加认证；前端无需传千问密钥
+- 后端从 `.env` 读取 `QWEN_API_KEY`，从 `config/ai.py` 读取 `QWEN_CHAT_URL`，调用千问时自动附加认证；前端无需传千问密钥
 - 两个流式接口均返回 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`X-Accel-Buffering: no`
 - AI 对话接口使用项目登录 Token 校验用户身份并隔离上下文；此 Token 与千问 API Key 无关
 - 流式输出兼容旧协议：`data:` 直接返回增量文本
@@ -351,7 +351,7 @@ make clean           # 清理缓存/tmp/log
 - 深度思考片段返回 JSON 字符串：`{"type":"reasoning_content","data":"..."}`
 - `chat_id=0` 表示新建对话；传已有 `chat_id` 表示续聊
 - `restart=1` 表示重新生成：丢弃历史中的最后一条消息且不追加本轮 `msg`，让模型基于剩余上下文重答（`restart=0` 时才会把 `msg` 作为新一轮用户提问追加）
-- `is_deep_reflection=1` 使用 `qwq-plus` 深度思考；为 `0` 或不传时使用 `qwen-max`，该流程不受 `.env` 的 `QWEN_MODEL` 影响
+- `is_deep_reflection=1` 使用 `qwq-plus` 深度思考；为 `0` 或不传时使用 `qwen-max`，该流程不受 `config/ai.py` 的 `QWEN_MODEL` 影响
 - `model` 当前仅支持取值 `1`（对应千问 qwen-max）；对话列表接口 `GET /api/ai/chats` 的 `model_id` 查询参数同样限定为 `1`
 - 所有上游请求默认开启千问联网搜索（`enable_search=true`）
 
@@ -397,7 +397,7 @@ curl -G 'http://127.0.0.1:8001/api/ai/get_image' \
 - `app/api/services/ai_service.py`：提供 `to_image(db, req, user_id)`、`get_image(db, task_id, user_id)` 调用入口。
 - `app/models/ai_to_work.py`：按现有 PHP `ai_to_work` 表映射，`task_id` 为可空的 `VARCHAR(255)`，`work` 可空；`type=1` 图片、`type=2` 视频；状态为 `0` 生成中、`1` 成功、`2` 失败、`3` 已删除。文生图只处理图片任务，已删除任务按不存在处理。
 - 已有你提供的 `ai_to_work` 表可直接复用；没有此表时执行 `sql/migrate_ai_to_work.sql` 创建。该脚本不会自动执行，也不会修改已有表或重置自增序号。
-- 认证复用后端 `.env` 的 `QWEN_API_KEY`。`QWEN_IMAGE_URL` 和 `QWEN_TASK_URL` 默认使用 PHP 中的 DashScope 地址，可通过 `.env` 覆盖。
+- 认证复用后端 `.env` 的 `QWEN_API_KEY`。`QWEN_IMAGE_URL` 和 `QWEN_TASK_URL` 统一维护在 `config/ai.py`，使用 PHP 中的 DashScope 地址。
 - 模型沿用 PHP：`model=1` 为 `wanx2.1-t2i-turbo`，`model=2` 为 `wanx2.1-t2i-plus`。
 - 图片按千问返回内容原样下载到 `UPLOAD_DIR/ai_images/`。启用 `OSS_ENABLED=True` 后，再通过公共 `app/storage/oss.py` 上传至 `OSS_BUCKET` 的 `uploads/ai_images/...`，所有图片上传成功后才保存作品地址并设置 `status=1`。返回域名使用 `OSS_VIEW_DOMAIN`，只填写域名，不包含 `/uploads`。
 - 已完成任务查询时会检查本站图片是否存在于 OSS：存在则直接复用；缺失且本地文件还在时自动补传，无需重新生成。上传或查询异常不会伪装成成功，也不会把已有本地文件删除。
@@ -440,6 +440,43 @@ result = await AIService.get_image(db, task_id, user_id)
 ```
 
 生成中返回任务 ID；成功返回 `{"image": [...]}`。失败抛出项目统一的 `AppException`。成功和明确失败的任务会入库缓存，后续查询不再访问千问。网络、下载或 OSS 上传异常保留待处理状态，可以重试查询。
+
+## 文生视频服务和接口
+
+沿用 PHP `toVideo/getVideo`：提交异步任务 → 保存 `ai_to_work`（`type=2`、`status=0`）→ 前端轮询 → 下载视频到本地 → FFmpeg 叠加 PNG 水印 → 上传 OSS → 保存 URL 数组并设置 `status=1`。查询已完成任务直接返回缓存。
+
+- `POST /api/ai/to_video`：支持 JSON、URL 编码表单和 multipart 表单；`prompt` 必传，1～500 字符，`to=2` 可省略。模型固定为 PHP 的 `wanx2.1-t2v-turbo`，当前只接文生视频。
+- `GET /api/ai/get_video?task_id=...`：生成中返回任务 ID，完成返回 `{"code":1,"msg":"视频生成成功","data":{"video":["https://static-nine-world.oss-cn-shanghai.aliyuncs.com/uploads/ai_videos/xxx.mp4"]}}`。
+- 两个接口均使用项目登录 Token，用户 ID 从 Token 获取；千问和 OSS 密钥均由后端 `.env` 读取。
+- 水印默认使用 `public/watermark.png`，与 PHP `public/uploads/222.png` 是相同图片。FFmpeg 使用 `overlay=W-w-10:H-h-10`，按水印原始尺寸叠加，右边、底边各留 10 像素。
+- MySQL 8 行锁覆盖任务查询和文件处理，同一任务被占用时其他轮询直接返回生成中；`status=3` 只表示已删除。下载、转码或上传失败保持待处理，可重试；上游明确失败保存 `status=2`。
+- 上传前保留本地加水印成片，OSS 上传失败后重试可复用；输入视频及临时输出自动清理。成片保存在 `UPLOAD_DIR/ai_videos/`，OSS 对象使用 `uploads/ai_videos/` 前缀。视频访问域名单独取 `AI_VIDEO_BASE_URL`，图片访问域名取 `OSS_VIEW_DOMAIN`；关闭 OSS 时取 `FILE_BASE_URL`。
+- 原片下载和成片均受 `FILE_VIDEO_MAX_SIZE` 限制。FFmpeg 异步调用，超时或请求取消会终止进程。处理期间当前查询请求会等待，客户端和反向代理超时应覆盖下载、转码和上传耗时，建议每 3～5 秒轮询。
+
+调用链：`ai_controller.py → api/services/ai_service.py → services/ai_video_service.py → storage/ai_video.py → storage/oss.py`。复用现有作品表，无需新增表结构。
+
+AI 地址、默认模型、水印文件、视频访问域名、FFmpeg 路径和超时统一维护在 `config/ai.py`；AI 相关 `.env` 配置只维护 `QWEN_API_KEY`。修改配置后重启服务。Docker 已补充 FFmpeg，部署时需要重新构建镜像。
+
+```python
+# config/ai.py
+QWEN_VIDEO_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
+QWEN_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks"
+AI_VIDEO_WATERMARK_PATH = "./public/watermark.png"
+AI_VIDEO_BASE_URL = "https://static-nine-world.oss-cn-shanghai.aliyuncs.com"
+FFMPEG_BIN = "ffmpeg"
+AI_VIDEO_FFMPEG_TIMEOUT = 600
+```
+
+```bash
+curl -X POST 'http://127.0.0.1:8001/api/ai/to_video' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"to":2,"prompt":"一只小猫在花园里慢慢行走，阳光温暖，镜头平稳移动"}'
+
+curl -G 'http://127.0.0.1:8001/api/ai/get_video' \
+  -H 'Authorization: Bearer <token>' \
+  --data-urlencode 'task_id=<提交时返回的任务ID>'
+```
 
 ## LLM / RAG 待开发规划
 

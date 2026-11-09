@@ -91,6 +91,21 @@ class ToImageRequest(ImageRequest):
         return int(dimensions[0]), int(dimensions[1])
 
 
+class VideoRequest(BaseModel):
+    """PHP-compatible text-to-video parameters for the to=2 workflow."""
+
+    to: int = Field(2, ge=2, le=2, description="Generation type: 2=text-to-video")
+    prompt: str = Field(..., min_length=1, max_length=500, description="Text-to-video prompt")
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, value: str) -> str:
+        """Reject empty prompts without changing user input."""
+        if not value.strip():
+            raise ValueError("提示词不能为空")
+        return value
+
+
 class ChatResponse(BaseModel):
     """对话响应体"""
 

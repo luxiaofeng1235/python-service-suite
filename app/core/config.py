@@ -14,6 +14,15 @@ from pydantic_settings import BaseSettings
 
 from config import (
     UPLOAD_DIR,
+    QWEN_CHAT_URL,
+    QWEN_MODEL,
+    QWEN_IMAGE_URL,
+    QWEN_VIDEO_URL,
+    QWEN_TASK_URL,
+    AI_VIDEO_WATERMARK_PATH,
+    AI_VIDEO_BASE_URL,
+    FFMPEG_BIN,
+    AI_VIDEO_FFMPEG_TIMEOUT,
     FILE_BASE_URL,
     FILE_IMAGE,
     FILE_VIDEO,
@@ -89,7 +98,7 @@ class Settings(BaseSettings):
 
     # ==================== 阿里云 OSS ====================
     OSS_ENABLED: bool = OSS_ENABLED
-    """是否将 AI 生成图片同步到 OSS"""
+    """是否将 AI 生成图片和加水印的视频同步到 OSS"""
     OSS_ACCESS_KEY_ID: str = ""
     OSS_ACCESS_KEY_SECRET: str = ""
     OSS_ENDPOINT: str = OSS_ENDPOINT
@@ -112,10 +121,17 @@ class Settings(BaseSettings):
 
     # ==================== 第三方 API 密钥 ====================
     QWEN_API_KEY: str = ""
-    QWEN_CHAT_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-    QWEN_MODEL: str = "qwen-max"
-    QWEN_IMAGE_URL: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
-    QWEN_TASK_URL: str = "https://dashscope.aliyuncs.com/api/v1/tasks"
+    QWEN_CHAT_URL: str = QWEN_CHAT_URL
+    QWEN_MODEL: str = QWEN_MODEL
+    QWEN_IMAGE_URL: str = QWEN_IMAGE_URL
+    QWEN_TASK_URL: str = QWEN_TASK_URL
+    QWEN_VIDEO_URL: str = QWEN_VIDEO_URL
+
+    # ==================== 视频水印 ====================
+    AI_VIDEO_WATERMARK_PATH: str = AI_VIDEO_WATERMARK_PATH
+    AI_VIDEO_BASE_URL: str = AI_VIDEO_BASE_URL
+    FFMPEG_BIN: str = FFMPEG_BIN
+    AI_VIDEO_FFMPEG_TIMEOUT: int = AI_VIDEO_FFMPEG_TIMEOUT
 
     # ==================== 鉴权白名单 ====================
     AUTH_WHITE_LIST: str = (

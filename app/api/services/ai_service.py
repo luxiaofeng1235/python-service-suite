@@ -1,8 +1,8 @@
 """
 ============================================
-AI 接口服务 - 聊天记录、流式转发与文生图
+AI 接口服务 - 聊天记录、流式转发与图片视频生成
 ============================================
-负责当前用户的聊天记录查询和删除，复用公共服务的流式对话和文生图能力。
+负责当前用户的聊天记录查询和删除，复用公共服务的流式对话和图片视频生成能力。
 """
 
 from collections.abc import AsyncGenerator
@@ -14,14 +14,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
 from app.models.ai_chat_log import AiChatLog
-from app.schemas.ai import ChatRequest, ImageRequest
+from app.schemas.ai import ChatRequest, ImageRequest, VideoRequest
 from app.services.ai_image_service import AIImageService
 from app.services.ai_stream_service import AIService as CoreAIService
+from app.services.ai_video_service import AIVideoService
 from app.utils.time_ import TimeUtil
 
 
 class AIService(CoreAIService):
-    """供接口调用的 AI 服务，复用公共服务的流式对话和文生图能力。"""
+    """供接口调用的 AI 服务，复用公共服务的对话和图片视频生成能力。"""
+
+    @staticmethod
+    async def to_video(db: AsyncSession, req: VideoRequest, user_id: int) -> str:
+        """提交文生视频任务，返回任务 ID，对应 PHP 的 toVideo。"""
+        return await AIVideoService.to_video(db, req, user_id)
+
+    @staticmethod
+    async def get_video(
+        db: AsyncSession, task_id: str, user_id: int
+    ) -> dict[str, list[str]] | str:
+        """查询视频进度，生成后由公共服务加水印、上传 OSS 并缓存结果。"""
+        return await AIVideoService.get_video(db, task_id, user_id)
 
     @staticmethod
     async def to_image(

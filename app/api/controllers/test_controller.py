@@ -31,5 +31,6 @@ async def testget(
     items = {
         "name": name,
         "age": age,
+        "tst":1122,
     }
     return Response.success(items)

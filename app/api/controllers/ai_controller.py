@@ -6,10 +6,11 @@ AI 接口控制器层
 """
 
 import json
+from typing import TypeVar
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.exceptions import RequestValidationError
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
@@ -18,15 +19,16 @@ from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.dependency import get_current_user
 from app.database import get_session
-from app.schemas.ai import ChatRequest, SendStreamRequest, ToImageRequest
+from app.schemas.ai import ChatRequest, SendStreamRequest, ToImageRequest, VideoRequest
 from app.utils.sse import SSEUtil
 
 # ==================== 路由定义 ====================
 router = APIRouter(prefix="/api", tags=["AI 服务"])
+AIRequest = TypeVar("AIRequest", bound=BaseModel)
 
 
-async def _parse_to_image_request(request: Request) -> ToImageRequest:
-    """Read JSON or PHP-style form fields and validate the image request."""
+async def _parse_ai_request(request: Request, schema: type[AIRequest]) -> AIRequest:
+    """Read JSON or PHP-style form fields and validate a generation request."""
     content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
     try:
         if content_type in {"application/x-www-form-urlencoded", "multipart/form-data"}:
@@ -38,7 +40,7 @@ async def _parse_to_image_request(request: Request) -> ToImageRequest:
             {"type": "json_invalid", "loc": ("body",), "msg": "请求体不是有效JSON", "input": None}
         ]) from exc
     try:
-        return ToImageRequest.model_validate(payload)
+        return schema.model_validate(payload)
     except ValidationError as exc:
         # 去掉异常对象上下文，交给项目统一校验响应处理器序列化。
         errors = [
@@ -46,6 +48,52 @@ async def _parse_to_image_request(request: Request) -> ToImageRequest:
             for error in exc.errors(include_context=False)
         ]
         raise RequestValidationError(errors, body=payload) from exc
+
+
+async def _parse_to_image_request(request: Request) -> ToImageRequest:
+    """Validate an image request using the shared body parser."""
+    return await _parse_ai_request(request, ToImageRequest)
+
+
+async def _parse_to_video_request(request: Request) -> VideoRequest:
+    """Validate a text-to-video request using the shared body parser."""
+    return await _parse_ai_request(request, VideoRequest)
+
+
+@router.post(
+    "/ai/to_video",
+    summary="提交AI文生视频任务",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                media_type: {"schema": VideoRequest.model_json_schema()}
+                for media_type in ("application/json", "application/x-www-form-urlencoded", "multipart/form-data")
+            },
+        },
+    },
+)
+async def to_video(
+    req: VideoRequest = Depends(_parse_to_video_request),
+    db: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """Submit a text-to-video task for the authenticated user."""
+    task_id = await AIService.to_video(db, req, user_id=current_user["user_id"])
+    return Response.success(data=task_id, msg="视频生成中")
+
+
+@router.get("/ai/get_video", summary="获取AI视频进度和带水印的结果")
+async def get_video(
+    task_id: str = Query(..., min_length=1, max_length=255, description="文生视频任务ID"),
+    db: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return progress or the published watermarked video URLs."""
+    result = await AIService.get_video(db, task_id, user_id=current_user["user_id"])
+    return Response.success(
+        data=result, msg="视频生成中" if isinstance(result, str) else "视频生成成功",
+    )
 
 
 @router.post(
