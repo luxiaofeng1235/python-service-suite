@@ -14,6 +14,7 @@ from pydantic_settings import BaseSettings
 
 from config import (
     UPLOAD_DIR,
+    AI_IMAGE_WATERMARK_PATH,
     FILE_IMAGE,
     FILE_VIDEO,
     SMTP_HOST,
@@ -76,6 +77,9 @@ class Settings(BaseSettings):
     FILE_VIDEO_MAX_SIZE: int = FILE_VIDEO["max_size"]
     """视频最大允许大小（字节）"""
 
+    AI_IMAGE_WATERMARK_PATH: str = AI_IMAGE_WATERMARK_PATH
+    """AI 图片水印文件路径，相对路径基于项目根目录"""
+
     FILE_BASE_URL: str = ""
     """文件访问基础URL，为空时从请求 base_url 自动拼接"""
 
@@ -93,6 +97,8 @@ class Settings(BaseSettings):
     QWEN_API_KEY: str = ""
     QWEN_CHAT_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     QWEN_MODEL: str = "qwen-max"
+    QWEN_IMAGE_URL: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+    QWEN_TASK_URL: str = "https://dashscope.aliyuncs.com/api/v1/tasks"
 
     # ==================== 鉴权白名单 ====================
     AUTH_WHITE_LIST: str = (

@@ -27,3 +27,6 @@ FILE_VIDEO = {
 
 # 上传根目录
 UPLOAD_DIR = "./uploads"
+
+# AI 生图本地水印（相对项目根目录）
+AI_IMAGE_WATERMARK_PATH = "public/watermark.png"

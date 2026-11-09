@@ -10,6 +10,7 @@ from app.models.user import User  # noqa: F401
 from app.models.user_token import UserToken  # noqa: F401
 from app.models.verification_code import VerificationCode  # noqa: F401
 from app.models.ai_chat_log import AiChatLog  # noqa: F401
+from app.models.ai_to_work import AiToWork  # noqa: F401
 from app.models.attachment import Attachment  # noqa: F401
 from app.models.auth_permission import Permission  # noqa: F401
 from app.models.auth_casbin_rule import CasbinRule  # noqa: F401

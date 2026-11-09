@@ -12,7 +12,7 @@ import pytest
 
 from app.common.exception import AppException
 from app.core.config import settings
-from app.services.ai_service import AIService
+from app.services.ai_stream_service import AIService
 from app.services.qwen_ai_service import QwenAIService
 from app.utils.sse import SSEUtil
 

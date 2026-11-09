@@ -362,6 +362,51 @@ curl -N \
   -d '{"model":1,"chat_id":0,"msg":"你好，介绍一下这个服务","restart":0}'
 ```
 
+## 文生图服务和接口
+
+按 `AiLogic.php` 的 `toImage` / `getImage` 移植，接口沿用 PHP 的参数格式：
+
+- `POST /api/ai/to_image`：提交文生图任务，支持 JSON、URL 编码表单和 multipart 表单。
+- `GET /api/ai/get_image`：通过查询参数 `user_id`、`task_id` 获取生成进度和结果。
+- 两个接口均需要项目登录 Token，参数 `user_id` 必传且须与登录用户一致。千问密钥仍由后端读取。
+- 提交参数全部必传：`user_id`、`model`（1或2）、`prompt`（1～500字符）、`size`（如 `1024~1024`）、`n`（1～4）、`watermark`（1开启、2关闭）。宽高各为720～1440整数，总像素不超过200万。
+- `watermark=1` 时，下载后由本地叠加 `public/watermark.png`，右下角等比缩放（宽度最多占原图25%，边距为短边2%），保留透明通道；`watermark=2` 不加水印。上游默认水印统一关闭。可用 `.env` 的 `AI_IMAGE_WATERMARK_PATH` 覆盖水印文件路径，相对路径从项目根目录解析。已完成任务仍直接返回此前缓存的图片。
+
+```bash
+curl -X POST 'http://127.0.0.1:8001/api/ai/to_image' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"user_id":7,"model":1,"prompt":"一只小猫","size":"1024~1024","n":1,"watermark":2}'
+
+curl -G 'http://127.0.0.1:8001/api/ai/get_image' \
+  -H 'Authorization: Bearer <token>' \
+  --data-urlencode 'user_id=7' \
+  --data-urlencode 'task_id=<提交时返回的任务ID>'
+```
+
+将示例的 `user_id=7` 替换为实际登录用户 ID。提交成功及生成中返回 `{"code":1,"msg":"图片生成中","data":"任务ID"}`；成功后返回 `{"code":1,"msg":"图片生成成功","data":{"image":[...],"iamge":[...]}}`。
+
+- `app/services/ai_image_service.py`：提交任务、按用户查询任务、下载生成图片和缓存结果。
+- `app/api/services/ai_service.py`：提供 `to_image(db, req, user_id)`、`get_image(db, task_id, user_id)` 调用入口。
+- `app/models/ai_to_work.py`：按现有 PHP `ai_to_work` 表映射，`task_id` 为可空的 `VARCHAR(255)`，`work` 可空；`type=1` 图片、`type=2` 视频；状态为 `0` 生成中、`1` 成功、`2` 失败、`3` 已删除。文生图只处理图片任务，已删除任务按不存在处理。
+- 已有你提供的 `ai_to_work` 表可直接复用；没有此表时执行 `sql/migrate_ai_to_work.sql` 创建。该脚本不会自动执行，也不会修改已有表或重置自增序号。
+- 认证复用后端 `.env` 的 `QWEN_API_KEY`。`QWEN_IMAGE_URL` 和 `QWEN_TASK_URL` 默认使用 PHP 中的 DashScope 地址，可通过 `.env` 覆盖。
+- 模型沿用 PHP：`model=1` 为 `wanx2.1-t2i-turbo`，`model=2` 为 `wanx2.1-t2i-plus`。
+- 图片保存在 `UPLOAD_DIR/ai_images/`，返回 `/uploads/ai_images/...` 地址；配置 `FILE_BASE_URL` 后返回完整访问地址。不会使用原 PHP 项目的固定 CDN 域名。
+
+调用示例（`db` 为异步数据库会话，`user_id` 为已认证用户 ID）：
+
+```python
+from app.api.services.ai_service import AIService
+from app.schemas.ai import ImageRequest
+
+req = ImageRequest(model=1, prompt="一只小猫", size=[1024, 1024], n=1, watermark=2)
+task_id = await AIService.to_image(db, req, user_id)
+result = await AIService.get_image(db, task_id, user_id)
+```
+
+生成中返回任务 ID；成功返回 `{"image": [...], "iamge": [...]}`，保留旧 PHP 的两个字段。失败抛出项目统一的 `AppException`。成功和明确失败的任务会入库缓存，后续查询不再访问上游。网络或图片下载异常保留待处理状态，可以重试查询。
+
 ## LLM / RAG 待开发规划
 
 架构链路：

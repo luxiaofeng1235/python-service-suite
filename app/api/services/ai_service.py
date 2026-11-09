@@ -1,8 +1,8 @@
 """
 ============================================
-AI 接口服务 - 聊天记录管理与流式转发
+AI 接口服务 - 聊天记录、流式转发与文生图
 ============================================
-负责当前用户的聊天记录查询和删除，流式对话交由公共 AI 服务处理。
+负责当前用户的聊天记录查询和删除，复用公共服务的流式对话和文生图能力。
 """
 
 from collections.abc import AsyncGenerator
@@ -14,13 +14,38 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
 from app.models.ai_chat_log import AiChatLog
-from app.schemas.ai import ChatRequest
-from app.services.ai_service import AIService as CoreAIService
+from app.schemas.ai import ChatRequest, ImageRequest
+from app.services.ai_image_service import AIImageService
+from app.services.ai_stream_service import AIService as CoreAIService
 from app.utils.time_ import TimeUtil
 
 
 class AIService(CoreAIService):
-    """供接口调用的 AI 服务，复用公共服务的流式对话能力。"""
+    """供接口调用的 AI 服务，复用公共服务的流式对话和文生图能力。"""
+
+    @staticmethod
+    async def to_image(
+        db: AsyncSession,
+        req: ImageRequest,
+        user_id: int,
+        request_user_id: int | None = None,
+    ) -> str:
+        """提交文生图任务，返回任务 ID，对应 PHP 的 toImage。"""
+        if request_user_id is not None and request_user_id != user_id:
+            raise AppException(msg="user_id与当前登录用户不一致")
+        return await AIImageService.to_image(db, req, user_id)
+
+    @staticmethod
+    async def get_image(
+        db: AsyncSession,
+        task_id: str,
+        user_id: int,
+        request_user_id: int | None = None,
+    ) -> dict[str, list[str]] | str:
+        """查询文生图结果，生成中返回任务 ID，对应 PHP 的 getImage。"""
+        if request_user_id is not None and request_user_id != user_id:
+            raise AppException(msg="user_id与当前登录用户不一致")
+        return await AIImageService.get_image(db, task_id, user_id)
 
     @staticmethod
     async def stream_chat(req: ChatRequest, user_id: int = 0) -> AsyncGenerator[str, None]:

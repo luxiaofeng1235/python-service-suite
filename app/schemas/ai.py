@@ -5,9 +5,9 @@ AI 对话数据模型模块
 定义 AI 对话相关的请求体、响应体。
 """
 
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, WithJsonSchema, field_validator
 
 # ==================== 请求体 ====================
 
@@ -41,6 +41,55 @@ class SendStreamRequest(ChatRequest):
 
     chat_id: int = Field(..., ge=0, description="Chat ID; use 0 for a new conversation")
     restart: int = Field(..., ge=0, le=1, description="Regenerate the reply: 0=no, 1=yes")
+
+
+class ImageRequest(BaseModel):
+    """Image parameters matching AiLogic.php toImage."""
+
+    model: int = Field(..., ge=1, le=2, description="Image model: 1=turbo 2=plus")
+    prompt: str = Field(..., min_length=1, max_length=500, description="Text-to-image prompt")
+    size: tuple[int, int] = Field(..., description="Image size as [width, height]")
+    n: int = Field(..., ge=1, le=4, description="Number of images")
+    watermark: int = Field(..., ge=1, le=2, description="Watermark: 1=on 2=off")
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, value: str) -> str:
+        """Reject empty prompts without changing user input."""
+        if not value.strip():
+            raise ValueError("提示词不能为空")
+        return value
+
+    @field_validator("size")
+    @classmethod
+    def validate_size(cls, value: tuple[int, int]) -> tuple[int, int]:
+        """Validate the dimensions and pixel limit from the PHP controller."""
+        if any(dimension < 720 or dimension > 1440 for dimension in value):
+            raise ValueError("size格式错误，宽高必须在720到1440之间")
+        if value[0] * value[1] > 2_000_000:
+            raise ValueError("尺寸过大，像素不能超过200万")
+        return value
+
+
+class ToImageRequest(ImageRequest):
+    """PHP-compatible image API parameters, normalized for the core service."""
+
+    user_id: int = Field(..., ge=1, description="User ID; must match the authenticated user")
+    size: Annotated[
+        tuple[int, int],
+        WithJsonSchema({"type": "string", "examples": ["1024~1024"]}),
+    ] = Field(..., description="Image size as width~height, e.g. 1024~1024")
+
+    @field_validator("size", mode="before")
+    @classmethod
+    def parse_size(cls, value: Any) -> tuple[int, int]:
+        """Convert the PHP size string into integer dimensions."""
+        if not isinstance(value, str):
+            raise ValueError("size格式错误，请使用宽~高，例如1024~1024")
+        dimensions = value.split("~")
+        if len(dimensions) != 2 or not all(part.isascii() and part.isdigit() for part in dimensions):
+            raise ValueError("size格式错误，请使用宽~高，例如1024~1024")
+        return int(dimensions[0]), int(dimensions[1])
 
 
 class ChatResponse(BaseModel):

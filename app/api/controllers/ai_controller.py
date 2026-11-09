@@ -5,7 +5,11 @@ AI 接口控制器层
 负责 AI 对话、流式输出等接口定义。
 """
 
-from fastapi import APIRouter, Depends, Query
+import json
+
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
@@ -14,11 +18,82 @@ from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.dependency import get_current_user
 from app.database import get_session
-from app.schemas.ai import ChatRequest, SendStreamRequest
+from app.schemas.ai import ChatRequest, SendStreamRequest, ToImageRequest
 from app.utils.sse import SSEUtil
 
 # ==================== 路由定义 ====================
 router = APIRouter(prefix="/api", tags=["AI 服务"])
+
+
+async def _parse_to_image_request(request: Request) -> ToImageRequest:
+    """Read JSON or PHP-style form fields and validate the image request."""
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
+    try:
+        if content_type in {"application/x-www-form-urlencoded", "multipart/form-data"}:
+            payload = dict(await request.form())
+        else:
+            payload = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise RequestValidationError([
+            {"type": "json_invalid", "loc": ("body",), "msg": "请求体不是有效JSON", "input": None}
+        ]) from exc
+    try:
+        return ToImageRequest.model_validate(payload)
+    except ValidationError as exc:
+        # 去掉异常对象上下文，交给项目统一校验响应处理器序列化。
+        errors = [
+            {**error, "loc": ("body", *error["loc"])}
+            for error in exc.errors(include_context=False)
+        ]
+        raise RequestValidationError(errors, body=payload) from exc
+
+
+@router.post(
+    "/ai/to_image",
+    summary="提交AI文生图任务",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                media_type: {"schema": ToImageRequest.model_json_schema()}
+                for media_type in ("application/json", "application/x-www-form-urlencoded", "multipart/form-data")
+            },
+        },
+    },
+)
+async def to_image(
+    req: ToImageRequest = Depends(_parse_to_image_request),
+    db: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """Submit a validated image task for the authenticated user."""
+    task_id = await AIService.to_image(
+        db,
+        req,
+        user_id=current_user["user_id"],
+        request_user_id=req.user_id,
+    )
+    return Response.success(data=task_id, msg="图片生成中")
+
+
+@router.get("/ai/get_image", summary="获取AI生图进度和结果")
+async def get_image(
+    user_id: int = Query(..., ge=1, description="用户ID，须与当前登录用户一致"),
+    task_id: str = Query(..., min_length=1, max_length=255, description="文生图任务ID"),
+    db: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return image progress or the completed image URLs."""
+    result = await AIService.get_image(
+        db,
+        task_id,
+        user_id=current_user["user_id"],
+        request_user_id=user_id,
+    )
+    return Response.success(
+        data=result,
+        msg="图片生成中" if isinstance(result, str) else "图片生成成功",
+    )
 
 
 @router.post(
