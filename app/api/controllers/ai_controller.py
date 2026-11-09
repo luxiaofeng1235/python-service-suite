@@ -7,24 +7,29 @@ AI 接口控制器层
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
 from app.api.services.ai_service import AIService
 from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.dependency import get_current_user
 from app.database import get_session
-from app.schemas.ai import ChatRequest
+from app.schemas.ai import ChatRequest, SendStreamRequest
 from app.utils.sse import SSEUtil
 
 # ==================== 路由定义 ====================
 router = APIRouter(prefix="/api", tags=["AI 服务"])
 
 
-@router.post("/ai/chat/send_stream_sse", summary="AI 流式对话(SSE)")
+@router.post(
+    "/ai/chat/send_stream_sse",
+    summary="AI 流式对话(SSE)",
+    response_class=EventSourceResponse,
+)
 async def chat_stream(
     req: ChatRequest,
     current_user: dict = Depends(get_current_user),
-):
+) -> EventSourceResponse:
     """
     AI 流式对话接口
 
@@ -33,6 +38,29 @@ async def chat_stream(
     """
     return SSEUtil.stream_response(
         AIService.stream_chat(req, user_id=current_user.get("user_id") or 0),
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post(
+    "/ai/chat/send_stream",
+    summary="AI 流式对话",
+    response_class=EventSourceResponse,
+)
+async def chat_stream_compatible(
+    req: SendStreamRequest,
+    current_user: dict = Depends(get_current_user),
+) -> EventSourceResponse:
+    """Stream a chat with required chat_id and restart fields."""
+    return SSEUtil.stream_response(
+        AIService.stream_chat(req, user_id=current_user.get("user_id") or 0),
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

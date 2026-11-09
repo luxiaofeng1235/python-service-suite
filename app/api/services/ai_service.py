@@ -1,151 +1,32 @@
 """
 ============================================
-AI 业务逻辑服务层
+AI API Service - compatibility facade
 ============================================
-负责处理千问兼容模式对话、流式输出与聊天记录落库。
+Keeps API-specific chat-log queries while delegating streaming to the common AI service.
 """
 
-import json
 from collections.abc import AsyncGenerator
-from datetime import datetime
 from typing import Any
 
-import httpx
-from loguru import logger
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
-from app.core.config import settings
-from app.database import async_session
 from app.models.ai_chat_log import AiChatLog
-from app.schemas.ai import ChatRequest, StreamChunk
+from app.schemas.ai import ChatRequest
+from app.services.ai_service import AIService as CoreAIService
 from app.utils.time_ import TimeUtil
 
 
-class AIService:
-    """AI 对话服务"""
-
-    # ============================================================
-    # 模型配置映射表
-    # 键: 模型ID (1)
-    # 值: 上游模型名、System Prompt、是否启用搜索、是否启用深度思考
-    # ============================================================
-    MODEL_CONFIGS: dict[int, dict[str, Any]] = {  # noqa: RUF012
-        1: {
-            "upstream_model": "qwen-max",
-            "deep_reflection_model": "qwen-plus",
-            "system": "你现在是一个全能生活小助手，擅长星座运势、生活百科、情感建议、健康养生、美食旅行、科技数码等各个领域的知识问答。你可以为用户查询星座运势、解读命理、推荐美食、规划旅行、解答情感困惑、分享生活技巧等。请以热情友好的方式回答；如果用户输入了链接，请不要声称你能直接访问网页内容。全程使用简体中文，如果回答中有数学相关公式请使用双$符加换行的markdown语法",
-            "enable_search": True,
-        },
-    }
+class AIService(CoreAIService):
+    """API facade for the common AI conversation service."""
 
     @staticmethod
     async def stream_chat(req: ChatRequest, user_id: int = 0) -> AsyncGenerator[str, None]:
-        """流式对话接口，自管 DB 事务，按旧协议直接输出文本片段"""
-        # 在生成器内部自建独立 session，避免 FastAPI yield 依赖提前 commit/close
-        async with async_session() as db:
-            try:
-                # 1. 获取/创建聊天记录、解析配置、组装消息
-                chat = await AIService._get_or_create_chat_log(db, req.chat_id, req.model, user_id)
-                config = AIService._resolve_model_config(req.model, req.is_deep_reflection)
-                messages = AIService._prepare_messages(chat, req.msg, req.restart, config["system"])
-
-                # 2. 初始化累积变量（用于流结束后落库）
-                accumulated_reply = ""
-                accumulated_reasoning = ""
-
-                # 并行启动推荐问题生成任务（已屏蔽）
-                # suggestions_task = asyncio.create_task(
-                #     AIService._generate_suggestions(
-                #         messages=messages,
-                #         upstream_model=config["upstream_model"],
-                #         enable_search=config["enable_search"],
-                #     )
-                # )
-
-                # 3. 建立 httpx 流式连接请求上游 LLM
-                async with httpx.AsyncClient(
-                    timeout=httpx.Timeout(300.0, connect=30.0),
-                    trust_env=False,
-                ) as client:
-                    async with client.stream(
-                        "POST",
-                        settings.QWEN_CHAT_URL,
-                        headers=AIService._build_headers(),
-                        json={
-                            "model": config["upstream_model"],
-                            "messages": messages,
-                            "stream": True,
-                            "enable_search": config["enable_search"],
-                        },
-                    ) as resp:
-                        # 4. 检查上游 HTTP 状态码
-                        if resp.status_code >= 400:
-                            error_text = await resp.aread()
-                            raise AppException(
-                                msg=AIService._extract_error_message(resp, error_text)
-                            )
-
-                        # 5. 逐行解析 SSE 事件并实时 yield 给客户端
-                        async for raw_line in resp.aiter_lines():
-                            event = AIService._parse_stream_line(raw_line, chat.id)
-                            if not event:
-                                continue
-
-                            # 5a. 普通文本片段 → 累加后直接输出
-                            if event["type"] == "delta":
-                                accumulated_reply += event["content"]
-                                yield event["content"]
-                            # 5b. 推理过程片段 → 包装为 JSON 格式输出
-                            elif event["type"] == "reasoning":
-                                accumulated_reasoning += event["content"]
-                                yield json.dumps(
-                                    {"type": "reasoning_content", "data": event["content"]},
-                                    ensure_ascii=False,
-                                )
-                            # 5c. 结束标记 → 跳过（后续走 else 分支收尾）
-                            elif event["type"] == "end":
-                                continue
-
-                # 6. 流结束后将完整对话落库，正常落库返回
-                await AIService._save_chat_log(
-                    db=db,
-                    chat=chat,
-                    messages=messages,
-                    assistant_content=accumulated_reply,
-                    reasoning_content=accumulated_reasoning,
-                )
-                await db.commit()
-
-            except AppException as exc:
-                # 7a. 业务错误 → 先 rollback 再 yield，避免客户端断连时 rollback 不执行
-                await db.rollback()
-                try:
-                    yield str(exc)
-                    yield "[EXCEPTION]"
-                except RuntimeError:
-                    pass
-            except Exception as exc:
-                # 7b. 系统异常 → 先 rollback，堆栈日志，再 yield
-                await db.rollback()
-                logger.exception("流式对话系统异常")
-                try:
-                    yield f"上游流式调用失败: {exc!s}"
-                    yield "[EXCEPTION]"
-                except RuntimeError:
-                    pass
-            else:
-                # 7c. 正常结束 → 返回日志 ID 和完成标记（推荐问题已屏蔽）
-                # suggestions = await suggestions_task
-                # if suggestions:
-                #     yield json.dumps(
-                #         {"type": "suggestions", "data": suggestions},
-                #         ensure_ascii=False,
-                #     )
-                yield f"[LOG_ID]:{chat.id}"
-                yield "[DONE]"
+        """Stream a chat using the shared conversation workflow."""
+        async for chunk in CoreAIService.stream_chat(req, user_id):
+            yield chunk
 
     @staticmethod
     async def list_chat_logs(
@@ -154,37 +35,31 @@ class AIService:
         page_params: PageParams,
         model_id: int | None = None,
     ) -> dict[str, Any]:
-        """获取当前用户的 AI 对话列表"""
-        # 1. 拼装查询条件（用户ID + 可选模型筛选）
+        """Get the current user's paginated chat logs."""
         conditions = [AiChatLog.user_id == user_id]
         if model_id is not None:
             conditions.append(AiChatLog.model_id == model_id)
 
-        # 2. 构建查询语句
         stmt = select(AiChatLog).where(*conditions).order_by(AiChatLog.id.desc())
         count_stmt = select(func.count(AiChatLog.id)).where(*conditions)
-
-        # 3. 分页查询
         data = await paginate(db, stmt, page_params, count_stmt)
-
-        # 4. 序列化并返回
         items = [AIService._serialize_chat_log(item) for item in data["items"]]
         return {**data, "items": items}
 
     @staticmethod
-    async def get_chat_log_detail(db: AsyncSession, chat_id: int, user_id: int) -> dict[str, Any]:
-        """获取当前用户的对话详情"""
-        # 1. 校验并获取聊天记录
+    async def get_chat_log_detail(
+        db: AsyncSession,
+        chat_id: int,
+        user_id: int,
+    ) -> dict[str, Any]:
+        """Get one chat log owned by the current user."""
         chat = await AIService._get_existing_chat_log(db, chat_id, user_id)
-        # 2. 序列化返回
         return AIService._serialize_chat_log(chat)
 
     @staticmethod
-    async def delete_chat_log(db: AsyncSession, chat_id: int, user_id: int) -> dict[str, Any]:
-        """删除当前用户的指定对话"""
-        # 1. 校验记录归属权（不存在则抛异常）
+    async def delete_chat_log(db: AsyncSession, chat_id: int, user_id: int) -> dict[str, int]:
+        """Delete one chat log owned by the current user."""
         await AIService._get_existing_chat_log(db, chat_id, user_id)
-        # 2. 执行删除
         await db.execute(
             delete(AiChatLog).where(AiChatLog.id == chat_id, AiChatLog.user_id == user_id)
         )
@@ -192,37 +67,12 @@ class AIService:
         return {"deleted": 1}
 
     @staticmethod
-    async def _get_or_create_chat_log(
-        db: AsyncSession, chat_id: int, model_id: int, user_id: int
+    async def _get_existing_chat_log(
+        db: AsyncSession,
+        chat_id: int,
+        user_id: int,
     ) -> AiChatLog:
-        """获取或创建聊天记录"""
-        if chat_id > 0:
-            # 已有 chat_id → 从数据库查询并校验归属
-            result = await db.execute(
-                select(AiChatLog).where(
-                    AiChatLog.id == chat_id,
-                    AiChatLog.model_id == model_id,
-                    AiChatLog.user_id == user_id,
-                )
-            )
-            chat = result.scalar_one_or_none()
-            if chat is None:
-                raise AppException(msg="聊天记录不存在")
-            return chat
-
-        # chat_id=0 → 创建新聊天记录
-        now = datetime.now()
-        chat = AiChatLog(
-            user_id=user_id, model_id=model_id, chat=[], create_time=now, update_time=now
-        )
-        db.add(chat)
-        await db.flush()
-        await db.refresh(chat)
-        return chat
-
-    @staticmethod
-    async def _get_existing_chat_log(db: AsyncSession, chat_id: int, user_id: int) -> AiChatLog:
-        """获取当前用户已有对话"""
+        """Get one chat log and enforce ownership."""
         result = await db.execute(
             select(AiChatLog).where(AiChatLog.id == chat_id, AiChatLog.user_id == user_id)
         )
@@ -233,168 +83,12 @@ class AIService:
 
     @staticmethod
     def _serialize_chat_log(chat: AiChatLog) -> dict[str, Any]:
-        """序列化聊天记录"""
+        """Serialize a chat log for API responses."""
         return {
             "id": chat.id,
             "user_id": chat.user_id,
             "model_id": chat.model_id,
-            "chat": AIService._load_history(chat.chat),
+            "chat": CoreAIService._load_history(chat.chat),
             "create_time": TimeUtil.format_datetime(chat.create_time),
             "update_time": TimeUtil.format_datetime(chat.update_time),
         }
-
-    @staticmethod
-    def _resolve_model_config(model_id: int, is_deep_reflection: int) -> dict[str, Any]:
-        """解析模型配置"""
-        # 1. 按 model_id 查询对应配置
-        config = AIService.MODEL_CONFIGS.get(model_id)
-        if config is None:
-            raise AppException(msg="不支持的模型类型")
-
-        # 2. 深度思考回退逻辑：模型1启用深度思考时替换为 deep_reflection_model
-        resolved = dict(config)
-        if model_id == 1 and is_deep_reflection == 1:
-            resolved["upstream_model"] = config.get(
-                "deep_reflection_model", config["upstream_model"]
-            )
-        return resolved
-
-    @staticmethod
-    def _prepare_messages(
-        chat: AiChatLog, msg: str, restart: int, system: str
-    ) -> list[dict[str, Any]]:
-        """组装消息列表，兼容 restart 语义"""
-        # 1. 以 system prompt 开头
-        messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
-        # 2. 追加历史对话
-        history = AIService._load_history(chat.chat)
-        messages.extend(history)
-
-        # 3. restart=1 → 移除上一条消息（重新回答）; 否则追加本轮用户消息
-        if restart == 1:
-            if len(messages) > 1:
-                messages.pop()
-        else:
-            messages.append({"role": "user", "content": msg})
-
-        return messages
-
-    @staticmethod
-    def _load_history(chat_json: Any) -> list[dict[str, Any]]:
-        """读取历史消息"""
-        # 已反序列化 → 直接返回（JSON 字段已自动解析）
-        if isinstance(chat_json, list):
-            return chat_json
-        try:
-            history = json.loads(chat_json or "[]")
-        except json.JSONDecodeError:
-            return []
-        return history if isinstance(history, list) else []
-
-    @staticmethod
-    async def _save_chat_log(
-        db: AsyncSession,
-        chat: AiChatLog,
-        messages: list[dict[str, Any]],
-        assistant_content: str,
-        reasoning_content: str,
-    ) -> None:
-        """保存聊天记录"""
-        # 1. 去掉 system 消息，保留 user<->assistant 历史
-        chat_messages = messages[1:]
-        # 2. 追加 assistant 回复（推理内容非空时才写入）
-        msg: dict[str, Any] = {"role": "assistant", "content": assistant_content}
-        if reasoning_content:
-            msg["reasoning_content"] = reasoning_content
-        chat_messages.append(msg)
-        chat.chat = chat_messages
-        chat.update_time = datetime.now()
-        await db.flush()
-
-    @staticmethod
-    def _build_headers() -> dict[str, str]:
-        """构建上游请求头"""
-        if not settings.QWEN_API_KEY:
-            raise AppException(msg="QWEN_API_KEY 未配置")
-        return {
-            "Authorization": f"Bearer {settings.QWEN_API_KEY}",
-            "Content-Type": "application/json",
-        }
-
-    @staticmethod
-    def _parse_stream_line(raw_line: str, chat_id: int) -> dict[str, Any] | None:
-        """解析上游 SSE 单行数据"""
-        # 1. 过滤无效行（空行 / 非 data: 开头）
-        line = raw_line.strip()
-        if not line or not line.startswith("data:"):
-            return None
-
-        # 2. 提取 payload
-        payload = line[5:].strip()
-        if payload == "[DONE]":
-            return None
-
-        # 3. 尝试 JSON 解析
-        try:
-            data = json.loads(payload)
-        except json.JSONDecodeError:
-            return None
-
-        # 4. 上游返回错误 → 包装为 error 类型
-        if data.get("error"):
-            return StreamChunk(
-                type="error",
-                chat_id=chat_id,
-                content=data["error"].get("message")
-                or data["error"].get("code", "服务错误，请稍后再试"),
-            ).model_dump()
-
-        choice = (data.get("choices") or [{}])[0]
-        delta = choice.get("delta") or {}
-        finish_reason = choice.get("finish_reason")
-        usage = data.get("usage")
-
-        # 5. 推理过程
-        if delta.get("reasoning_content"):
-            return StreamChunk(
-                type="reasoning",
-                chat_id=chat_id,
-                content=delta["reasoning_content"],
-            ).model_dump()
-
-        # 6. 普通文本增量
-        if delta.get("content"):
-            return StreamChunk(
-                type="delta",
-                chat_id=chat_id,
-                content=delta["content"],
-            ).model_dump()
-
-        # 7. 结束标记（含用量信息）
-        if finish_reason or usage:
-            return StreamChunk(
-                type="end",
-                chat_id=chat_id,
-                content="",
-                usage=usage,
-            ).model_dump()
-
-        return None
-
-    @staticmethod
-    def _extract_error_message(resp: httpx.Response, body: bytes | None = None) -> str:
-        """提取上游错误信息"""
-        # 1. 获取响应体（优先使用传入的 body）
-        content = body if body is not None else resp.content
-        # 2. 尝试 JSON 解析，提取 error.message 或 error.code
-        try:
-            data = json.loads(content.decode("utf-8"))
-        except Exception:
-            return f"上游接口调用失败，HTTP {resp.status_code}"
-
-        error = data.get("error") or {}
-        return (
-            error.get("message")
-            or error.get("code")
-            or f"上游接口调用失败，HTTP {resp.status_code}"
-        )

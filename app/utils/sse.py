@@ -13,7 +13,7 @@ SSE 流式响应工具模块
 """
 
 import json
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 
 from sse_starlette.sse import EventSourceResponse
 
@@ -25,6 +25,7 @@ class SSEUtil:
     def stream_response(
         generator: AsyncGenerator[str, None],
         event: str = "message",
+        headers: Mapping[str, str] | None = None,
     ) -> EventSourceResponse:
         """
         创建 SSE 流式响应
@@ -32,6 +33,7 @@ class SSEUtil:
         Args:
             generator: 异步生成器，每次 yield 文本块
             event: SSE 事件类型，默认 "message"
+            headers: Optional response header overrides.
 
         Returns:
             EventSourceResponse 对象
@@ -51,7 +53,7 @@ class SSEUtil:
                     "data": chunk,
                 }
 
-        return EventSourceResponse(event_generator())
+        return EventSourceResponse(event_generator(), headers=headers)
 
     @staticmethod
     def json_stream_response(

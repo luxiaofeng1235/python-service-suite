@@ -36,6 +36,13 @@ class ChatRequest(BaseModel):
     }
 
 
+class SendStreamRequest(ChatRequest):
+    """Required parameters for the PHP-compatible streaming endpoint."""
+
+    chat_id: int = Field(..., ge=0, description="Chat ID; use 0 for a new conversation")
+    restart: int = Field(..., ge=0, le=1, description="Regenerate the reply: 0=no, 1=yes")
+
+
 class ChatResponse(BaseModel):
     """对话响应体"""
 

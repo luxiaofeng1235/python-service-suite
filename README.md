@@ -317,7 +317,7 @@ make clean           # 清理缓存/tmp/log
 
 当前仓库已接入 OpenAI 兼容接口，当前默认对接千问，开箱即用：
 
-- `POST /api/ai/chat`：返回完整回复
+- `POST /api/ai/chat/send_stream`：返回 SSE 流式分片，`model`、`chat_id`、`msg`、`restart` 必传
 - `POST /api/ai/chat/send_stream_sse`：返回 SSE 流式分片
 - `GET /api/ai/chats`：对话列表（登录后按用户隔离）
 - `GET /api/ai/chats/{chat_id}`：对话详情
@@ -338,16 +338,16 @@ make clean           # 清理缓存/tmp/log
 说明：
 
 - 框架使用 OpenAI 兼容协议（`/v1/chat/completions`），接入 DeepSeek / 千问 / OpenAI 等任意兼容服务均可
-- 需在 `.env` 中配置对应 API Key（默认变量名 `QWEN_API_KEY`，可自行扩展）
-- `/api/ai/chat/send_stream_sse` 返回 `text/event-stream`
-- AI 对话接口无需登录；如果携带登录 Token，会按当前用户保存和查询上下文
+- 后端从 `.env` 读取 `QWEN_API_KEY` 和 `QWEN_CHAT_URL`，调用千问时自动附加认证；前端无需传千问密钥
+- 两个流式接口均返回 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`X-Accel-Buffering: no`
+- AI 对话接口使用项目登录 Token 校验用户身份并隔离上下文；此 Token 与千问 API Key 无关
 - 流式输出兼容旧协议：`data:` 直接返回增量文本
 - 正常结束时依次返回两条独立 SSE 消息：`data: [LOG_ID]:<chat_id>`、`data: [DONE]`
 - **出错时不会返回 `[DONE]`**：先返回一条错误文本（业务错误为具体提示，系统异常为 `上游流式调用失败: ...`），再返回 `data: [EXCEPTION]` 作为结束标记。前端需同时处理 `[DONE]` 和 `[EXCEPTION]` 两种收尾
 - 深度思考片段返回 JSON 字符串：`{"type":"reasoning_content","data":"..."}`
 - `chat_id=0` 表示新建对话；传已有 `chat_id` 表示续聊
 - `restart=1` 表示重新生成：丢弃历史中的最后一条消息且不追加本轮 `msg`，让模型基于剩余上下文重答（`restart=0` 时才会把 `msg` 作为新一轮用户提问追加）
-- `is_deep_reflection=1` 启用深度思考：model 1 会把上游模型从 `qwen-max` 切换为 `qwen-plus`（`is_deep_reflection=0` 时用默认 `qwen-max`）
+- `is_deep_reflection=1` 使用 `qwq-plus` 深度思考；为 `0` 或不传时使用 `qwen-max`，该流程不受 `.env` 的 `QWEN_MODEL` 影响
 - `model` 当前仅支持取值 `1`（对应千问 qwen-max）；对话列表接口 `GET /api/ai/chats` 的 `model_id` 查询参数同样限定为 `1`
 - 所有上游请求默认开启千问联网搜索（`enable_search=true`）
 
@@ -357,7 +357,8 @@ make clean           # 清理缓存/tmp/log
 curl -N \
   -H "Accept: text/event-stream" \
   -H "Content-Type: application/json" \
-  -X POST http://localhost:8001/api/ai/chat/send_stream_sse \
+  -H "Authorization: Bearer <token>" \
+  -X POST http://localhost:8001/api/ai/chat/send_stream \
   -d '{"model":1,"chat_id":0,"msg":"你好，介绍一下这个服务","restart":0}'
 ```
 
