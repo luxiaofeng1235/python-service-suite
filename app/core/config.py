@@ -19,6 +19,8 @@ from config import (
     QWEN_IMAGE_URL,
     QWEN_VIDEO_URL,
     QWEN_TASK_URL,
+    QWEN_REQUEST_TIMEOUT,
+    QWEN_CONNECT_TIMEOUT,
     AI_VIDEO_WATERMARK_PATH,
     AI_VIDEO_BASE_URL,
     FFMPEG_BIN,
@@ -126,6 +128,8 @@ class Settings(BaseSettings):
     QWEN_IMAGE_URL: str = QWEN_IMAGE_URL
     QWEN_TASK_URL: str = QWEN_TASK_URL
     QWEN_VIDEO_URL: str = QWEN_VIDEO_URL
+    QWEN_REQUEST_TIMEOUT: float = QWEN_REQUEST_TIMEOUT
+    QWEN_CONNECT_TIMEOUT: float = QWEN_CONNECT_TIMEOUT
 
     # ==================== 视频水印 ====================
     AI_VIDEO_WATERMARK_PATH: str = AI_VIDEO_WATERMARK_PATH

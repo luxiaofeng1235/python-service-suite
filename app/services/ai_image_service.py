@@ -7,15 +7,14 @@ Ports AiLogic.php toImage/getTask/getImage into asynchronous Python services.
 
 import json
 from typing import Any
-from urllib.parse import quote
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
 from app.core.config import settings
 from app.models.ai_to_work import AiToWork
+from app.pkg.qwen_client import QwenTaskClient
 from app.schemas.ai import ImageRequest
 from app.storage.ai_image import save_generated_image, sync_generated_images
 from app.storage.oss import OSSStorage
@@ -33,10 +32,11 @@ class AIImageService:
         if settings.OSS_ENABLED:
             OSSStorage.validate_config()
         # 对应 PHP toImage：异步提交后只保存任务，不在请求中等待图片生成。
-        data = await cls._request(
+        data = await QwenTaskClient.request(
             "POST",
             settings.QWEN_IMAGE_URL,
-            json={
+            media_type="图片",
+            payload={
                 "model": cls.IMAGE_MODELS[req.model],
                 "input": {"prompt": req.prompt},
                 "parameters": {
@@ -91,11 +91,7 @@ class AIImageService:
                 message = work.get("error") or message
             raise AppException(msg=f"图片生成失败，{message}")
 
-        if not settings.QWEN_TASK_URL:
-            raise AppException(msg="QWEN_TASK_URL 未配置")
-        data = await cls._request(
-            "GET", f"{settings.QWEN_TASK_URL.rstrip('/')}/{quote(task_id, safe='')}"
-        )
+        data = await QwenTaskClient.get_task(task_id, media_type="图片")
         output = data.get("output") or {}
         status = output.get("task_status")
         if status in cls.PENDING_STATUSES:
@@ -119,7 +115,7 @@ class AIImageService:
             if status == "UNKNOWN":
                 message = "任务不存在"
             elif output.get("code"):
-                message = cls._error_message(output["code"])
+                message = QwenTaskClient.error_message(output["code"], media_type="图片")
             else:
                 message = str(output.get("message") or "任务已取消或生成失败")
             await cls._fail_task(db, task, message)
@@ -156,47 +152,3 @@ class AIImageService:
         if prefix:
             urls = [f"{prefix}{url}" if url.startswith("/uploads/") else url for url in urls]
         return {"image": urls}
-
-    @classmethod
-    async def _request(cls, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
-        """Call DashScope using backend environment credentials only."""
-        if not settings.QWEN_API_KEY:
-            raise AppException(msg="QWEN_API_KEY 未配置")
-        if not url:
-            raise AppException(msg="千问图片服务地址未配置")
-        headers = {"Authorization": f"Bearer {settings.QWEN_API_KEY}"}
-        if method == "POST":
-            headers.update({"Content-Type": "application/json", "X-DashScope-Async": "enable"})
-        try:
-            async with cls._create_client() as client:
-                response = await client.request(method, url, headers=headers, **kwargs)
-            data = response.json()
-        except httpx.HTTPError as exc:
-            raise AppException(msg="图片服务网络出错，请稍后再试") from exc
-        except ValueError as exc:
-            raise AppException(msg="图片服务返回格式错误，请稍后再试") from exc
-        if not isinstance(data, dict):
-            raise AppException(msg="图片服务返回格式错误，请稍后再试")
-        if response.is_error or data.get("code"):
-            prefix = "图片生成失败" if method == "POST" else "图片任务查询失败"
-            raise AppException(msg=f"{prefix}，{cls._error_message(data.get('code'))}")
-        if not isinstance(data.get("output"), dict):
-            raise AppException(msg="图片服务返回格式错误，请稍后再试")
-        return data
-
-    @staticmethod
-    def _create_client() -> httpx.AsyncClient:
-        """Create an asynchronous upstream client without environment proxies."""
-        return httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=30.0), trust_env=False)
-
-    @staticmethod
-    def _error_message(code: str | None) -> str:
-        """Translate the error codes handled by the original PHP implementation."""
-        return {
-            "InvalidParameter": "AI 服务器错误，请联系客服处理或稍后再试",
-            "APIConnectionError": "AI 服务器网络出错，请稍后再试",
-            "invalid_request_error": "AI 服务器错误，请联系客服处理或稍后再试",
-            "DataInspectionFailed": "敏感内容，生成失败",
-            "data_inspection_failed": "敏感内容，生成失败",
-            "IPInfringementSuspect": "IP侵权，生成失败",
-        }.get(code, "服务错误，请稍后再试")

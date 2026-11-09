@@ -394,6 +394,7 @@ curl -G 'http://127.0.0.1:8001/api/ai/get_image' \
 提交成功及生成中返回 `{"code":1,"msg":"图片生成中","data":"任务ID"}`；成功后返回 `{"code":1,"msg":"图片生成成功","data":{"image":[...]}}`。
 
 - `app/services/ai_image_service.py`：提交任务、按用户查询任务、下载生成图片和缓存结果。
+- `app/pkg/qwen_client.py`：图片和视频共用的千问任务客户端，集中维护后端认证、异步请求头、HTTP 请求、任务查询和错误转换；请求与连接超时在 `config/ai.py` 的 `QWEN_REQUEST_TIMEOUT`、`QWEN_CONNECT_TIMEOUT` 中配置。
 - `app/api/services/ai_service.py`：提供 `to_image(db, req, user_id)`、`get_image(db, task_id, user_id)` 调用入口。
 - `app/models/ai_to_work.py`：按现有 PHP `ai_to_work` 表映射，`task_id` 为可空的 `VARCHAR(255)`，`work` 可空；`type=1` 图片、`type=2` 视频；状态为 `0` 生成中、`1` 成功、`2` 失败、`3` 已删除。文生图只处理图片任务，已删除任务按不存在处理。
 - 已有你提供的 `ai_to_work` 表可直接复用；没有此表时执行 `sql/migrate_ai_to_work.sql` 创建。该脚本不会自动执行，也不会修改已有表或重置自增序号。

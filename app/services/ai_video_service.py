@@ -7,15 +7,14 @@ Port PHP toVideo/getVideo with ownership checks and serialized local processing.
 
 import json
 from typing import Any
-from urllib.parse import quote
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
 from app.core.config import settings
 from app.models.ai_to_work import AiToWork
+from app.pkg.qwen_client import QwenTaskClient
 from app.schemas.ai import VideoRequest
 from app.storage.ai_video import get_video_url, save_generated_video, validate_video_storage
 
@@ -30,9 +29,10 @@ class AIVideoService:
     async def to_video(cls, db: AsyncSession, req: VideoRequest, user_id: int) -> str:
         """Submit the PHP to=2 text-to-video model and save its task ID."""
         await validate_video_storage()
-        data = await cls._request(
+        data = await QwenTaskClient.request(
             "POST", settings.QWEN_VIDEO_URL,
-            json={"model": cls.VIDEO_MODEL, "input": {"prompt": req.prompt}},
+            media_type="视频",
+            payload={"model": cls.VIDEO_MODEL, "input": {"prompt": req.prompt}},
         )
         task_id = data["output"].get("task_id")
         if not isinstance(task_id, str) or not task_id or len(task_id) > 255:
@@ -75,11 +75,7 @@ class AIVideoService:
             if cached is not None:
                 await db.commit()
                 return cached
-            if not settings.QWEN_TASK_URL:
-                raise AppException(msg="QWEN_TASK_URL 未配置")
-            data = await cls._request(
-                "GET", f"{settings.QWEN_TASK_URL.rstrip('/')}/{quote(task_id, safe='')}"
-            )
+            data = await QwenTaskClient.get_task(task_id, media_type="视频")
             output = data["output"]
             status = output.get("task_status")
             if status in cls.PENDING_STATUSES:
@@ -99,7 +95,7 @@ class AIVideoService:
             if status in {"FAILED", "CANCELED", "UNKNOWN"}:
                 message = (
                     "任务不存在或已过期" if status == "UNKNOWN"
-                    else cls._error_message(output.get("code"))
+                    else QwenTaskClient.error_message(output.get("code"), media_type="视频")
                 )
                 task.work = {"error": message}
                 task.status = 2
@@ -130,43 +126,3 @@ class AIVideoService:
         if not isinstance(work, list) or not work or not all(isinstance(url, str) for url in work):
             raise AppException(msg="视频任务记录格式错误")
         return {"video": [get_video_url(url.lstrip("/")) if url.startswith("/uploads/") else url for url in work]}
-
-    @classmethod
-    async def _request(cls, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
-        """Call DashScope using backend credentials and asynchronous task headers."""
-        if not settings.QWEN_API_KEY:
-            raise AppException(msg="QWEN_API_KEY 未配置")
-        if not url:
-            raise AppException(msg="千问视频服务地址未配置")
-        headers = {"Authorization": f"Bearer {settings.QWEN_API_KEY}"}
-        if method == "POST":
-            headers.update({"Content-Type": "application/json", "X-DashScope-Async": "enable"})
-        try:
-            async with httpx.AsyncClient(timeout=60.0, trust_env=False) as client:
-                response = await client.request(method, url, headers=headers, **kwargs)
-            data = response.json()
-        except httpx.HTTPError as exc:
-            raise AppException(msg="视频服务网络出错，请稍后重试") from exc
-        except ValueError as exc:
-            raise AppException(msg="视频服务返回格式错误，请稍后重试") from exc
-        if not isinstance(data, dict):
-            raise AppException(msg="视频服务返回格式错误，请稍后重试")
-        if response.is_error or data.get("code"):
-            prefix = "视频生成失败" if method == "POST" else "视频任务查询失败"
-            raise AppException(msg=f"{prefix}，{cls._error_message(data.get('code'))}")
-        if not isinstance(data.get("output"), dict):
-            raise AppException(msg="视频服务返回格式错误，请稍后重试")
-        return data
-
-    @staticmethod
-    def _error_message(code: str | None) -> str:
-        """Translate upstream errors without exposing backend credentials."""
-        return {
-            "InvalidParameter": "AI 请求参数错误，请联系客服处理",
-            "InvalidApiKey": "AI 服务认证失败，请检查后端配置",
-            "ModelNotFound": "视频模型不存在或当前账号无权限",
-            "APIConnectionError": "AI 服务器网络出错，请稍后重试",
-            "DataInspectionFailed": "敏感内容，生成失败",
-            "data_inspection_failed": "敏感内容，生成失败",
-            "IPInfringementSuspect": "IP侵权，生成失败",
-        }.get(code, "服务错误，请稍后重试")
