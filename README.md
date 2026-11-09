@@ -315,7 +315,11 @@ make clean           # 清理缓存/tmp/log
 
 ## AI 流式输出
 
-当前仓库已接入 OpenAI 兼容接口，当前默认对接千问，开箱即用：
+调用链：`app/api/controllers/ai_controller.py → app/api/services/ai_service.py → app/services/ai_stream_service.py → app/services/qwen_ai_service.py → 千问`。
+
+核心流程：从 Token 获取用户 → 创建或读取当前用户的对话 → 组装系统提示词和历史消息 → 请求千问并逐段返回 SSE → 将用户消息、完整回复和推理内容保存到 `ai_chat_log.chat`。流式服务独立管理数据库会话，异常或客户端断开时尝试保存已收到的部分结果；系统提示词不入库，消息按原始文本保存。
+
+接口如下：
 
 - `POST /api/ai/chat/send_stream`：返回 SSE 流式分片，`model`、`chat_id`、`msg`、`restart` 必传
 - `POST /api/ai/chat/send_stream_sse`：返回 SSE 流式分片
@@ -337,7 +341,7 @@ make clean           # 清理缓存/tmp/log
 
 说明：
 
-- 框架使用 OpenAI 兼容协议（`/v1/chat/completions`），接入 DeepSeek / 千问 / OpenAI 等任意兼容服务均可
+- 上游使用 OpenAI 兼容协议，当前流程按千问模型与联网搜索策略处理
 - 后端从 `.env` 读取 `QWEN_API_KEY` 和 `QWEN_CHAT_URL`，调用千问时自动附加认证；前端无需传千问密钥
 - 两个流式接口均返回 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`X-Accel-Buffering: no`
 - AI 对话接口使用项目登录 Token 校验用户身份并隔离上下文；此 Token 与千问 API Key 无关
@@ -364,7 +368,11 @@ curl -N \
 
 ## 文生图服务和接口
 
-按 `AiLogic.php` 的 `toImage` / `getImage` 移植，接口沿用 PHP 的参数格式：
+调用链：`app/api/controllers/ai_controller.py → app/api/services/ai_service.py → app/services/ai_image_service.py → app/storage/ai_image.py → app/storage/oss.py`。
+
+核心流程沿用 PHP 的 `toImage` / `getImage`：提交千问异步任务并将参数保存到 `ai_to_work` → 返回 `task_id` → 前端轮询进度 → 生成完成后逐张下载原图并上传 OSS → 全部上传成功后保存 URL 数组、标记任务成功 → 返回 `data.image`。水印开关只传给千问，本地不叠加 PNG。已完成任务读取缓存，OSS 缺失且本地文件仍在时自动补传；下载或上传失败可重试。
+
+接口如下：
 
 - `POST /api/ai/to_image`：提交文生图任务，支持 JSON、URL 编码表单和 multipart 表单。
 - `GET /api/ai/get_image`：通过查询参数 `task_id` 获取生成进度和结果。
@@ -383,7 +391,7 @@ curl -G 'http://127.0.0.1:8001/api/ai/get_image' \
   --data-urlencode 'task_id=<提交时返回的任务ID>'
 ```
 
-提交成功及生成中返回 `{"code":1,"msg":"图片生成中","data":"任务ID"}`；成功后返回 `{"code":1,"msg":"图片生成成功","data":{"image":[...],"iamge":[...]}}`。
+提交成功及生成中返回 `{"code":1,"msg":"图片生成中","data":"任务ID"}`；成功后返回 `{"code":1,"msg":"图片生成成功","data":{"image":[...]}}`。
 
 - `app/services/ai_image_service.py`：提交任务、按用户查询任务、下载生成图片和缓存结果。
 - `app/api/services/ai_service.py`：提供 `to_image(db, req, user_id)`、`get_image(db, task_id, user_id)` 调用入口。
@@ -431,7 +439,7 @@ task_id = await AIService.to_image(db, req, user_id)
 result = await AIService.get_image(db, task_id, user_id)
 ```
 
-生成中返回任务 ID；成功返回 `{"image": [...], "iamge": [...]}`，保留旧 PHP 的两个字段。失败抛出项目统一的 `AppException`。成功和明确失败的任务会入库缓存，后续查询不再访问千问。网络、下载或 OSS 上传异常保留待处理状态，可以重试查询。
+生成中返回任务 ID；成功返回 `{"image": [...]}`。失败抛出项目统一的 `AppException`。成功和明确失败的任务会入库缓存，后续查询不再访问千问。网络、下载或 OSS 上传异常保留待处理状态，可以重试查询。
 
 ## LLM / RAG 待开发规划
 

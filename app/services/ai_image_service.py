@@ -148,14 +148,14 @@ class AIImageService:
 
     @staticmethod
     def _image_result(urls: list[str] | dict[str, Any]) -> dict[str, list[str]]:
-        """Keep both spellings from the PHP response for compatibility."""
+        """Return image URLs under the image field."""
         if not isinstance(urls, list) or not all(isinstance(url, str) for url in urls):
             raise AppException(msg="图片任务记录格式错误")
         # 历史任务可能缓存相对路径，返回时补齐当前配置的文件访问域名。
         prefix = (settings.OSS_VIEW_DOMAIN if settings.OSS_ENABLED else settings.FILE_BASE_URL).rstrip("/")
         if prefix:
             urls = [f"{prefix}{url}" if url.startswith("/uploads/") else url for url in urls]
-        return {"iamge": urls, "image": urls}
+        return {"image": urls}
 
     @classmethod
     async def _request(cls, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
