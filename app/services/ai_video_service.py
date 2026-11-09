@@ -5,17 +5,18 @@ AI Video Service - text-to-video tasks and result persistence
 Port PHP toVideo/getVideo with ownership checks and serialized local processing.
 """
 
-import json
-from typing import Any
+from typing import Any, NoReturn
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
+from app.constants.ai import FAILED_TASK_STATUSES, PENDING_TASK_STATUSES, TaskStatus
 from app.core.config import settings
 from app.models.ai_to_work import AiToWork
 from app.pkg.qwen_client import QwenTaskClient
 from app.schemas.ai import VideoRequest
+from app.services.ai_task_service import extract_task_error, fail_task, load_task_work
 from app.storage.ai_video import get_video_url, save_generated_video, validate_video_storage
 
 
@@ -23,7 +24,6 @@ class AIVideoService:
     """Submit text-to-video tasks and persist watermarked video URLs."""
 
     VIDEO_MODEL = "wanx2.1-t2v-turbo"
-    PENDING_STATUSES = {"PENDING", "RUNNING", "SUSPENDED"}
 
     @classmethod
     async def to_video(cls, db: AsyncSession, req: VideoRequest, user_id: int) -> str:
@@ -39,7 +39,7 @@ class AIVideoService:
             raise AppException(msg="视频生成失败，未返回有效任务 ID")
         db.add(AiToWork(
             user_id=user_id, task_id=task_id, params=req.model_dump(mode="json"),
-            type=2, status=0, work=None,
+            type=2, status=TaskStatus.GENERATING, work=None,
         ))
         await db.commit()
         return task_id
@@ -49,80 +49,121 @@ class AIVideoService:
         cls, db: AsyncSession, task_id: str, user_id: int
     ) -> dict[str, list[str]] | str:
         """Return progress or publish the owned task after watermarking it."""
-        stmt = select(AiToWork).where(
+        task = await cls._get_task(db, task_id, user_id)
+        cached = cls._try_get_cached_result(task)
+        if cached is not None:
+            return cached
+        # 结束首次查询的事务，再进入行锁保护的处理流程。
+        await db.commit()
+        return await cls._get_locked_result(db, task_id, user_id)
+
+    @staticmethod
+    def _task_query(task_id: str, user_id: int) -> Select[tuple[AiToWork]]:
+        """Build the same ownership filter for ordinary and locked reads."""
+        return select(AiToWork).where(
             AiToWork.task_id == task_id,
             AiToWork.user_id == user_id,
             AiToWork.type == 2,
         )
-        task = (await db.execute(stmt)).scalar_one_or_none()
+
+    @classmethod
+    async def _get_task(cls, db: AsyncSession, task_id: str, user_id: int) -> AiToWork:
+        """Find a video task owned by the current user."""
+        task = (await db.execute(cls._task_query(task_id, user_id))).scalar_one_or_none()
         if task is None:
             raise AppException(msg="任务不存在")
-        cached = cls._cached_result(task)
-        if cached is not None:
-            return cached
-        await db.commit()
+        return task
 
+    @classmethod
+    async def _get_locked_result(
+        cls, db: AsyncSession, task_id: str, user_id: int
+    ) -> dict[str, list[str]] | str:
+        """Serialize video processing and release the lock on every exit path."""
         # MySQL 8 行锁覆盖查询、下载、转码和上传；其他轮询直接返回生成中。
         # status=3 始终只表示已删除，不借用它表示水印处理中。
+        stmt = cls._task_query(task_id, user_id).with_for_update(skip_locked=True)
+        stmt = stmt.execution_options(populate_existing=True)
         try:
-            task = (await db.execute(
-                stmt.with_for_update(skip_locked=True).execution_options(populate_existing=True)
-            )).scalar_one_or_none()
+            task = (await db.execute(stmt)).scalar_one_or_none()
             if task is None:
                 await db.rollback()
                 return task_id
-            cached = cls._cached_result(task)
+            # 获取锁前任务可能已被其他请求处理，必须重新检查缓存。
+            cached = cls._try_get_cached_result(task)
             if cached is not None:
                 await db.commit()
                 return cached
             data = await QwenTaskClient.get_task(task_id, media_type="视频")
-            output = data["output"]
-            status = output.get("task_status")
-            if status in cls.PENDING_STATUSES:
-                await db.commit()
-                return task_id
-            if status == "SUCCEEDED":
-                video_url = output.get("video_url")
-                if not video_url and isinstance(output.get("results"), dict):
-                    video_url = output["results"].get("video_url")
-                if not isinstance(video_url, str) or not video_url:
-                    raise AppException(msg="视频任务未返回可用视频，请稍后重试")
-                url = await save_generated_video(video_url, task_id)
-                task.work = [url]
-                task.status = 1
-                await db.commit()
-                return {"video": [url]}
-            if status in {"FAILED", "CANCELED", "UNKNOWN"}:
-                message = (
-                    "任务不存在或已过期" if status == "UNKNOWN"
-                    else QwenTaskClient.error_message(output.get("code"), media_type="视频")
-                )
-                task.work = {"error": message}
-                task.status = 2
-                await db.commit()
-                raise AppException(msg=f"视频生成失败，{message}")
-            raise AppException(msg="视频任务查询失败，请稍后重试")
+            return await cls._handle_upstream_status(db, task, data["output"])
         except BaseException:
             # 下载、FFmpeg、OSS 或请求取消均释放行锁，保留待处理状态以便重试。
             await db.rollback()
             raise
 
+    @classmethod
+    async def _handle_upstream_status(
+        cls, db: AsyncSession, task: AiToWork, output: dict[str, Any]
+    ) -> dict[str, list[str]] | str:
+        """Route upstream states while retaining the processing transaction."""
+        status = output.get("task_status")
+        if status in PENDING_TASK_STATUSES:
+            await db.commit()
+            return task.task_id
+        if status == "SUCCEEDED":
+            return await cls._handle_success(db, task, output)
+        if status in FAILED_TASK_STATUSES:
+            await cls._handle_failure(db, task, output)
+        raise AppException(msg="视频任务查询失败，请稍后重试")
+
     @staticmethod
-    def _cached_result(task: AiToWork) -> dict[str, list[str]] | None:
+    async def _handle_success(
+        db: AsyncSession, task: AiToWork, output: dict[str, Any]
+    ) -> dict[str, list[str]]:
+        """Download, watermark and upload the video before committing success."""
+        video_url = output.get("video_url")
+        if not video_url and isinstance(output.get("results"), dict):
+            video_url = output["results"].get("video_url")
+        if not isinstance(video_url, str) or not video_url:
+            raise AppException(msg="视频任务未返回可用视频，请稍后重试")
+
+        url = await save_generated_video(video_url, task.task_id)
+        task.work = [url]
+        task.status = TaskStatus.COMPLETED
+        await db.commit()
+        return {"video": [url]}
+
+    @staticmethod
+    async def _handle_failure(
+        db: AsyncSession, task: AiToWork, output: dict[str, Any]
+    ) -> NoReturn:
+        """Translate and persist a terminal upstream failure."""
+        message = (
+            "任务不存在或已过期" if output.get("task_status") == "UNKNOWN"
+            else QwenTaskClient.error_message(output.get("code"), media_type="视频")
+        )
+        await fail_task(db, task, message, media_type="视频")
+
+    @classmethod
+    def _try_get_cached_result(cls, task: AiToWork) -> dict[str, list[str]] | None:
         """Read completed or failed results, accepting legacy JSON strings."""
-        if task.status == 3:
+        if task.status == TaskStatus.DELETED:
             raise AppException(msg="任务不存在")
-        if task.status not in {1, 2}:
+        if task.status not in {TaskStatus.COMPLETED, TaskStatus.FAILED}:
             return None
-        work: Any = task.work
-        if isinstance(work, str):
-            try:
-                work = json.loads(work)
-            except json.JSONDecodeError as exc:
-                raise AppException(msg="视频任务记录格式错误") from exc
-        if task.status == 2:
-            message = work.get("error") if isinstance(work, dict) else None
-            raise AppException(msg=f"视频生成失败，{message or '服务错误，请稍后重试'}")
+
+        work = load_task_work(task.work, media_type="视频")
+        if task.status == TaskStatus.FAILED:
+            message = extract_task_error(work, default="服务错误，请稍后重试")
+            raise AppException(msg=f"视频生成失败，{message}")
+        return cls._format_result(work)
+
+    @staticmethod
+    def _format_result(work: object) -> dict[str, list[str]]:
+        """Validate cached video URLs and normalize legacy local paths."""
         if not isinstance(work, list) or not work or not all(isinstance(url, str) for url in work):
             raise AppException(msg="视频任务记录格式错误")
-        return {"video": [get_video_url(url.lstrip("/")) if url.startswith("/uploads/") else url for url in work]}
+        urls = [
+            get_video_url(url.lstrip("/")) if url.startswith("/uploads/") else url
+            for url in work
+        ]
+        return {"video": urls}
