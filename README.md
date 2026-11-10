@@ -320,6 +320,24 @@ make clean           # 清理缓存/tmp/log
 - Swagger UI：http://localhost:8001/docs
 - ReDoc：http://localhost:8001/redoc
 
+## 通用 OSS 上传
+
+- 统一接口：`POST /api/file/upload/oss`，根据文件扩展名自动识别图片或视频。
+- 公共接口，无需 Token、`sign` 或 `timestamp`，通过 `multipart/form-data` 的 `file` 字段直接上传；与现有公共上传一致，`user_id=0`、`owner_type=user`、`owner_id=0`。
+- 接口已加入默认免登录、免验签白名单；如果 `.env` 自定义了 `AUTH_WHITE_LIST`，也需包含 `/api/file/upload/oss`。
+- 复用本地上传的格式、大小配置（图片默认 10 MB、视频默认 200 MB），通过公共 OSS SDK 上传，服务端读取已有 OSS 配置。此接口始终上传 OSS，`OSS_ENABLED` 仍仅控制 AI 生成资源的同步。
+- 上传完成后写入 `attachment`，返回 `data.url`、`id`、`originName`（原文件名）、`storedName`（存储文件名）、`fileSize`（字节数）、`fileType`（image/video）、`mimeType` 和 `createdAt`（上传时间）。完整地址取 `OSS_VIEW_DOMAIN` 拼接，当前为 `https://static.jsss999.com/`；文件列表兼容本地相对路径和 OSS 完整地址。入库失败会尝试清理刚上传的 OSS 文件。
+- OSS 路径为 `uploads/images/YYYY/MM/<随机文件名>` 或 `uploads/videos/YYYY/MM/<随机文件名>`。复用请求的临时文件流，不另存一份本地文件，也不添加水印。
+- 已有数据库需执行附件归属字段迁移：`alembic upgrade 20260612_0001`（首次部署按项目迁移流程执行 `alembic upgrade head`）。
+
+```bash
+curl -sS 'http://127.0.0.1:8001/api/file/upload/oss' \
+  -F 'file=@/path/to/image.png'
+
+curl -sS 'http://127.0.0.1:8001/api/file/upload/oss' \
+  -F 'file=@/path/to/video.mp4'
+```
+
 ## AI 流式输出
 
 调用链：`app/api/controllers/ai_controller.py → app/api/services/ai_service.py → app/services/ai_stream_service.py → app/services/qwen_ai_service.py → 千问`。

@@ -9,10 +9,12 @@ import asyncio
 import mimetypes
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
+from typing import BinaryIO
 from urllib.parse import quote, urlsplit
 
 import httpx
 import oss2
+from anyio import to_thread
 
 from app.common.exception import AppException
 from app.core.config import settings
@@ -110,6 +112,37 @@ class OSSStorage:
         if not 200 <= result.status < 300:
             raise AppException(msg="OSS 上传失败，请稍后重试")
         return cls.get_url(key)
+
+    @classmethod
+    async def upload_stream(cls, file: BinaryIO, object_key: str, *, content_type: str | None = None) -> str:
+        """Upload a seekable file object in a worker thread without copying it into memory."""
+        cls.validate_config()
+        key = cls._key(object_key)
+        mime = content_type or mimetypes.guess_type(key)[0] or "application/octet-stream"
+
+        def upload():
+            file.seek(0)
+            return cls._create_bucket().put_object(key, file, headers={"Content-Type": mime})
+
+        try:
+            result = await to_thread.run_sync(upload)
+        except (oss2.exceptions.OssError, OSError, ValueError) as exc:
+            raise cls._storage_error("上传", exc) from None
+        if not 200 <= result.status < 300:
+            raise AppException(msg="OSS 上传失败，请稍后重试")
+        return cls.get_url(key)
+
+    @classmethod
+    async def delete_object(cls, object_key: str) -> None:
+        """Delete an object, including one whose attachment could not be persisted."""
+        cls.validate_config()
+        key = cls._key(object_key)
+        try:
+            result = await to_thread.run_sync(lambda: cls._create_bucket().delete_object(key))
+        except (oss2.exceptions.OssError, OSError, ValueError) as exc:
+            raise cls._storage_error("删除", exc) from None
+        if not 200 <= result.status < 300:
+            raise AppException(msg="OSS 删除失败，请稍后重试")
 
     @classmethod
     async def upload_url(cls, source_url: str, object_key: str, *, content_type: str | None = None, max_size: int | None = None) -> str:

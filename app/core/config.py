@@ -156,7 +156,8 @@ class Settings(BaseSettings):
         "/,/docs,/redoc,/openapi.json,/favicon.ico,"
         "/api/health,/api/user/login,/api/user/register,"
         "/api/user/forgot-password,/api/user/reset-password,"
-        "/api/file/upload/image,/api/file/upload/video"
+        "/api/file/upload/image,/api/file/upload/video,"
+        "/api/file/upload/oss"
     )
 
     @property

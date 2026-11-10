@@ -13,7 +13,7 @@ from app.api.services.file_service import FileService
 from app.common.pagination import PageParams
 from app.common.response import Response
 from app.database import get_session
-from app.schemas.file import AttachmentResponse
+from app.schemas.file import AttachmentResponse, OSSUploadResponse
 
 router = APIRouter(prefix="/api/file", tags=["文件管理"])
 
@@ -68,6 +68,25 @@ async def upload_video(
     )
     data = AttachmentResponse.from_attachment(attachment, str(request.base_url))
     return Response.success(data, msg="视频上传成功")
+
+
+# ==================== OSS 上传 ====================
+
+
+@router.post("/upload/oss", summary="上传附件到 OSS（图片、视频，无需登录和验签）")
+async def upload_oss(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_session),
+):
+    """Upload an image or video to OSS through the public endpoint."""
+    attachment = await FileService.upload_oss_for_owner(
+        db,
+        owner_type=FileService.OWNER_USER,
+        owner_id=0,
+        file=file,
+    )
+    data = OSSUploadResponse.model_validate(attachment).model_dump(mode="json", by_alias=True)
+    return Response.success(data, msg="附件上传成功")
 
 
 # ==================== 文件列表 ====================

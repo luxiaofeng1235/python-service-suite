@@ -8,8 +8,10 @@
 
 import uuid
 from datetime import datetime
+from os import SEEK_END
 from pathlib import Path
 
+from anyio import to_thread
 from fastapi import UploadFile
 
 from app.common.exception import AppException
@@ -32,6 +34,17 @@ def generate_stored_name(original_name: str) -> tuple[str, str, str]:
     ext = Path(original_name).suffix.lower()
     stored_name = f"{uuid.uuid4().hex}{ext}"
     return stored_name, ext, stored_name
+
+
+async def get_upload_size(file: UploadFile) -> int:
+    """Measure the spooled upload without loading its contents into memory."""
+    def measure() -> int:
+        file.file.seek(0, SEEK_END)
+        size = file.file.tell()
+        file.file.seek(0)
+        return size
+
+    return await to_thread.run_sync(measure)
 
 
 async def write_stream(

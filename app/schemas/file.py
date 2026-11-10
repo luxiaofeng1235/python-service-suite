@@ -20,7 +20,7 @@ class AttachmentResponse(BaseModel):
     owner_id: int = Field(0, description="归属主体ID")
     original_name: str = Field(..., description="原始文件名")
     stored_name: str = Field(..., description="存储文件名")
-    file_path: str = Field(..., description="文件相对路径")
+    file_path: str = Field(..., description="Local relative path or absolute OSS URL")
     file_size: int = Field(..., description="文件大小（字节）")
     mime_type: str = Field(..., description="MIME 类型")
     file_type: str = Field(..., description="文件分类：image / video / other")
@@ -63,6 +63,21 @@ class AttachmentResponse(BaseModel):
             "url": url,
         }
         return cls.model_validate(data)
+
+
+class OSSUploadResponse(BaseModel):
+    """Expose OSS upload metadata using client-facing field names."""
+
+    id: int = Field(..., description="Attachment ID")
+    url: str = Field(..., validation_alias="file_path", description="OSS public URL")
+    original_name: str = Field(..., serialization_alias="originName", description="Original filename")
+    stored_name: str = Field(..., serialization_alias="storedName", description="Stored filename")
+    file_size: int = Field(..., serialization_alias="fileSize", description="File size in bytes")
+    file_type: str = Field(..., serialization_alias="fileType", description="File type: image or video")
+    mime_type: str = Field(..., serialization_alias="mimeType", description="MIME type")
+    created_at: datetime = Field(..., serialization_alias="createdAt", description="Upload time")
+
+    model_config = {"from_attributes": True}
 
 
 class AttachmentListResponse(BaseModel):

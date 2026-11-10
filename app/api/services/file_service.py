@@ -13,12 +13,16 @@ from fastapi import UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
 from app.models.attachment import Attachment
-from app.storage.local import ensure_upload_dir, generate_stored_name, write_stream
+from app.pkg.logging import app_logger
+from app.storage.local import ensure_upload_dir, generate_stored_name, get_upload_size, write_stream
+from app.storage.oss import OSSStorage
 from app.storage.validation import (
     IMAGE_MAX_SIZE,
     VIDEO_MAX_SIZE,
+    get_file_type,
     validate_image,
     validate_video,
 )
@@ -227,6 +231,65 @@ class FileService:
             file_type="video",
         )
 
+    # ==================== OSS 上传 ====================
+
+    @classmethod
+    async def upload_oss_for_owner(
+        cls,
+        db: AsyncSession,
+        owner_type: str,
+        owner_id: int,
+        file: UploadFile,
+    ) -> Attachment:
+        """Validate an upload, store it in OSS, and persist its ownership and metadata."""
+        original_name = file.filename or "unknown"
+        mime_type = file.content_type or "application/octet-stream"
+        if len(original_name) > 255:
+            raise AppException(msg="文件名过长，最多支持 255 个字符")
+        if len(mime_type) > 100:
+            raise AppException(msg="文件 MIME 类型过长")
+
+        ext = Path(original_name).suffix.lower()
+        file_type = get_file_type(ext)
+        if file_type not in {"image", "video"}:
+            raise AppException(msg="不支持的附件格式，仅支持配置中允许的图片和视频")
+        validator = validate_image if file_type == "image" else validate_video
+        validator(ext, 0)
+        file_size = await get_upload_size(file)
+        validator(ext, file_size)
+        if file_size == 0:
+            raise AppException(msg="上传文件不能为空")
+
+        OSSStorage.validate_config()
+        stored_name, _, _ = generate_stored_name(original_name)
+        directory = "images" if file_type == "image" else "videos"
+        object_key = f"uploads/{directory}/{datetime.now():%Y/%m}/{stored_name}"
+        if len(OSSStorage.get_url(object_key)) > 500:
+            raise AppException(msg="OSS 文件访问地址过长，请检查域名配置")
+
+        url = await OSSStorage.upload_stream(file.file, object_key, content_type=mime_type)
+        try:
+            return await cls._create_attachment(
+                db=db,
+                user_id=cls._legacy_user_id(owner_type, owner_id),
+                owner_type=owner_type,
+                owner_id=owner_id,
+                original_name=original_name,
+                stored_name=stored_name,
+                file_path=url,
+                file_size=file_size,
+                mime_type=mime_type,
+                file_type=file_type,
+            )
+        except Exception:
+            await db.rollback()
+            # 入库失败时清理本次上传，避免留下没有附件记录的 OSS 文件。
+            try:
+                await OSSStorage.delete_object(object_key)
+            except AppException:
+                app_logger.error("附件保存失败，OSS 文件清理失败，object_key={}", object_key)
+            raise
+
     # ==================== 文件已落盘后创建记录 ====================
 
     @classmethod
@@ -333,8 +396,10 @@ class FileService:
             file_type=file_type,
         )
         db.add(attachment)
-        await db.commit()
+        # 提交前完成刷新，避免提交成功后的刷新异常触发 OSS 文件清理。
+        await db.flush()
         await db.refresh(attachment)
+        await db.commit()
         return attachment
 
     # ==================== 文件列表查询 ====================
@@ -381,6 +446,8 @@ class FileService:
 
         # 统一为正斜杠，兼容 Windows 环境 Path 可能产生的反斜杠
         normalized_path = file_path.replace("\\", "/")
+        if normalized_path.startswith(("https://", "http://")):
+            return normalized_path
         if not base_url:
             base_url = settings.FILE_BASE_URL
         if base_url:

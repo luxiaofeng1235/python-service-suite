@@ -29,7 +29,7 @@ class Attachment(Base):
     owner_id = Column(Integer, nullable=False, default=0, index=True, comment="归属主体ID")
     original_name = Column(String(255), nullable=False, comment="原始文件名")
     stored_name = Column(String(255), nullable=False, comment="存储文件名")
-    file_path = Column(String(500), nullable=False, comment="文件相对路径")
+    file_path = Column(String(500), nullable=False, comment="Local relative path or absolute OSS URL")
     file_size = Column(Integer, nullable=False, comment="文件大小（字节）")
     mime_type = Column(String(100), nullable=False, comment="MIME 类型")
     file_type = Column(String(20), nullable=False, comment="文件分类：image / video / other")
