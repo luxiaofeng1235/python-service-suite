@@ -83,104 +83,37 @@ Controller → Service → Model    Controller → Service → Model
 
 ## 目录结构
 
-```
-app/
-├── main.py                  # 入口 — app 工厂、中间件、路由挂载
-│
-├── routes/                  # 路由聚合入口
-│   ├── api.py               # 前台接口路由（app/api/controllers）
-│   └── admin.py             # 后台管理路由（app/admin/controllers）
-│
-├── setup/                   # 应用启动配置
-│   ├── lifecycle.py         # 启动/关闭生命周期钩子
-│   └── routes.py            # 统一注册前台+后台路由
-│
-├── api/                     # 前台接口层（面向普通用户）
-│   ├── controllers/         # 前台路由控制器
-│   │   ├── user_controller.py
-│   │   ├── ai_controller.py
-│   │   ├── file_controller.py
-│   │   ├── tools_controller.py
-│   │   ├── test_controller.py
-│   │   ├── lottery_controller.py
-│   │   └── encrypt_controller.py          # 加解密测试接口
-│   └── services/            # 前台业务逻辑
-│       ├── user_service.py
-│       ├── ai_service.py
-│       └── file_service.py
-│
-├── services/                # 公共业务服务层（跨模块复用）
-│   └── lottery_service.py   # 抽奖服务：加载配置 + 调用引擎
-│
-├── admin/                   # 后台管理层（面向管理员）
-│   ├── controllers/         # 后台路由控制器
-│   │   ├── auth_controller.py       # 管理员认证（login/register/logout/me）
-│   │   ├── admin_controller.py      # 管理员管理（列表/禁用启用）
-│   │   ├── user_admin_controller.py # 前台用户管理（后台视角）
-│   │   └── rbac_controller.py       # RBAC 权限管理
-│   └── services/            # 后台业务逻辑
-│       ├── auth_service.py          # 管理员认证服务
-│       └── user_admin_service.py    # 前台用户管理服务
-│
-├── core/                    # 核心基础设施（改配置就够了）
-│   ├── config.py            # 集中配置管理，从 .env 读取
-│   ├── security.py          # Token 签发/验证/密码加密
-│   ├── dependency.py        # 前台鉴权依赖：get_current_user
-│   ├── admin_auth.py        # 后台鉴权依赖：get_current_admin_user
-│   ├── rbac.py              # RBAC 鉴权依赖工厂：require_permission
-│   └── lottery.py           # 抽奖核心引擎：概率归一化/层级/单层抽取  
-│
-├── common/                  # 通用工具
-│   ├── response.py          # 统一响应格式 Response.success / Response.fail
-│   ├── exception.py         # 全局异常处理器
-│   ├── pagination.py        # 分页查询工具
-│   └── sse.py               # SSE 流式响应工具
-│
-├── models/                  # ORM 数据模型
-│   ├── user.py              # 前台用户表
-│   ├── user_token.py        # 前台用户 Token 表
-│   ├── verification_code.py # 验证码表
-│   ├── ai_chat_log.py       # AI 对话日志表
-│   ├── attachment.py        # 文件附件表
-│   ├── rbac.py              # RBAC 权限/角色/CasbinRule 表
-│   ├── auth_admin.py        # 后台管理员表（独立于 users）
-│   ├── admin_token.py       # 后台管理员 Token 表
-│   └── lottery_config.py    # 抽奖配置表（DB ORM）
-│
-├── schemas/                 # Pydantic 请求/响应模型
-│   ├── ai.py                # AI 对话请求/响应体
-│   ├── user.py              # 用户注册/登录/密码重置
-│   ├── user_admin.py        # 后台用户管理请求/响应
-│   ├── auth_admin.py        # 管理员登录/注册请求体
-│   ├── rbac.py              # RBAC 请求/响应体
-│   ├── file.py              # 文件上传响应体
-│   ├── storage.py           # 存储验证
-│   └── lottery.py           # 抽奖请求/响应体
-│
-├── storage/                 # 文件存储
-│   └── validation.py        # 文件上传验证规则
-│
-├── utils/                   # 辅助工具
-│   ├── email.py             # SMTP 邮件发送（验证码、通知）
-│   ├── rsa.py               # RSA / AES 加解密工具
-│   ├── crypto.py            # 接口签名验签（SHA256 参数排序 + 签名）
-│   └── time_.py             # 时间工具类（时区/时间戳/日期格式化）
-│
-├── middleware/              # ASGI 中间件
-│   └── encrypt.py           # 接口签名校验中间件
-│
-├── web/                     # 预留 Web 业务模块
-│   └── README.md
-│
-├── database.py              # 数据库引擎 & 会话管理
-│
-├── migrations/              # Alembic 迁移脚本
-│   ├── versions/
-│   └── env.py
-│
-└── config/                  # 业务配置（JSON 引擎降级用）
-    └── lottery/             # 抽奖 JSON 配置：{key}.json
-        └── default.json
+按目录说明职责，业务文件在对应目录内扩展。
+
+```text
+项目根目录/
+├── app/                     # 应用代码
+│   ├── api/                 # 前台业务模块
+│   │   ├── controllers/     # 接收请求、调用服务、返回响应
+│   │   └── services/        # 前台业务逻辑和数据库操作
+│   ├── admin/               # 后台管理模块
+│   │   ├── controllers/     # 后台接口控制器
+│   │   └── services/        # 后台业务逻辑
+│   ├── services/            # 跨模块复用的公共服务
+│   ├── models/              # ORM 数据库表映射
+│   ├── schemas/             # 请求校验和响应序列化
+│   ├── constants/           # 业务常量、状态枚举和静态业务数据
+│   ├── routes/              # 前台、后台路由聚合
+│   ├── setup/               # 应用生命周期、中间件和路由注册
+│   ├── core/                # 配置汇聚、鉴权依赖和核心机制
+│   ├── common/              # 统一响应、异常、分页等公共组件
+│   ├── pkg/                 # 日志、Redis、第三方客户端等基础设施
+│   ├── storage/             # 本地文件、OSS、资源下载和水印处理
+│   ├── utils/               # 通用辅助工具
+│   ├── middleware/          # 请求处理、日志、验签等中间件
+│   └── web/                 # 预留 Web 业务模块
+├── config/                  # 配置默认值，支持环境变量覆盖
+├── migrations/              # Alembic 数据库迁移
+│   └── versions/            # 迁移版本脚本
+├── sql/                     # 初始化和补充 SQL 脚本
+├── public/                  # 公开静态资源、水印素材
+├── uploads/                 # 本地上传文件和生成资源
+└── logs/                    # 运行日志
 ```
 
 **新增模块只需四步**：创建 `model`（如需新表）→ 创建 `service` → 创建 `controller` → 在 `routes/api.py` 或 `routes/admin.py` 注册。
@@ -513,6 +446,8 @@ result = await AIService.get_image(db, task_id, user_id)
 
 ## 文生视频服务和接口
 
+**运行环境必须安装 FFmpeg**，用于生成视频后的水印处理；安装 Python 依赖不会安装 FFmpeg。安装方式见下方“FFmpeg 安装与检查”。
+
 沿用 PHP `toVideo/getVideo`：提交异步任务 → 保存 `ai_to_work`（`type=2`、`status=0`）→ 前端轮询 → 下载视频到本地 → FFmpeg 叠加 PNG 水印 → 上传 OSS → 保存 URL 数组并设置 `status=1`。查询已完成任务直接返回缓存。
 
 - `POST /api/ai/to_video`：支持 JSON、URL 编码表单和 multipart 表单；`prompt` 必传，1～500 字符，`to=2` 可省略。模型固定为 PHP 的 `wanx2.1-t2v-turbo`，当前只接文生视频。
@@ -536,6 +471,34 @@ AI_VIDEO_BASE_URL = "https://video.example.com"
 FFMPEG_BIN = "ffmpeg"
 AI_VIDEO_FFMPEG_TIMEOUT = 600
 ```
+
+### FFmpeg 安装与检查
+
+Alpine Linux（使用 `apk`，以 root 执行）：
+
+```bash
+apk add ffmpeg
+ffmpeg -version
+```
+
+Ubuntu / Debian / Ubuntu WSL：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ffmpeg
+ffmpeg -version
+```
+
+当前项目 Docker 镜像基于 `python:3.12-slim`（Debian），`Dockerfile` 已通过 `apt-get` 安装 FFmpeg。部署时重新构建并创建应用容器，再在容器内检查：
+
+```bash
+docker compose up -d --build ai-server
+docker compose exec ai-server ffmpeg -version
+```
+
+FFmpeg 必须安装在实际运行后端的环境中；Docker 部署时在应用容器内检查，本机运行时在本机检查。默认 `config/ai.py` 的 `FFMPEG_BIN = "ffmpeg"`，通过 PATH 查找；自定义安装位置时可改为可执行文件的绝对路径。所用 FFmpeg 需支持 `overlay` 滤镜和 `libx264` 编码器。提交视频任务前会检查 FFmpeg 和水印文件，缺少 FFmpeg 时提示“FFmpeg 未安装或 FFMPEG_BIN 配置错误”。
+
+### 接口调用示例
 
 ```bash
 curl -X POST 'http://127.0.0.1:8001/api/ai/to_video' \
