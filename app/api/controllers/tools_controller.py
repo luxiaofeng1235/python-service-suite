@@ -29,7 +29,7 @@ async def health_check():
     同时检查 MySQL 和 Redis 的连通性。
     """
     checks = {
-        "mysql": await HealthChecker.check_mysql(engine),
+        "mysql" : await HealthChecker.check_mysql(engine),
         "redis": await HealthChecker.check_redis(redis_client, settings.REDIS_URL),
     }
 
