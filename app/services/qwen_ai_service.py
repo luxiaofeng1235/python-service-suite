@@ -2,11 +2,12 @@
 ============================================
 Qwen AI Service - upstream streaming client
 ============================================
-Builds the Qwen chat-completion request and converts upstream SSE events into text deltas.
+Builds Qwen requests and supports parsed text events or unchanged multimodal SSE.
 """
 
 import json
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -58,35 +59,73 @@ class QwenAIService:
         config: QwenChatConfig,
     ) -> AsyncGenerator[tuple[str, str], None]:
         """Yield reasoning and answer deltas from the Qwen SSE response."""
+        payload = {
+            "model": config.model,
+            "messages": messages,
+            "stream": True,
+            "enable_search": config.enable_search,
+        }
+        async with cls._request_stream(payload) as response:
+            async for raw_line in response.aiter_lines():
+                for event in cls._parse_sse_line(raw_line):
+                    yield event
+
+    @classmethod
+    @asynccontextmanager
+    async def stream_omni(
+        cls, messages: list[dict[str, Any]],
+    ) -> AsyncIterator[httpx.Response]:
+        """Open an Omni stream using backend model and audio settings."""
+        payload = {
+            "model": settings.QWEN_OMNI_MODEL,
+            "messages": messages,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            "modalities": ["text", "audio"],
+            "audio": {
+                "voice": settings.QWEN_OMNI_AUDIO_VOICE,
+                "format": settings.QWEN_OMNI_AUDIO_FORMAT,
+            },
+            # 音频输出使用非思考模式，联网搜索参数不沿用普通文本对话。
+            "enable_thinking": False,
+        }
+        async with cls._request_stream(payload) as response:
+            content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
+            if content_type.lower() != "text/event-stream":
+                raise AppException(msg="千问多模态服务未返回事件流，请稍后重试")
+            yield response
+
+    @classmethod
+    @asynccontextmanager
+    async def _request_stream(
+        cls, payload: dict[str, Any],
+    ) -> AsyncIterator[httpx.Response]:
+        """Share backend authentication, connection policy and HTTP error checks."""
         if not settings.QWEN_API_KEY:
             raise AppException(msg="QWEN_API_KEY 未配置")
         if not settings.QWEN_CHAT_URL:
             raise AppException(msg="QWEN_CHAT_URL 未配置")
 
-        async with cls._create_client() as client:
-            async with client.stream(
-                "POST",
-                settings.QWEN_CHAT_URL,
-                headers={
-                    "Authorization": f"Bearer {settings.QWEN_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": config.model,
-                    "messages": messages,
-                    "stream": True,
-                    "enable_search": config.enable_search,
-                },
-            ) as response:
-                if response.status_code >= 400:
-                    body = await response.aread()
-                    raise AppException(
-                        msg=cls._extract_error_message(response.status_code, body)
-                    )
-
-                async for raw_line in response.aiter_lines():
-                    for event in cls._parse_sse_line(raw_line):
-                        yield event
+        try:
+            async with cls._create_client() as client:
+                async with client.stream(
+                    "POST",
+                    settings.QWEN_CHAT_URL,
+                    headers={
+                        "Authorization": f"Bearer {settings.QWEN_API_KEY}",
+                        "Content-Type": "application/json",
+                        "Accept": "text/event-stream",
+                    },
+                    json=payload,
+                ) as response:
+                    if response.status_code >= 300:
+                        body = await response.aread()
+                        raise AppException(
+                            msg=cls._extract_error_message(response.status_code, body)
+                        )
+                    yield response
+        except httpx.HTTPError as exc:
+            raise AppException(msg="千问服务网络异常，请稍后重试") from exc
 
     @staticmethod
     def _create_client() -> httpx.AsyncClient:

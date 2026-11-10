@@ -360,7 +360,7 @@ make clean           # 清理缓存/tmp/log
 - `restart=1` 表示重新生成：丢弃历史中的最后一条消息且不追加本轮 `msg`，让模型基于剩余上下文重答（`restart=0` 时才会把 `msg` 作为新一轮用户提问追加）
 - `is_deep_reflection=1` 使用 `qwq-plus` 深度思考；为 `0` 或不传时使用 `qwen-max`，该流程不受 `config/ai.py` 的 `QWEN_MODEL` 影响
 - `model` 当前仅支持取值 `1`（对应千问 qwen-max）；对话列表接口 `GET /api/ai/chats` 的 `model_id` 查询参数同样限定为 `1`
-- 所有上游请求默认开启千问联网搜索（`enable_search=true`）
+- 上述两个文字对话流接口默认开启千问联网搜索（`enable_search=true`）
 
 `curl` 示例：
 
@@ -371,6 +371,22 @@ curl -N \
   -H "Authorization: Bearer <token>" \
   -X POST http://localhost:8001/api/ai/chat/send_stream \
   -d '{"model":1,"chat_id":0,"msg":"你好，介绍一下这个服务","restart":0}'
+```
+
+## 多模态流式转发
+
+`POST /api/chat/stream_new`：携带项目登录 Token，提交 `message` 消息数组 → 后端补充模型和音频配置 → 请求千问 → 将文字、音频、用量及结束分片按原始 SSE 格式转发给前端。
+
+- 复用 `QWEN_CHAT_URL` 和后端 `.env` 的 `QWEN_API_KEY`；模型 `qwen3-omni-flash`、音色 `Cherry`、音频格式 `wav` 集中维护在 `config/ai.py`。
+- 兼容 `messages` 字段和 PHP 的表单提交方式，消息 `content` 可为文本或多模态内容数组；历史上下文由请求提供，不重复拼接，也不写入聊天记录。
+- 返回原始 `choices/delta/audio/usage` 结构，完整转发空 `choices` 的用量分片和上游结束标记。前端自行解析 SSE、解码音频并播放。
+- 此入口不附加普通对话的联网搜索参数；实时天气等问题需要另外接入实时数据。
+
+```bash
+curl -N -X POST 'http://127.0.0.1:8001/api/chat/stream_new' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"message":[{"role":"user","content":"你好，请介绍一下自己"}]}'
 ```
 
 ## 文生图服务和接口

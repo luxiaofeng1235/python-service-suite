@@ -10,6 +10,7 @@ from typing import TypeVar
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
@@ -19,12 +20,18 @@ from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.dependency import get_current_user
 from app.database import get_session
-from app.schemas.ai import ChatRequest, SendStreamRequest, ToImageRequest, VideoRequest
+from app.schemas.ai import ChatRequest, OmniStreamRequest, SendStreamRequest, ToImageRequest, VideoRequest
 from app.utils.sse import SSEUtil
 
 # ==================== 路由定义 ====================
 router = APIRouter(prefix="/api", tags=["AI 服务"])
 AIRequest = TypeVar("AIRequest", bound=BaseModel)
+
+# 内联消息定义，避免嵌入请求体的 JSON Schema 引用到 OpenAPI 根目录。
+_omni_stream_schema = OmniStreamRequest.model_json_schema()
+_omni_stream_schema["properties"]["message"]["items"] = (
+    _omni_stream_schema.pop("$defs")["OmniMessage"]
+)
 
 
 async def _parse_ai_request(request: Request, schema: type[AIRequest]) -> AIRequest:
@@ -58,6 +65,34 @@ async def _parse_to_image_request(request: Request) -> ToImageRequest:
 async def _parse_to_video_request(request: Request) -> VideoRequest:
     """Validate a text-to-video request using the shared body parser."""
     return await _parse_ai_request(request, VideoRequest)
+
+
+async def _parse_omni_stream_request(request: Request) -> OmniStreamRequest:
+    """Validate multimodal messages from JSON or PHP-compatible forms."""
+    return await _parse_ai_request(request, OmniStreamRequest)
+
+
+@router.post(
+    "/chat/stream_new",
+    summary="AI 多模态原始 SSE 转发",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"text/event-stream": {"schema": {"type": "string"}}}}},
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                media_type: {"schema": _omni_stream_schema}
+                for media_type in ("application/json", "application/x-www-form-urlencoded", "multipart/form-data")
+            },
+        },
+    },
+)
+async def chat_stream_new(
+    req: OmniStreamRequest = Depends(_parse_omni_stream_request),
+    current_user: dict = Depends(get_current_user),
+) -> StreamingResponse:
+    """Forward the Qwen Omni stream for an authenticated user."""
+    return await AIService.stream_new(req)
 
 
 @router.post(

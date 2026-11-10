@@ -5,9 +5,10 @@ AI 对话数据模型模块
 定义 AI 对话相关的请求体、响应体。
 """
 
+import json
 from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, WithJsonSchema, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, WithJsonSchema, field_validator
 
 # ==================== 请求体 ====================
 
@@ -41,6 +42,47 @@ class SendStreamRequest(ChatRequest):
 
     chat_id: int = Field(..., ge=0, description="Chat ID; use 0 for a new conversation")
     restart: int = Field(..., ge=0, le=1, description="Regenerate the reply: 0=no, 1=yes")
+
+
+class OmniMessage(BaseModel):
+    """Preserve text and structured multimodal message content."""
+
+    role: str = Field(..., min_length=1, description="Message role")
+    content: str | list[dict[str, Any]] = Field(
+        ..., description="Text or structured image, audio and video content"
+    )
+
+    # 保留音频标识等消息附加字段，避免改写前端传入的多模态结构。
+    model_config = ConfigDict(extra="allow")
+
+
+class OmniStreamRequest(BaseModel):
+    """Accept the PHP message field and its messages alias."""
+
+    message: list[OmniMessage] = Field(
+        ...,
+        min_length=1,
+        validation_alias=AliasChoices("message", "messages"),
+        description="Complete conversation messages for this request",
+    )
+
+    @field_validator("message", mode="before")
+    @classmethod
+    def parse_messages(cls, value: Any) -> Any:
+        """Normalize PHP form values while preserving message arrays."""
+        if not isinstance(value, str):
+            return value
+        try:
+            decoded = json.loads(value)
+        except ValueError:
+            decoded = None
+        if isinstance(decoded, list):
+            return decoded
+        # 与 PHP 一致：表单字段可传 JSON 数组字符串，也可传普通文本。
+        text = value.strip()
+        if not text:
+            raise ValueError("消息内容不能为空")
+        return [{"role": "user", "content": text}]
 
 
 class ImageRequest(BaseModel):

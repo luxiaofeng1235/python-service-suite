@@ -6,23 +6,68 @@ AI 接口服务 - 聊天记录、流式转发与图片视频生成
 """
 
 from collections.abc import AsyncGenerator
+from contextlib import AsyncExitStack
 from typing import Any
 
+import anyio
+import httpx
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTask
+from starlette.responses import StreamingResponse
 
 from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
 from app.models.ai_chat_log import AiChatLog
-from app.schemas.ai import ChatRequest, ImageRequest, VideoRequest
+from app.pkg.logging import app_logger
+from app.schemas.ai import ChatRequest, ImageRequest, OmniStreamRequest, VideoRequest
 from app.services.ai_image_service import AIImageService
 from app.services.ai_stream_service import AIService as CoreAIService
 from app.services.ai_video_service import AIVideoService
+from app.services.qwen_ai_service import QwenAIService
 from app.utils.time_ import TimeUtil
 
 
 class AIService(CoreAIService):
     """供接口调用的 AI 服务，复用公共服务的对话和图片视频生成能力。"""
+
+    @staticmethod
+    async def stream_new(req: OmniStreamRequest) -> StreamingResponse:
+        """转发多模态原始 SSE，消息上下文由本次请求提供，不写聊天记录。"""
+        stack = AsyncExitStack()
+
+        async def close_stream() -> None:
+            # 断开连接时仍完成清理，释放千问响应和 HTTP 客户端。
+            with anyio.CancelScope(shield=True):
+                await stack.aclose()
+
+        try:
+            messages = [item.model_dump(mode="json", exclude_unset=True) for item in req.message]
+            # 先连接并校验上游状态，再向前端发送 SSE 响应头。
+            upstream = await stack.enter_async_context(QwenAIService.stream_omni(messages))
+        except BaseException:
+            await close_stream()
+            raise
+
+        async def forward_stream() -> AsyncGenerator[bytes, None]:
+            try:
+                # 分片可能跨越 SSE 事件边界，直接转发即可；不解析或重复添加 data:。
+                async for chunk in upstream.aiter_bytes():
+                    yield chunk
+            except httpx.HTTPError:
+                app_logger.warning("千问多模态流式连接异常")
+                # 流已开始，使用与 PHP 一致的 SSE 错误提示，不伪造正常结束标记。
+                yield "\n\ndata: [ERROR] 千问多模态流式连接中断，请重试\n\n".encode()
+            finally:
+                await close_stream()
+
+        return StreamingResponse(
+            forward_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            # 覆盖前端在读取第一个分片前就断开连接的情况。
+            background=BackgroundTask(close_stream),
+        )
 
     @staticmethod
     async def to_video(db: AsyncSession, req: VideoRequest, user_id: int) -> str:

@@ -8,6 +8,10 @@ Maintain AI options here; backend API credentials are read from .env.
 # 千问地址和默认模型；QWEN_API_KEY 由后端 .env 提供。
 QWEN_CHAT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 QWEN_MODEL = "qwen-max"
+# 多模态流式对话由后端固定模型、音色和输出格式。
+QWEN_OMNI_MODEL = "qwen3-omni-flash"
+QWEN_OMNI_AUDIO_VOICE = "Cherry"
+QWEN_OMNI_AUDIO_FORMAT = "wav"
 QWEN_IMAGE_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
 QWEN_VIDEO_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
 QWEN_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks"
