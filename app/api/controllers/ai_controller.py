@@ -20,7 +20,14 @@ from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.dependency import get_current_user
 from app.database import get_session
-from app.schemas.ai import ChatRequest, OmniStreamRequest, SendStreamRequest, ToImageRequest, VideoRequest
+from app.schemas.ai import (
+    ChatRequest,
+    ChatTTSRequest,
+    OmniStreamRequest,
+    SendStreamRequest,
+    ToImageRequest,
+    VideoRequest,
+)
 from app.utils.sse import SSEUtil
 
 # ==================== 路由定义 ====================
@@ -70,6 +77,33 @@ async def _parse_to_video_request(request: Request) -> VideoRequest:
 async def _parse_omni_stream_request(request: Request) -> OmniStreamRequest:
     """Validate multimodal messages from JSON or PHP-compatible forms."""
     return await _parse_ai_request(request, OmniStreamRequest)
+
+
+async def _parse_chattts_request(request: Request) -> ChatTTSRequest:
+    """Validate speech text from JSON or PHP-compatible forms."""
+    return await _parse_ai_request(request, ChatTTSRequest)
+
+
+@router.post(
+    "/chat/chattts",
+    summary="AI 文本转语音，返回完整音频地址",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                media_type: {"schema": ChatTTSRequest.model_json_schema()}
+                for media_type in ("application/json", "application/x-www-form-urlencoded", "multipart/form-data")
+            },
+        },
+    },
+)
+async def chattts(
+    req: ChatTTSRequest = Depends(_parse_chattts_request),
+    current_user: dict = Depends(get_current_user),
+):
+    """Synthesize speech for an authenticated user."""
+    result = await AIService.chattts(req)
+    return Response.success(data=result, msg="语音生成成功")
 
 
 @router.post(

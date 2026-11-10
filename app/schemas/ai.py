@@ -44,6 +44,20 @@ class SendStreamRequest(ChatRequest):
     restart: int = Field(..., ge=0, le=1, description="Regenerate the reply: 0=no, 1=yes")
 
 
+class ChatTTSRequest(BaseModel):
+    """Text to synthesize using backend TTS settings."""
+
+    text: str = Field(..., min_length=1, max_length=600, description="Text to synthesize")
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        """Reject whitespace-only input without altering the spoken text."""
+        if not value.strip():
+            raise ValueError("合成文本不能为空")
+        return value
+
+
 class OmniMessage(BaseModel):
     """Preserve text and structured multimodal message content."""
 

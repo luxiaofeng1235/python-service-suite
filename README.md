@@ -389,6 +389,21 @@ curl -N -X POST 'http://127.0.0.1:8001/api/chat/stream_new' \
   -d '{"message":[{"role":"user","content":"你好，请介绍一下自己"}]}'
 ```
 
+## 文本转语音
+
+`POST /api/chat/chattts`：携带项目登录 Token，提交 `text` → 后端补充 `qwen3-tts-flash`、音色和语言 → 请求千问 → 返回完整音频地址及过期时间。
+
+- 支持 JSON、URL 编码表单和 multipart 表单，文本必填，最多 600 字符。
+- 地址 `QWEN_TTS_URL`、模型 `QWEN_TTS_MODEL`、音色 `QWEN_TTS_VOICE`（`Cherry`）和语言 `QWEN_TTS_LANGUAGE_TYPE`（`Chinese`）维护在 `config/ai.py`，复用后端 `.env` 的 `QWEN_API_KEY`。
+- 返回项目统一 JSON，原始千问结果保留在 `data`：音频地址读取 `data.output.audio.url`，过期时间读取 `data.output.audio.expires_at`，用量读取 `data.usage.characters`。地址是上游临时链接，此流程不写聊天记录、不下载音频或上传 OSS。
+
+```bash
+curl -sS -X POST 'http://127.0.0.1:8001/api/chat/chattts' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"你好，欢迎使用文本转语音服务。"}'
+```
+
 ## 文生图服务和接口
 
 调用链：`app/api/controllers/ai_controller.py → app/api/services/ai_service.py → app/services/ai_image_service.py → app/storage/ai_image.py → app/storage/oss.py`。

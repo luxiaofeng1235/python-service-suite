@@ -2,7 +2,7 @@
 ============================================
 Qwen AI Service - upstream streaming client
 ============================================
-Builds Qwen requests and supports parsed text events or unchanged multimodal SSE.
+Builds Qwen requests for text streams, multimodal SSE and speech synthesis.
 """
 
 import json
@@ -65,7 +65,7 @@ class QwenAIService:
             "stream": True,
             "enable_search": config.enable_search,
         }
-        async with cls._request_stream(payload) as response:
+        async with cls._request(payload) as response:
             async for raw_line in response.aiter_lines():
                 for event in cls._parse_sse_line(raw_line):
                     yield event
@@ -89,32 +89,76 @@ class QwenAIService:
             # 音频输出使用非思考模式，联网搜索参数不沿用普通文本对话。
             "enable_thinking": False,
         }
-        async with cls._request_stream(payload) as response:
+        async with cls._request(payload) as response:
             content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
             if content_type.lower() != "text/event-stream":
                 raise AppException(msg="千问多模态服务未返回事件流，请稍后重试")
             yield response
 
     @classmethod
+    async def chattts(cls, text: str) -> dict[str, Any]:
+        """Synthesize speech and return the original completed audio response."""
+        if not settings.QWEN_TTS_URL:
+            raise AppException(msg="QWEN_TTS_URL 未配置")
+        payload = {
+            "model": settings.QWEN_TTS_MODEL,
+            "input": {
+                "text": text,
+                "voice": settings.QWEN_TTS_VOICE,
+                "language_type": settings.QWEN_TTS_LANGUAGE_TYPE,
+            },
+        }
+        async with cls._request(payload, url=settings.QWEN_TTS_URL, stream=False) as response:
+            # 一次读取完整 JSON，音频由上游提供地址，不在本地下载或合并。
+            await response.aread()
+            try:
+                data = response.json()
+            except ValueError as exc:
+                raise AppException(msg="语音服务返回格式错误，请稍后重试") from exc
+            if not isinstance(data, dict):
+                raise AppException(msg="语音服务返回格式错误，请稍后重试")
+            if data.get("code"):
+                raise AppException(
+                    msg=cls._extract_error_message(response.status_code, response.content)
+                )
+
+        output = data.get("output")
+        audio = output.get("audio") if isinstance(output, dict) else None
+        if (
+            not isinstance(audio, dict)
+            or not isinstance(audio.get("url"), str)
+            or not audio["url"].strip()
+            or output.get("finish_reason") != "stop"
+        ):
+            raise AppException(msg="语音服务未返回生成完成的音频地址，请稍后重试")
+        # 保留带签名的完整地址、过期时间和用量，调用方按原始结构读取。
+        return data
+
+    @classmethod
     @asynccontextmanager
-    async def _request_stream(
-        cls, payload: dict[str, Any],
+    async def _request(
+        cls,
+        payload: dict[str, Any],
+        *,
+        url: str | None = None,
+        stream: bool = True,
     ) -> AsyncIterator[httpx.Response]:
         """Share backend authentication, connection policy and HTTP error checks."""
         if not settings.QWEN_API_KEY:
             raise AppException(msg="QWEN_API_KEY 未配置")
-        if not settings.QWEN_CHAT_URL:
+        request_url = settings.QWEN_CHAT_URL if url is None else url
+        if not request_url:
             raise AppException(msg="QWEN_CHAT_URL 未配置")
 
         try:
             async with cls._create_client() as client:
                 async with client.stream(
                     "POST",
-                    settings.QWEN_CHAT_URL,
+                    request_url,
                     headers={
                         "Authorization": f"Bearer {settings.QWEN_API_KEY}",
                         "Content-Type": "application/json",
-                        "Accept": "text/event-stream",
+                        "Accept": "text/event-stream" if stream else "application/json",
                     },
                     json=payload,
                 ) as response:

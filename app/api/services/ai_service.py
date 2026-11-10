@@ -20,7 +20,7 @@ from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
 from app.models.ai_chat_log import AiChatLog
 from app.pkg.logging import app_logger
-from app.schemas.ai import ChatRequest, ImageRequest, OmniStreamRequest, VideoRequest
+from app.schemas.ai import ChatRequest, ChatTTSRequest, ImageRequest, OmniStreamRequest, VideoRequest
 from app.services.ai_image_service import AIImageService
 from app.services.ai_stream_service import AIService as CoreAIService
 from app.services.ai_video_service import AIVideoService
@@ -30,6 +30,11 @@ from app.utils.time_ import TimeUtil
 
 class AIService(CoreAIService):
     """供接口调用的 AI 服务，复用公共服务的对话和图片视频生成能力。"""
+
+    @staticmethod
+    async def chattts(req: ChatTTSRequest) -> dict[str, Any]:
+        """调用公共千问服务合成语音，返回音频地址、过期时间和用量。"""
+        return await QwenAIService.chattts(req.text)
 
     @staticmethod
     async def stream_new(req: OmniStreamRequest) -> StreamingResponse:
