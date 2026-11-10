@@ -13,6 +13,9 @@
 | **用户鉴权体系** | 注册/登录/Token 鉴权/管理员/密码找回，开箱即用 |
 | **AI 模型接入** | OpenAI 兼容接口，当前接入千问，后续可扩展 DeepSeek / OpenAI 等任意兼容服务 |
 | **SSE 流式输出** | 标准 Server-Sent Events，兼容旧协议，前端直接对接 |
+| **多模态与语音** | 文字、音频 SSE 原样转发；文本转语音返回音频地址 |
+| **图片与视频生成** | 异步任务提交、进度查询、作品存储；视频支持 FFmpeg 水印 |
+| **通用 OSS 上传** | 单接口上传图片或视频，保存附件信息并返回配置的访问地址 |
 | **对话管理** | 完整 CRUD + 上下文清除 + 重生成，按用户隔离 |
 | **数据库迁移** | Alembic 管理表结构变更，开发用 SQLite，生产切 MySQL |
 | **Docker 一键部署** | FastAPI + Redis 容器运行，连接宿主机 MySQL |
@@ -237,12 +240,17 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 
 ## 里程碑
 
-已完善的 AI 功能流程：
+已完善的功能流程：
 
 - **流式对话**：用户提问 → 读取历史上下文 → 普通回答或深度思考 → 流式返回 → 保存聊天记录。
+- **多模态流式转发**：`POST /api/chat/stream_new` 提交消息数组 → 后端补充模型、音色和音频格式 → 原样转发文字、音频和用量 SSE 分片；上下文由请求提供。
+- **文本转语音**：`POST /api/chat/chattts` 提交文本 → 后端补充模型、音色和语言 → 返回音频临时地址、过期时间及用量。
 - **文生图**：提交提示词 → 返回任务 ID → 查询生成进度 → 保存图片并上传 OSS → 返回图片地址，支持多张图片。
 - **文生视频**：提交提示词 → 返回任务 ID → 查询生成进度 → 下载视频并加水印 → 上传 OSS → 返回视频地址。
 - **任务与作品查询**：按登录用户隔离任务，生成中返回进度，完成后读取缓存结果，失败返回原因；图片缓存支持缺失补传。
+- **通用 OSS 附件上传**：`POST /api/file/upload/oss` 公共上传图片或视频 → 校验格式和大小 → 上传 OSS → 保存附件记录 → 返回完整地址及原文件名等信息；无需 Token 和验签。
+
+公共能力统一复用：文字对话、多模态和语音请求由 `app/services/qwen_ai_service.py` 管理；图片、视频的异步任务请求由 `app/pkg/qwen_client.py` 管理。两者均从后端读取千问密钥并集中处理各自的认证和请求异常。生成资源与附件上传共用 `app/storage/oss.py`，访问域名、Bucket 和密钥按部署环境配置。
 
 当前开发进度、已完成能力和后续计划统一维护在 [MILESTONE.md](/mnt/d/python_work/fastapi_server/MILESTONE.md)。
 
@@ -322,11 +330,13 @@ make clean           # 清理缓存/tmp/log
 
 ## 通用 OSS 上传
 
+调用流程：`file_controller.py → api/services/file_service.py` 校验附件 → `storage/oss.py` 上传文件流 → 保存 `attachment` → 返回附件地址与元数据。入库失败时回滚，并尝试删除本次上传的 OSS 文件。
+
 - 统一接口：`POST /api/file/upload/oss`，根据文件扩展名自动识别图片或视频。
 - 公共接口，无需 Token、`sign` 或 `timestamp`，通过 `multipart/form-data` 的 `file` 字段直接上传；与现有公共上传一致，`user_id=0`、`owner_type=user`、`owner_id=0`。
 - 接口已加入默认免登录、免验签白名单；如果 `.env` 自定义了 `AUTH_WHITE_LIST`，也需包含 `/api/file/upload/oss`。
 - 复用本地上传的格式、大小配置（图片默认 10 MB、视频默认 200 MB），通过公共 OSS SDK 上传，服务端读取已有 OSS 配置。此接口始终上传 OSS，`OSS_ENABLED` 仍仅控制 AI 生成资源的同步。
-- 上传完成后写入 `attachment`，返回 `data.url`、`id`、`originName`（原文件名）、`storedName`（存储文件名）、`fileSize`（字节数）、`fileType`（image/video）、`mimeType` 和 `createdAt`（上传时间）。完整地址取 `OSS_VIEW_DOMAIN` 拼接，当前为 `https://static.jsss999.com/`；文件列表兼容本地相对路径和 OSS 完整地址。入库失败会尝试清理刚上传的 OSS 文件。
+- 上传完成后写入 `attachment`，返回 `data.url`、`id`、`originName`（原文件名）、`storedName`（存储文件名）、`fileSize`（字节数）、`fileType`（image/video）、`mimeType` 和 `createdAt`（上传时间）。完整地址由当前部署的 `OSS_VIEW_DOMAIN` 与对象路径拼接；文件列表兼容本地相对路径和 OSS 完整地址。
 - OSS 路径为 `uploads/images/YYYY/MM/<随机文件名>` 或 `uploads/videos/YYYY/MM/<随机文件名>`。复用请求的临时文件流，不另存一份本地文件，也不添加水印。
 - 已有数据库需执行附件归属字段迁移：`alembic upgrade 20260612_0001`（首次部署按项目迁移流程执行 `alembic upgrade head`）。
 
@@ -469,9 +479,11 @@ OSS_ACCESS_KEY_ID=your-oss-access-key-id
 OSS_ACCESS_KEY_SECRET=your-oss-access-key-secret
 OSS_ENDPOINT=oss-cn-shanghai.aliyuncs.com
 OSS_REGION=cn-shanghai
-OSS_BUCKET=static-nine-world
-OSS_VIEW_DOMAIN=https://static.jsss999.com/
+OSS_BUCKET=your-oss-bucket
+OSS_VIEW_DOMAIN=https://assets.example.com/
 ```
+
+以上域名和 Bucket 均为示例，部署时替换为自己的存储配置；`OSS_VIEW_DOMAIN` 可以使用已绑定到存储空间的自定义域名或 CDN 域名，视频访问前缀单独配置 `AI_VIDEO_BASE_URL`。
 
 配置默认值在 `config/oss.py`，统一通过 `settings` 读取。`OSS_ROLEARN`、`OSS_TOKENEXPIRETIME`、`OSS_POLICYFILE` 保留给后续 STS 临时授权，当前服务端上传直接使用后端 AccessKey，不签发前端临时凭证，也不读取 PolicyFile。新增的 `oss2` 依赖需要在部署时安装，Docker 需要重新构建。
 
@@ -504,7 +516,7 @@ result = await AIService.get_image(db, task_id, user_id)
 沿用 PHP `toVideo/getVideo`：提交异步任务 → 保存 `ai_to_work`（`type=2`、`status=0`）→ 前端轮询 → 下载视频到本地 → FFmpeg 叠加 PNG 水印 → 上传 OSS → 保存 URL 数组并设置 `status=1`。查询已完成任务直接返回缓存。
 
 - `POST /api/ai/to_video`：支持 JSON、URL 编码表单和 multipart 表单；`prompt` 必传，1～500 字符，`to=2` 可省略。模型固定为 PHP 的 `wanx2.1-t2v-turbo`，当前只接文生视频。
-- `GET /api/ai/get_video?task_id=...`：生成中返回任务 ID，完成返回 `{"code":1,"msg":"视频生成成功","data":{"video":["https://static-nine-world.oss-cn-shanghai.aliyuncs.com/uploads/ai_videos/xxx.mp4"]}}`。
+- `GET /api/ai/get_video?task_id=...`：生成中返回任务 ID，完成返回 `{"code":1,"msg":"视频生成成功","data":{"video":["https://video.example.com/uploads/ai_videos/xxx.mp4"]}}`，域名取部署时配置的 `AI_VIDEO_BASE_URL`。
 - 两个接口均使用项目登录 Token，用户 ID 从 Token 获取；千问和 OSS 密钥均由后端 `.env` 读取。
 - 水印默认使用 `public/watermark.png`，与 PHP `public/uploads/222.png` 是相同图片。FFmpeg 使用 `overlay=W-w-10:H-h-10`，按水印原始尺寸叠加，右边、底边各留 10 像素。
 - MySQL 8 行锁覆盖任务查询和文件处理，同一任务被占用时其他轮询直接返回生成中；`status=3` 只表示已删除。下载、转码或上传失败保持待处理，可重试；上游明确失败保存 `status=2`。
@@ -516,11 +528,11 @@ result = await AIService.get_image(db, task_id, user_id)
 AI 地址、默认模型、水印文件、视频访问域名、FFmpeg 路径和超时统一维护在 `config/ai.py`；AI 相关 `.env` 配置只维护 `QWEN_API_KEY`。修改配置后重启服务。Docker 已补充 FFmpeg，部署时需要重新构建镜像。
 
 ```python
-# constants/ai.py
+# config/ai.py
 QWEN_VIDEO_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
 QWEN_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks"
 AI_VIDEO_WATERMARK_PATH = "./public/watermark.png"
-AI_VIDEO_BASE_URL = "https://static-nine-world.oss-cn-shanghai.aliyuncs.com"
+AI_VIDEO_BASE_URL = "https://video.example.com"
 FFMPEG_BIN = "ffmpeg"
 AI_VIDEO_FFMPEG_TIMEOUT = 600
 ```
