@@ -8,6 +8,7 @@
 from fastapi import APIRouter
 
 from app.api.controllers import (
+    agent_controller,
     ai_controller,
     file_controller,
     lottery_controller,
@@ -23,6 +24,9 @@ api_router.include_router(user_controller.router)
 
 # AI 服务接口
 api_router.include_router(ai_controller.router)
+
+# Agent 服务接口
+api_router.include_router(agent_controller.router)
 
 # 文件上传接口
 api_router.include_router(file_controller.router)

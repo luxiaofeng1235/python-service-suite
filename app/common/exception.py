@@ -14,6 +14,7 @@
 from typing import Any
 
 from fastapi import HTTPException
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -65,7 +66,8 @@ async def validation_exception_handler(
     捕获 Pydantic 参数校验异常
     将详细错误信息合并为可读的字符串
     """
-    errors = exc.errors()
+    # 自定义校验器的上下文可能含 ValueError 等异常对象，先转为可序列化数据。
+    errors = jsonable_encoder(exc.errors(), custom_encoder={Exception: str})
     # 提取所有校验错误信息
     error_messages = []
     for err in errors:
