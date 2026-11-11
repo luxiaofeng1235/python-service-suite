@@ -38,36 +38,36 @@ class ChatMessage(Base):
             "mysql_engine": "InnoDB",
             "mysql_charset": "utf8mb4",
             "mysql_collate": "utf8mb4_unicode_ci",
-            "comment": "Agent chat messages and tool calls",
+            "comment": "智能体聊天消息及工具调用记录表",
         },
     )
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="Message ID")
-    session_id = Column(String(36), nullable=False, comment="Related chat_sessions.id")
-    role = Column(String(20), nullable=False, comment="Message role: system, user, assistant, tool")
+    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="消息ID")
+    session_id = Column(String(36), nullable=False, comment="关联聊天会话ID，对应chat_sessions.id")
+    role = Column(String(20), nullable=False, comment="消息角色：system系统、user用户、assistant助手、tool工具")
     content = Column(
-        Text, nullable=True, comment="Message text or serialized JSON; null for tool-only calls"
+        Text, nullable=True, comment="消息文本内容或序列化JSON，纯工具调用时可以为空"
     )
-    tool_name = Column(String(64), nullable=True, comment="Tool function name")
+    tool_name = Column(String(64), nullable=True, comment="工具函数名称")
     tool_calls = Column(
         JSON(none_as_null=True),
         nullable=True,
-        comment="Assistant tool calls with IDs, function names and arguments",
+        comment="助手发起的工具调用信息，包含调用ID、函数名称及参数",
     )
-    tool_call_id = Column(String(128), nullable=True, comment="Tool result correlation ID")
+    tool_call_id = Column(String(128), nullable=True, comment="工具调用关联ID，用于匹配工具执行结果")
     status = Column(
         SmallInteger,
         nullable=False,
         default=ChatMessageStatus.COMPLETED,
         server_default=text("1"),
-        comment="0=generating 1=completed 2=failed 3=interrupted",
+        comment="消息状态：0生成中、1已完成、2执行失败、3已中断",
     )
     created_at = Column(
         DateTime,
         nullable=False,
         default=datetime.now,
         server_default=text("CURRENT_TIMESTAMP"),
-        comment="Created time",
+        comment="创建时间",
     )
     updated_at = Column(
         DateTime,
@@ -75,7 +75,7 @@ class ChatMessage(Base):
         default=datetime.now,
         onupdate=datetime.now,
         server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
-        comment="Updated time",
+        comment="更新时间",
     )
 
     def __repr__(self) -> str:

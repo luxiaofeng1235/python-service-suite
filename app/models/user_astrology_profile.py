@@ -26,37 +26,37 @@ class UserAstrologyProfile(Base):
             "mysql_engine": "InnoDB",
             "mysql_charset": "utf8mb4",
             "mysql_collate": "utf8mb4_unicode_ci",
-            "comment": "User astrology profiles",
+            "comment": "用户星座档案表",
         },
     )
 
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="Profile ID")
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="档案ID")
     user_id = Column(
         Integer,
         nullable=False,
         unique=True,
         index=True,
-        comment="Existing users.id; one profile per user",
+        comment="用户ID，",
     )
-    birthday = Column(Date, nullable=True, comment="Birth date in the Gregorian calendar")
-    birth_time = Column(Time, nullable=True, comment="Local birth time; null when unknown")
+    birthday = Column(Date, nullable=True, comment="出生日期（公历）")
+    birth_time = Column(Time, nullable=True, comment="出生时间（当地时间，未知时为空）")
     birth_timezone = Column(
-        String(64), nullable=True, comment="IANA birth timezone, e.g. Asia/Shanghai"
+        String(64), nullable=True, comment="出生地时区（IANA标准，例如Asia/Shanghai）"
     )
-    birth_place = Column(String(255), nullable=True, comment="Birthplace name")
-    birth_latitude = Column(Numeric(10, 7), nullable=True, comment="Birthplace latitude in degrees")
+    birth_place = Column(String(255), nullable=True, comment="出生地点")
+    birth_latitude = Column(Numeric(10, 7), nullable=True, comment="出生地纬度（度）")
     birth_longitude = Column(
-        Numeric(10, 7), nullable=True, comment="Birthplace longitude in degrees"
+        Numeric(10, 7), nullable=True, comment="出生地经度（度）"
     )
     constellation = Column(
-        String(20), nullable=True, comment="Default zodiac sign, e.g. aries or pisces"
+        String(20), nullable=True, comment="默认星座（例如aries白羊座、pisces双鱼座）"
     )
     created_at = Column(
         DateTime,
         nullable=False,
         default=datetime.now,
         server_default=text("CURRENT_TIMESTAMP"),
-        comment="Created time",
+        comment="创建时间",
     )
     updated_at = Column(
         DateTime,
@@ -64,7 +64,7 @@ class UserAstrologyProfile(Base):
         default=datetime.now,
         onupdate=datetime.now,
         server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
-        comment="Updated time",
+        comment="更新时间",
     )
 
     def __repr__(self) -> str:

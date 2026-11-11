@@ -24,34 +24,34 @@ class ChatSession(Base):
             "mysql_engine": "InnoDB",
             "mysql_charset": "utf8mb4",
             "mysql_collate": "utf8mb4_unicode_ci",
-            "comment": "Agent chat sessions",
+            "comment": "智能体聊天会话表",
         },
     )
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()), comment="Session UUID")
-    user_id = Column(Integer, nullable=False, comment="Existing users.id")
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()), comment="会话UUID")
+    user_id = Column(Integer, nullable=False, comment="用户ID，关联users.id")
     agent = Column(
         String(50),
         nullable=False,
         default="astrology",
         server_default="astrology",
-        comment="Agent identifier, e.g. astrology or divination",
+        comment="Agent智能体标识，例如astrology星座、divination占卜",
     )
-    active_run_id = Column(String(36), nullable=True, comment="Current execution lease UUID")
-    run_expires_at = Column(DateTime, nullable=True, comment="Execution lease expiry time")
+    active_run_id = Column(String(36), nullable=True, comment="当前执行任务租约UUID")
+    run_expires_at = Column(DateTime, nullable=True, comment="当前执行任务租约过期时间")
     title = Column(
         String(100),
         nullable=False,
         default="新对话",
         server_default="新对话",
-        comment="Conversation title",
+        comment="对话标题",
     )
     created_at = Column(
         DateTime,
         nullable=False,
         default=datetime.now,
         server_default=text("CURRENT_TIMESTAMP"),
-        comment="Created time",
+        comment="创建时间",
     )
     updated_at = Column(
         DateTime,
@@ -59,7 +59,7 @@ class ChatSession(Base):
         default=datetime.now,
         onupdate=datetime.now,
         server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
-        comment="Updated time",
+        comment="更新时间",
     )
 
     def __repr__(self) -> str:
