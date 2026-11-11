@@ -16,6 +16,7 @@ from pydantic_settings import BaseSettings
 from config import (
     AGENT_LLM_PROVIDER,
     AGENT_MODEL,
+    AGENT_ENABLE_SEARCH,
     AGENT_MAX_TOOL_ROUNDS,
     AGENT_MAX_TOOL_CALLS,
     AGENT_MAX_HISTORY_MESSAGES,
@@ -158,6 +159,7 @@ class Settings(BaseSettings):
     # ==================== Agent 底座 ====================
     AGENT_LLM_PROVIDER: str = AGENT_LLM_PROVIDER
     AGENT_MODEL: str = AGENT_MODEL
+    AGENT_ENABLE_SEARCH: bool = AGENT_ENABLE_SEARCH
     AGENT_MAX_TOOL_ROUNDS: int = Field(AGENT_MAX_TOOL_ROUNDS, ge=0, le=20)
     AGENT_MAX_TOOL_CALLS: int = Field(AGENT_MAX_TOOL_CALLS, ge=1, le=10)
     AGENT_MAX_HISTORY_MESSAGES: int = Field(AGENT_MAX_HISTORY_MESSAGES, ge=2, le=500)
