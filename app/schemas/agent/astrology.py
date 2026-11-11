@@ -49,6 +49,18 @@ class HoroscopeToolRequest(BaseModel):
     aspect: FortuneAspect = Field("all", description="Fortune topic: all, love, career or wealth")
 
 
+class GeneratedHoroscope(BaseModel):
+    """Validate AI-authored entertainment content before caching it."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    summary: str = Field(..., min_length=1, max_length=600, description="Daily overview")
+    love: str = Field(..., min_length=1, max_length=400, description="Relationship advice")
+    career: str = Field(..., min_length=1, max_length=400, description="Work and study advice")
+    wealth: str = Field(..., min_length=1, max_length=400, description="Everyday spending advice")
+    advice: str = Field(..., min_length=1, max_length=400, description="Actionable daily suggestion")
+
+
 class AstrologyProfileUpdateRequest(BaseModel):
     """Update explicitly supplied birth-profile fields."""
 

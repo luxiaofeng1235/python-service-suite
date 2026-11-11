@@ -19,8 +19,11 @@ from app.services.qwen_ai_service import QwenAIService
 class QwenLLM:
     """Adapt Qwen's compatible API to the Agent streaming contract."""
 
-    def __init__(self, model: str | None = None):
+    def __init__(self, model: str | None = None, *, enable_search: bool | None = None):
         self.model = model or settings.AGENT_MODEL
+        self.enable_search = (
+            settings.AGENT_ENABLE_SEARCH if enable_search is None else enable_search
+        )
 
     async def stream(
         self, messages: list[LLMMessage], tools: list[dict[str, JsonValue]]
@@ -32,7 +35,7 @@ class QwenLLM:
             "stream": True,
             "stream_options": {"include_usage": True},
             # 与普通千问流保持一致：允许模型基于实时互联网信息回答。
-            "enable_search": settings.AGENT_ENABLE_SEARCH,
+            "enable_search": self.enable_search,
             # 第一版使用非思考模式执行工具；不沿用普通搜索对话的模型策略。
             "enable_thinking": False,
         }

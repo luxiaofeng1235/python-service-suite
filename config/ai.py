@@ -28,6 +28,8 @@ QWEN_CONNECT_TIMEOUT = 30.0
 # Agent 使用独立模型策略，复用已有千问密钥与请求地址。
 AGENT_LLM_PROVIDER = "qwen"
 AGENT_MODEL = "qwen-plus"
+# Agent 是否允许千问使用互联网搜索；密钥和开关均由后端控制。
+AGENT_ENABLE_SEARCH = True
 AGENT_MAX_TOOL_ROUNDS = 4
 AGENT_MAX_TOOL_CALLS = 4
 AGENT_MAX_HISTORY_MESSAGES = 60
