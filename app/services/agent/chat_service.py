@@ -151,20 +151,22 @@ class AgentChatService:
                 raise AppException(msg="会话不存在或不属于当前 Agent")
             if session.active_run_id and session.run_expires_at and session.run_expires_at > now:
                 raise AppException(msg="该会话正在生成中，请稍后重试")
+            # 只有已有会话需要恢复遗留消息并读取历史。
+            await db.execute(
+                update(ChatMessage)
+                .where(
+                    ChatMessage.session_id == session.id,
+                    ChatMessage.status == ChatMessageStatus.GENERATING,
+                )
+                .values(status=ChatMessageStatus.INTERRUPTED)
+            )
+            history = await self._load_history(db, session.id)
         else:
             session = ChatSession(user_id=user_id, agent=self.runner.name, title=req.message[:100])
             db.add(session)
             await db.flush()
-        # 进程异常退出后，过期租约允许新请求恢复，并标记遗留的生成中消息。
-        await db.execute(
-            update(ChatMessage)
-            .where(
-                ChatMessage.session_id == session.id,
-                ChatMessage.status == ChatMessageStatus.GENERATING,
-            )
-            .values(status=ChatMessageStatus.INTERRUPTED)
-        )
-        history = await self._load_history(db, session.id)
+            # 新会话没有历史，避免对空消息范围加锁后并发插入导致死锁。
+            history = []
         run_id = str(uuid4())
         session.active_run_id = run_id
         session.run_expires_at = now + timedelta(
