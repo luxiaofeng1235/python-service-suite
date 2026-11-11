@@ -20,3 +20,7 @@ from app.models.admin_token import AdminToken  # noqa: F401
 from app.models.lottery_config import LotteryConfig  # noqa: F401
 from app.models.cms_article import CmsArticle  # noqa: F401
 from app.models.cms_tag import CmsTag  # noqa: F401
+from app.models.user_astrology_profile import UserAstrologyProfile  # noqa: F401
+from app.models.chat_session import ChatSession  # noqa: F401
+from app.models.chat_message import ChatMessage  # noqa: F401
+from app.models.horoscope_cache import HoroscopeCache  # noqa: F401
