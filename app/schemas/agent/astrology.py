@@ -62,26 +62,26 @@ class GeneratedHoroscope(BaseModel):
 
 
 class AstrologyProfileUpdateRequest(BaseModel):
-    """Update explicitly supplied birth-profile fields."""
+    """校验用户明确提交的星座档案字段，省略字段保持原值。"""
 
     model_config = ConfigDict(extra="forbid")
 
-    birthday: date | None = Field(None, description="Gregorian birth date")
-    birth_time: time | None = Field(None, description="Local birth time; null when unknown")
-    birth_timezone: str | None = Field(None, max_length=64, description="IANA birth timezone")
-    birth_place: str | None = Field(None, max_length=255, description="Birthplace name")
+    birthday: date | None = Field(None, description="出生日期（公历），格式 YYYY-MM-DD")
+    birth_time: time | None = Field(None, description="当地出生时间，未知时可传 null")
+    birth_timezone: str | None = Field(None, max_length=64, description="出生地 IANA 时区，例如 Asia/Shanghai")
+    birth_place: str | None = Field(None, max_length=255, description="出生地点")
     birth_latitude: Decimal | None = Field(
-        None, ge=-90, le=90, decimal_places=7, description="Birthplace latitude"
+        None, ge=-90, le=90, decimal_places=7, description="出生地纬度，最多 7 位小数"
     )
     birth_longitude: Decimal | None = Field(
-        None, ge=-180, le=180, decimal_places=7, description="Birthplace longitude"
+        None, ge=-180, le=180, decimal_places=7, description="出生地经度，最多 7 位小数"
     )
-    constellation: ZodiacSign | None = Field(None, description="Default zodiac sign")
+    constellation: ZodiacSign | None = Field(None, description="默认星座标准英文名，例如 pisces（双鱼座）")
 
     @field_validator("birthday")
     @classmethod
     def validate_birthday(cls, value: date | None) -> date | None:
-        """Reject future birth dates."""
+        """出生日期不能晚于今天。"""
         if value is not None and value > date.today():
             raise ValueError("出生日期不能晚于今天")
         return value
@@ -89,7 +89,7 @@ class AstrologyProfileUpdateRequest(BaseModel):
     @field_validator("birth_timezone")
     @classmethod
     def validate_timezone(cls, value: str | None) -> str | None:
-        """Require an existing IANA timezone when supplied."""
+        """提交出生时区时，校验其是否为有效的 IANA 时区。"""
         if value is not None:
             try:
                 ZoneInfo(value)

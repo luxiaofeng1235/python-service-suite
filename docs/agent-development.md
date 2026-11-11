@@ -23,8 +23,8 @@ app/
 
 | 入口 | 职责 |
 |------|------|
-| [agent_controller.py](../app/api/controllers/agent_controller.py) | 定义接口、注入登录用户、返回 SSE 响应 |
-| [AstrologyService](../app/services/agent/astrology_service.py) | 绑定当前用户的工具，查询档案、读取和保存运势缓存 |
+| [agent_controller.py](../app/api/controllers/agent_controller.py) | 定义接口、注入登录用户、返回档案 JSON 或 SSE 响应 |
+| [AstrologyService](../app/services/agent/astrology_service.py) | 绑定当前用户的工具，查询和保存档案、读取和保存运势缓存 |
 | [AgentChatService](../app/services/agent/chat_service.py) | 会话归属、历史上下文、执行租约、消息入库和异常收尾 |
 | [星座 Agent 定义](../app/agents/astrology/agent.py) | 系统提示词、业务日期注入、工具声明和运行器创建 |
 | [FunctionCallingRunner](../app/agents/runtime.py) | 拼接工具调用参数、校验、执行工具、多轮模型调用 |
@@ -125,7 +125,34 @@ Function Calling 的含义是：模型提出函数名称和 JSON 参数，后端
 
 ## 4. 接口与 SSE 协议
 
-已实现接口：`POST /api/agent/astrology/stream`。使用项目登录 Token，通过 `Authorization: Bearer <token>` 传递身份。
+以下接口均使用项目登录 Token，通过 `Authorization: Bearer <token>` 传递身份，不接受请求体中的 `user_id`。
+
+### 星座档案
+
+| 方法 | 路径 | 用途 |
+|------|------|------|
+| GET | `/api/agent/astrology/profile` | 查询当前用户档案，供前端回显 |
+| POST | `/api/agent/astrology/profile` | 首次创建或更新当前用户档案 |
+
+```bash
+curl -sS 'http://127.0.0.1:8001/api/agent/astrology/profile' \
+  -H 'Authorization: Bearer <token>'
+
+curl -sS 'http://127.0.0.1:8001/api/agent/astrology/profile' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"birthday":"2000-03-01","birth_time":"09:30:00","birth_timezone":"Asia/Shanghai","birth_place":"上海","constellation":"pisces"}'
+```
+
+可提交 `birthday`、`birth_time`、`birth_timezone`、`birth_place`、`birth_latitude`、`birth_longitude`、`constellation`，均为可选字段。省略字段保持原值，显式传 `null` 清空对应字段；星座使用标准英文名，不会仅根据生日自动计算。
+
+接口使用统一的 `code`、`msg`、`data` JSON 响应。没有档案时，查询返回 `data={"found":false,"message":"尚未设置星座档案"}`；保存成功和已有档案的查询均返回 `data={"found":true,"profile":{...}}`。每个用户保留一份档案。
+
+保存后，Agent 的 `get_user_profile` 工具可以读取档案，未指定星座的运势查询可使用其中的默认星座。聊天中提到某个星座不会自动写入个人档案，当前没有注册资料保存工具。
+
+### 流式对话
+
+接口：`POST /api/agent/astrology/stream`。
 
 | 请求字段 | 必填 | 说明 |
 |----------|------|------|

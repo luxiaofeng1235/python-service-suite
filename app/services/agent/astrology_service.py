@@ -122,7 +122,7 @@ class AstrologyService:
         user_id: int,
         req: AstrologyProfileUpdateRequest,
     ) -> dict[str, JsonValue]:
-        """Save explicitly supplied fields with one profile per existing user."""
+        """更新个人星座信息."""
         user = await db.scalar(
             select(User.id)
             .where(
