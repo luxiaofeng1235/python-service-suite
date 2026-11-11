@@ -73,7 +73,9 @@ tmp/
 temp/
 .atomcode/
 /public/resource/*
-docs/
+# Keep local notes ignored; include project documentation.
+/docs/*
+!/docs/business.md
 
 # AtomCode local-scope configs (machine-specific)
 .atomcode/local/
