@@ -268,6 +268,8 @@ curl -G 'http://127.0.0.1:8001/api/ai/get_video' \
 
 ## LLM / RAG 待开发规划
 
+> 本节保留早期扩展设想，其中 LangChain / LangGraph、RAG 和示例目录尚未落地。当前已实现原生 Function Calling，实际分层、星座运势生成与缓存机制以 [Function Calling LLM / Agent 开发流程](agent-development.md) 为准。
+
 架构链路：
 
 ```

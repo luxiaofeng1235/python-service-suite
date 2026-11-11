@@ -273,6 +273,20 @@ make clean           # 清理缓存/tmp/log
 
 详细说明见 [AI 流式输出](docs/business.md#ai-流式输出)。
 
+## Agent 流式对话（Function Calling）
+
+`POST /api/agent/astrology/stream`：星座知识问答与每日运势解读，使用 `Authorization: Bearer <token>` 认证，返回 SSE 事件。
+
+```json
+{
+  "message": "帮我看看双鱼座今天的运势。"
+}
+```
+
+续聊时增加 `session_id`，使用首个 `session` 事件返回的会话 ID。客户端按事件的 `type` 处理工具状态、回答分片和结束通知。
+
+开发流程、缓存机制和完整调用示例见 [Function Calling LLM / Agent 开发流程](docs/agent-development.md)。
+
 ## 多模态流式转发
 
 `POST /api/chat/stream_new`：携带项目登录 Token，提交 `message` 消息数组 → 后端补充模型和音频配置 → 请求千问 → 将文字、音频、用量及结束分片按原始 SSE 格式转发给前端。
@@ -301,13 +315,9 @@ make clean           # 清理缓存/tmp/log
 
 ## LLM / RAG 待开发规划
 
-架构链路：
+当前已实现原生 Function Calling 星座 Agent，开发方式见 [Agent 开发流程](docs/agent-development.md)。LangChain / LangGraph 编排和 RAG 知识检索作为后续扩展，尚未接入。
 
-```
-Controller → 业务 Service (ConstellationService 等) → LangChain Agent / LangGraph → AIService → LLM 模型
-```
-
-详细说明见 [LLM / RAG 待开发规划](docs/business.md#llm--rag-待开发规划)。
+早期规划参考见 [LLM / RAG 待开发规划](docs/business.md#llm--rag-待开发规划)，当前代码分层以 Agent 开发文档为准。
 
 ## 用户与权限
 
@@ -520,4 +530,4 @@ alembic revision --autogenerate -m "change description"
 
 ## 详细文档
 
-完整业务流程、参数说明和调用示例统一收录在 [业务流程与调用示例](docs/business.md)，包含 AI、OSS 上传、抽奖、接口签名及 LLM / RAG 规划。
+AI、OSS 上传、抽奖和接口签名等说明见 [业务流程与调用示例](docs/business.md)；Agent 编排、工具调用和运势缓存见 [Function Calling LLM / Agent 开发流程](docs/agent-development.md)。
