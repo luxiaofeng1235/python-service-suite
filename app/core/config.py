@@ -10,9 +10,19 @@ Settings 汇聚后支持 .env 环境变量覆盖。
     settings.DATABASE_URL
 """
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 from config import (
+    AGENT_LLM_PROVIDER,
+    AGENT_MODEL,
+    AGENT_MAX_TOOL_ROUNDS,
+    AGENT_MAX_TOOL_CALLS,
+    AGENT_MAX_HISTORY_MESSAGES,
+    AGENT_MAX_HISTORY_CHARS,
+    AGENT_TOOL_TIMEOUT,
+    AGENT_RUN_TIMEOUT,
+    AGENT_TIMEZONE,
     UPLOAD_DIR,
     QWEN_CHAT_URL,
     QWEN_MODEL,
@@ -144,6 +154,17 @@ class Settings(BaseSettings):
     QWEN_VIDEO_URL: str = QWEN_VIDEO_URL
     QWEN_REQUEST_TIMEOUT: float = QWEN_REQUEST_TIMEOUT
     QWEN_CONNECT_TIMEOUT: float = QWEN_CONNECT_TIMEOUT
+
+    # ==================== Agent 底座 ====================
+    AGENT_LLM_PROVIDER: str = AGENT_LLM_PROVIDER
+    AGENT_MODEL: str = AGENT_MODEL
+    AGENT_MAX_TOOL_ROUNDS: int = Field(AGENT_MAX_TOOL_ROUNDS, ge=0, le=20)
+    AGENT_MAX_TOOL_CALLS: int = Field(AGENT_MAX_TOOL_CALLS, ge=1, le=10)
+    AGENT_MAX_HISTORY_MESSAGES: int = Field(AGENT_MAX_HISTORY_MESSAGES, ge=2, le=500)
+    AGENT_MAX_HISTORY_CHARS: int = Field(AGENT_MAX_HISTORY_CHARS, ge=1000, le=200000)
+    AGENT_TOOL_TIMEOUT: float = Field(AGENT_TOOL_TIMEOUT, gt=0)
+    AGENT_RUN_TIMEOUT: float = Field(AGENT_RUN_TIMEOUT, gt=0)
+    AGENT_TIMEZONE: str = AGENT_TIMEZONE
 
     # ==================== 视频水印 ====================
     AI_VIDEO_WATERMARK_PATH: str = AI_VIDEO_WATERMARK_PATH

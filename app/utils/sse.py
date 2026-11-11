@@ -15,7 +15,20 @@ SSE 流式响应工具模块
 import json
 from collections.abc import AsyncGenerator, Mapping
 
+import anyio
 from sse_starlette.sse import EventSourceResponse
+from starlette.types import Receive, Scope, Send
+
+
+class _ClosingEventSourceResponse(EventSourceResponse):
+    """Close paused business generators on disconnect, send errors and cancellation."""
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            with anyio.CancelScope(shield=True):
+                await self.body_iterator.aclose()
 
 
 class SSEUtil:
@@ -47,13 +60,21 @@ class SSEUtil:
             return SSEUtil.stream_response(text_stream())
         """
 
-        async def event_generator():
-            async for chunk in generator:
-                yield {
-                    "data": chunk,
-                }
+        async def close_generator():
+            with anyio.CancelScope(shield=True):
+                await generator.aclose()
 
-        return EventSourceResponse(event_generator(), headers=headers)
+        async def event_generator():
+            try:
+                async for chunk in generator:
+                    yield {
+                        "data": chunk,
+                    }
+            finally:
+                # SSE 发送时断开连接，也要关闭暂停在 yield 处的业务生成器。
+                await close_generator()
+
+        return _ClosingEventSourceResponse(event_generator(), headers=headers)
 
     @staticmethod
     def json_stream_response(
@@ -71,11 +92,18 @@ class SSEUtil:
             EventSourceResponse 对象
         """
 
-        async def event_generator():
-            async for chunk in generator:
-                yield {
-                    "event": event,
-                    "data": json.dumps(chunk, ensure_ascii=False),
-                }
+        async def close_generator():
+            with anyio.CancelScope(shield=True):
+                await generator.aclose()
 
-        return EventSourceResponse(event_generator())
+        async def event_generator():
+            try:
+                async for chunk in generator:
+                    yield {
+                        "event": event,
+                        "data": json.dumps(chunk, ensure_ascii=False),
+                    }
+            finally:
+                await close_generator()
+
+        return _ClosingEventSourceResponse(event_generator())

@@ -136,6 +136,20 @@ class QwenAIService:
 
     @classmethod
     @asynccontextmanager
+    async def request(
+        cls,
+        payload: dict[str, Any],
+        *,
+        url: str | None = None,
+        stream: bool = True,
+    ) -> AsyncIterator[httpx.Response]:
+        """Expose shared HTTP transport without applying a conversation policy."""
+        # Agent 自行组装模型、提示词和工具参数，底层共用后端鉴权及异常处理。
+        async with cls._request(payload, url=url, stream=stream) as response:
+            yield response
+
+    @classmethod
+    @asynccontextmanager
     async def _request(
         cls,
         payload: dict[str, Any],

@@ -19,6 +19,7 @@ class ChatSession(Base):
     __tablename__ = "chat_sessions"
     __table_args__ = (
         Index("idx_chat_sessions_user_updated", "user_id", "updated_at"),
+        Index("idx_chat_sessions_user_agent_updated", "user_id", "agent", "updated_at"),
         {
             "mysql_engine": "InnoDB",
             "mysql_charset": "utf8mb4",
@@ -29,6 +30,15 @@ class ChatSession(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()), comment="Session UUID")
     user_id = Column(Integer, nullable=False, comment="Existing users.id")
+    agent = Column(
+        String(50),
+        nullable=False,
+        default="astrology",
+        server_default="astrology",
+        comment="Agent identifier, e.g. astrology or divination",
+    )
+    active_run_id = Column(String(36), nullable=True, comment="Current execution lease UUID")
+    run_expires_at = Column(DateTime, nullable=True, comment="Execution lease expiry time")
     title = Column(
         String(100),
         nullable=False,
