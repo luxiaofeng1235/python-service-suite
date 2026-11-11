@@ -17,12 +17,16 @@ from app.models import (
     Attachment,  # noqa: F401
     AuthAdmin,  # noqa: F401
     CasbinRule,  # noqa: F401
+    ChatMessage,  # noqa: F401
+    ChatSession,  # noqa: F401
     CmsArticle,  # noqa: F401
     CmsTag,  # noqa: F401
+    HoroscopeCache,  # noqa: F401
     LotteryConfig,  # noqa: F401
     Permission,  # noqa: F401
     Role,  # noqa: F401
     User,  # noqa: F401
+    UserAstrologyProfile,  # noqa: F401
     UserToken,  # noqa: F401
     VerificationCode,  # noqa: F401
 )

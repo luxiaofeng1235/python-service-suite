@@ -25,6 +25,17 @@ QWEN_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks"
 QWEN_REQUEST_TIMEOUT = 60.0
 QWEN_CONNECT_TIMEOUT = 30.0
 
+# Agent 使用独立模型策略，复用已有千问密钥与请求地址。
+AGENT_LLM_PROVIDER = "qwen"
+AGENT_MODEL = "qwen-plus"
+AGENT_MAX_TOOL_ROUNDS = 4
+AGENT_MAX_TOOL_CALLS = 4
+AGENT_MAX_HISTORY_MESSAGES = 60
+AGENT_MAX_HISTORY_CHARS = 24000
+AGENT_TOOL_TIMEOUT = 30.0
+AGENT_RUN_TIMEOUT = 300.0
+AGENT_TIMEZONE = "Asia/Shanghai"
+
 # 视频下载后使用 FFmpeg 加 PNG 水印，再上传 OSS。
 AI_VIDEO_WATERMARK_PATH = "./public/watermark.png"
 AI_VIDEO_BASE_URL = "https://static-nine-world.oss-cn-shanghai.aliyuncs.com"
