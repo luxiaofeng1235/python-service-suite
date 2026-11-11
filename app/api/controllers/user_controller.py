@@ -110,7 +110,7 @@ async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(g
 # ==================== 用户列表 ====================
 
 
-@router.get("/list", summary="用户列表（分页）")
+@router.get("/list", summary="用户展示目录（分页）")
 async def list_users(
     page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_session),
@@ -119,7 +119,7 @@ async def list_users(
     """
     获取用户列表（需登录）
 
-    - 分页查询
+    - 仅返回正常账户的 ID、用户名和昵称；管理列表使用后台权限接口
     - 默认每页 10 条
     """
     data = await UserService.get_user_list(db, page_params)

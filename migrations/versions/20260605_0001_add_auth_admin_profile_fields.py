@@ -27,11 +27,11 @@ def upgrade() -> None:
     existing_columns = {c["name"] for c in inspector.get_columns("auth_admins")}
 
     additions = [
-        ("avatar", sa.String(500), {"comment": "头像URL", "after": "nickname"}),
-        ("mobile", sa.String(20), {"comment": "手机号", "after": "avatar"}),
-        ("email", sa.String(255), {"comment": "邮箱", "after": "mobile"}),
-        ("sex", sa.Integer(), {"server_default": "0", "comment": "性别 0=保密 1=男 2=女", "after": "email"}),
-        ("remark", sa.String(500), {"comment": "备注", "after": "sex"}),
+        ("avatar", sa.String(500), {"comment": "头像URL"}),
+        ("mobile", sa.String(20), {"comment": "手机号"}),
+        ("email", sa.String(255), {"comment": "邮箱"}),
+        ("sex", sa.Integer(), {"server_default": "0", "comment": "性别 0=保密 1=男 2=女"}),
+        ("remark", sa.String(500), {"comment": "备注"}),
     ]
 
     for col_name, col_type, kwargs in additions:

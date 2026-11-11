@@ -7,7 +7,7 @@ Controller 通过调用 Service 方法完成业务，不写任何逻辑代码。
 """
 
 import base64
-import random
+import secrets
 import string
 import uuid
 from datetime import datetime, timedelta
@@ -35,6 +35,7 @@ from app.pkg.security import (
 from app.schemas.user import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    UserDirectoryResponse,
     UserLoginRequest,
     UserRegisterRequest,
     UserResponse,
@@ -153,7 +154,10 @@ class UserService:
             raise AppException(msg="登录过于频繁，请 5 分钟后再试")
 
         # 3. 按用户名查找用户
-        stmt = select(User).where(User.username == req.username)
+        # 与密码重置共用账户行锁，避免旧密码校验后在重置事务之外签发新 Token。
+        stmt = select(User).where(
+            User.username == req.username, User.is_active, ~User.is_deleted,
+        ).with_for_update().execution_options(populate_existing=True)
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if not user:
@@ -206,12 +210,12 @@ class UserService:
     @staticmethod
     def _generate_code(length: int = 6) -> str:
         """生成指定位数的数字验证码"""
-        return "".join(random.choices(string.digits, k=length))
+        return "".join(secrets.choice(string.digits) for _ in range(length))
 
     @staticmethod
     async def generate_captcha() -> dict:
         """生成图片验证码，返回验证码 ID 和 base64 图片。"""
-        code = "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        code = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
         captcha_id = str(uuid.uuid4())
 
         await redis_client.set(f"captcha_id:{captcha_id}", code, ex=300)
@@ -253,11 +257,12 @@ class UserService:
             raise AppException(msg="系统未配置邮件发送功能，请联系管理员")
 
         # 3. 查找用户 — 找不到也走统一消息
-        stmt = select(User).where(User.email == req.email)
+        stmt = select(User).where(User.email == req.email, User.is_active, ~User.is_deleted).limit(2)
         result = await db.execute(stmt)
-        user = result.scalar_one_or_none()
-        if not user:
+        users = result.scalars().all()
+        if len(users) != 1:
             return {"message": uniform_msg, "email": req.email}
+        user = users[0]
 
         # 4. 生成 6 位验证码
         code = UserService._generate_code()
@@ -266,9 +271,7 @@ class UserService:
         expire_minutes = settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
         expires_at = datetime.now() + timedelta(minutes=expire_minutes)
 
-        # 6. 存储验证码到 Redis；数据库保留一份记录用于审计和兜底
-        await UserService._cache_reset_code(user.email, code, expire_minutes * 60)
-
+        # 6. 数据库是验证码有效性的最终依据，成功提交后才写缓存。
         vc = VerificationCode(
             email=user.email,
             code=code,
@@ -289,6 +292,7 @@ class UserService:
             raise AppException(msg="邮件发送失败，请稍后重试")
 
         await db.commit()
+        await UserService._cache_reset_code(user.email, code, expire_minutes * 60)
 
         return {
             "message": uniform_msg,
@@ -316,46 +320,60 @@ class UserService:
         if not await UserService._reset_limiter.check(f"reset:{req.email}"):
             raise AppException(msg="操作过于频繁，请稍后再试")
 
-        now = datetime.now()
-
-        # 2. 优先使用 Redis 校验验证码；Redis 不可用或未命中时查数据库兜底
-        redis_code = await UserService._get_cached_reset_code(req.email)
-        if redis_code is not None and redis_code != req.code:
-            raise AppException(msg="验证码无效或已过期，请重新申请")
-
-        stmt = (
-            select(VerificationCode)
-            .where(
-                VerificationCode.email == req.email,
-                VerificationCode.code == req.code,
-                VerificationCode.purpose == "password_reset",
-                ~VerificationCode.used,
-                VerificationCode.expires_at > now,
+        try:
+            # 2. 串行处理同一账户的重置请求；Redis 残留或不可用都不能绕过数据库。
+            result = await db.execute(
+                select(User.id)
+                .where(User.email == req.email, ~User.is_deleted, User.is_active)
+                .limit(2)
             )
-            .order_by(VerificationCode.id.desc())
-            .limit(1)
-        )
-        result = await db.execute(stmt)
-        vc = result.scalar_one_or_none()
+            user_ids = result.scalars().all()
+            if not user_ids:
+                raise AppException(msg="验证码无效或已过期，请重新申请")
+            if len(user_ids) != 1:
+                raise AppException(msg="该邮箱关联多个账户，请联系管理员处理")
+            # 用主键加锁，避免邮箱没有索引时锁住扫描到的其他账户。
+            user = await db.scalar(
+                select(User)
+                .where(User.id == user_ids[0], User.email == req.email, ~User.is_deleted, User.is_active)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if user is None:
+                raise AppException(msg="验证码无效或已过期，请重新申请")
 
-        if redis_code is None and not vc:
-            raise AppException(msg="验证码无效或已过期，请重新申请")
+            # 只允许使用最后签发的验证码，防止旧验证码在新验证码签发后继续使用。
+            result = await db.execute(
+                select(VerificationCode)
+                .where(VerificationCode.email == req.email, VerificationCode.purpose == "password_reset")
+                .order_by(VerificationCode.id.desc()).limit(1).with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            vc = result.scalar_one_or_none()
+            now = datetime.now()
+            if vc is None or vc.used or vc.expires_at <= now or vc.code != req.code:
+                raise AppException(msg="验证码无效或已过期，请重新申请")
 
-        # 3. 标记验证码为已使用；删除 Redis 缓存，防止重复使用
-        if vc:
-            vc.used = True
+            # 3. 条件更新保证同一个验证码只能被一个请求消费。
+            consumed = await db.execute(
+                update(VerificationCode)
+                .where(VerificationCode.id == vc.id, ~VerificationCode.used, VerificationCode.expires_at > now)
+                .values(used=True)
+                .execution_options(synchronize_session=False)
+            )
+            if consumed.rowcount != 1:
+                raise AppException(msg="验证码无效或已过期，请重新申请")
+
+            # 4. 密码修改与所有登录 Token 撤销在同一事务提交。
+            user.password_hash = get_password_hash(req.password)
+            await db.execute(delete(UserToken).where(UserToken.user_id == user.id))
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+        # 缓存清理失败不会恢复数据库中已经消费的验证码。
         await UserService._remove_cached_reset_code(req.email)
-
-        # 4. 查找用户
-        stmt = select(User).where(User.email == req.email)
-        result = await db.execute(stmt)
-        user = result.scalar_one_or_none()
-        if not user:
-            raise AppException(msg="用户不存在")
-
-        # 5. 更新密码
-        user.password_hash = get_password_hash(req.password)
-        await db.commit()
 
         return {"message": "密码重置成功，请使用新密码登录"}
 
@@ -363,20 +381,11 @@ class UserService:
 
     @staticmethod
     async def _cache_reset_code(email: str, code: str, ttl: int) -> None:
-        """缓存重置密码验证码；Redis 不可用时仅记录日志，不影响数据库兜底"""
+        """Cache a code after commit; database validation remains authoritative."""
         try:
             await redis_client.set(f"code:{email}", code, ex=ttl)
         except Exception:
             request_logger.opt(exception=True).warning("Redis 验证码缓存写入失败 email={}", email)
-
-    @staticmethod
-    async def _get_cached_reset_code(email: str) -> str | None:
-        """读取 Redis 中的重置密码验证码"""
-        try:
-            return await redis_client.get(f"code:{email}")
-        except Exception:
-            request_logger.opt(exception=True).warning("Redis 验证码缓存读取失败 email={}", email)
-            return None
 
     @staticmethod
     async def _remove_cached_reset_code(email: str) -> None:
@@ -400,17 +409,14 @@ class UserService:
         Returns:
             dict: {"items": [...], "total": N, "page": P, "size": S, "total_page": TP}
         """
-        stmt = select(User).order_by(User.id)
+        stmt = select(User).where(~User.is_deleted, User.is_active).order_by(User.id)
         data = await paginate(db, stmt, page_params)
 
         items = [
-            UserResponse(
+            UserDirectoryResponse(
                 id=u.id,
                 username=u.username,
                 nickname=u.nickname,
-                email=u.email,
-                is_active=u.is_active,
-                created_at=TimeUtil.format_datetime(u.created_at),
             )
             for u in data["items"]
         ]

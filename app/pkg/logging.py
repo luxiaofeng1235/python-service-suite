@@ -55,6 +55,8 @@ def setup_logging() -> None:
             "| <level>{message}</level>"
         ),
         colorize=True,
+        # 异常堆栈保留调用位置，关闭局部变量展开，避免再次暴露请求中的密码。
+        diagnose=False,
     )
 
     # ==================== 按业务域分文件 ====================
@@ -70,12 +72,8 @@ def setup_logging() -> None:
             retention="14 days",
             encoding="utf-8",
             format="{time:YYYY-MM-DD HH:mm:ss} | {level:7} | {message}",
-            # 慢请求日志额外记录调用位置
-            **(  # type: ignore[arg-type]
-                {"backtrace": True, "diagnose": False}
-                if biz_name == "slow"
-                else {}
-            ),
+            backtrace=True,
+            diagnose=False,
         )
 
 

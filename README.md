@@ -397,7 +397,7 @@ curl -G 'http://127.0.0.1:8001/api/ai/get_image' \
 - `app/pkg/qwen_client.py`：图片和视频共用的千问任务客户端，集中维护后端认证、异步请求头、HTTP 请求、任务查询和错误转换；请求与连接超时在 `config/ai.py` 的 `QWEN_REQUEST_TIMEOUT`、`QWEN_CONNECT_TIMEOUT` 中配置。
 - `app/api/services/ai_service.py`：提供 `to_image(db, req, user_id)`、`get_image(db, task_id, user_id)` 调用入口。
 - `app/models/ai_to_work.py`：按现有 PHP `ai_to_work` 表映射，`task_id` 为可空的 `VARCHAR(255)`，`work` 可空；`type=1` 图片、`type=2` 视频；状态为 `0` 生成中、`1` 成功、`2` 失败、`3` 已删除。文生图只处理图片任务，已删除任务按不存在处理。
-- 已有你提供的 `ai_to_work` 表可直接复用；没有此表时执行 `sql/migrate_ai_to_work.sql` 创建。该脚本不会自动执行，也不会修改已有表或重置自增序号。
+- 已有 `ai_to_work` 表可直接复用；新环境或缺表环境执行 `alembic upgrade head`，迁移会补建任务表并保留已有数据。
 - 认证复用后端 `.env` 的 `QWEN_API_KEY`。`QWEN_IMAGE_URL` 和 `QWEN_TASK_URL` 统一维护在 `config/ai.py`，使用 PHP 中的 DashScope 地址。
 - 模型沿用 PHP：`model=1` 为 `wanx2.1-t2i-turbo`，`model=2` 为 `wanx2.1-t2i-plus`。
 - 图片按千问返回内容原样下载到 `UPLOAD_DIR/ai_images/`。启用 `OSS_ENABLED=True` 后，再通过公共 `app/storage/oss.py` 上传至 `OSS_BUCKET` 的 `uploads/ai_images/...`，所有图片上传成功后才保存作品地址并设置 `status=1`。返回域名使用 `OSS_VIEW_DOMAIN`，只填写域名，不包含 `/uploads`。
@@ -581,7 +581,7 @@ app/services/
 | `POST` | `/api/user/logout` | 退出登录，使当前 Token 立即失效 | 是 |
 | `POST` | `/api/user/forgot-password` | 忘记密码，发送验证码邮件 | 否 |
 | `POST` | `/api/user/reset-password` | 重置密码，验证码 + 新密码 | 否 |
-| `GET` | `/api/user/list` | 用户列表（分页），默认每页 10 条 | 是 |
+| `GET` | `/api/user/list` | 用户展示目录（分页），只返回 ID、用户名和昵称 | 是 |
 | `GET` | `/api/user/me` | 获取当前登录用户信息 | 是 |
 | `DELETE` | `/api/user/delete` | 注销当前账号（软删除） | 是 |
 | `DELETE` | `/api/user/tokens/expired` | 清理过期 Token | 管理员 |
@@ -687,7 +687,8 @@ curl -H "Authorization: Bearer <token>" http://localhost:8001/api/user/me
 - Token 有效时长由 `.env` 的 `ACCESS_TOKEN_EXPIRE_MINUTES` 控制
 - 退出登录立即失效当前 Token，不影响其他设备
 - 忘记密码流程：`POST /api/user/forgot-password` 发邮件 → 查收 6 位验证码 → `POST /api/user/reset-password` 提交新密码
-- `GET /api/user/list` 支持 `page` 和 `size` 参数，`size` 最大 100
+- 重置密码只接受数据库中最后签发且未使用、未过期的验证码；成功后撤销该用户所有登录 Token，需重新登录。Redis 缓存异常不会使已使用验证码重新生效。
+- `GET /api/user/list` 支持 `page` 和 `size` 参数，`size` 最大 100；仅展示启用且未注销的用户，返回 `id`、`username`、`nickname`。查看邮箱等管理信息使用受 `user:list` 权限控制的 `/admin/users/list`。
 - `DELETE /api/user/delete` 为软删除（标记 `is_deleted=True`），同时清空该用户所有 Token
 - `DELETE /api/user/tokens/expired` 需 `users.is_super=1` 管理员权限
 - 免登录路径由 `.env` 的 `AUTH_WHITE_LIST` 统一配置，逗号分隔
@@ -842,6 +843,8 @@ curl -H "Authorization: Bearer <token>" http://localhost:8001/api/user/me
 |------|------|
 | 使用场景 | POST / PUT 请求（GET 不验签） |
 | 白名单 | `.env` 的 `AUTH_WHITE_LIST` 配置的路径跳过签名校验 |
+| 请求格式 | JSON、URL 编码表单、multipart 表单使用相同签名规则；启用验签时不支持的格式、空请求或缺签名返回 403 |
+| 表单字段 | `sign`、`timestamp` 与业务文本字段一起提交，不允许重复字段；multipart 文件内容不参与签名，仍由上传服务校验，公共 OSS 上传保持免验签 |
 | 参数限制 | 只允许标量（字符串/数字），禁止数组和嵌套对象 |
 | bool 类型 | 禁止直接传 `true`/`false`，需转为 `"1"`/`"0"` 字符串 |
 | 时间戳 | 13 位毫秒，不参与参数排序，追加在拼接串末尾（secret_key 之前） |

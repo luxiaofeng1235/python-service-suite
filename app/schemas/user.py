@@ -112,10 +112,20 @@ class TokenResponse(BaseModel):
     token_type: str = Field("bearer", description="Token 类型")
 
 
+class UserDirectoryResponse(BaseModel):
+    """Public display fields for an authenticated user directory."""
+
+    id: int = Field(..., description="User ID")
+    username: str = Field(..., description="Display username")
+    nickname: str | None = Field(None, description="Display nickname")
+
+    model_config = {"from_attributes": True}
+
+
 class UserListResponse(BaseModel):
     """用户列表响应体"""
 
-    items: list[UserResponse] = Field(..., description="用户列表")
+    items: list[UserDirectoryResponse] = Field(..., description="用户列表")
     total: int = Field(..., description="总记录数")
     page: int = Field(..., description="当前页码")
     size: int = Field(..., description="每页条数")

@@ -46,7 +46,22 @@ class UserAdminService:
         if is_deleted is not None:
             stmt = stmt.where(User.is_deleted == is_deleted)
 
-        return await paginate(db, stmt, page_params)
+        data = await paginate(db, stmt, page_params)
+        # 显式序列化管理字段，避免通用 ORM 序列化器把密码哈希带进响应。
+        items = [
+            AdminUserResponse(
+                id=user.id,
+                username=user.username,
+                nickname=user.nickname,
+                email=user.email,
+                is_active=user.is_active,
+                is_deleted=user.is_deleted,
+                created_at=TimeUtil.format_datetime(user.created_at),
+                deleted_at=TimeUtil.format_datetime(user.deleted_at),
+            )
+            for user in data["items"]
+        ]
+        return {**data, "items": items}
 
     # ==================== 用户详情 ====================
 

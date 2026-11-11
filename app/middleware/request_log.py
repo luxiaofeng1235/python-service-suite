@@ -9,6 +9,7 @@ import json
 import time
 import uuid
 from collections.abc import Callable
+from urllib.parse import parse_qsl
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -93,26 +94,20 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
         return masked
 
     @staticmethod
-    def _mask_body_dict(data: dict) -> dict:
-        """递归脱敏 JSON body 中的敏感字段"""
-        masked: dict = {}
-        for key, value in data.items():
-            if key.lower() in SENSITIVE_KEYS:
-                masked[key] = "***"
-            elif isinstance(value, dict):
-                masked[key] = RequestLogMiddleware._mask_body_dict(value)
-            elif isinstance(value, list):
-                masked[key] = [
-                    RequestLogMiddleware._mask_body_dict(v) if isinstance(v, dict) else v
-                    for v in value
-                ]
-            else:
-                masked[key] = value
-        return masked
+    def _mask_body(data: object) -> object:
+        """Mask sensitive fields at every JSON nesting level."""
+        if isinstance(data, dict):
+            return {
+                key: "***" if key.lower() in SENSITIVE_KEYS else RequestLogMiddleware._mask_body(value)
+                for key, value in data.items()
+            }
+        if isinstance(data, list):
+            return [RequestLogMiddleware._mask_body(value) for value in data]
+        return data
 
     @staticmethod
     async def _capture_body(request: Request) -> str:
-        """捕获请求体（JSON / form / raw），脱敏后截断返回字符串"""
+        """Parse and mask structured bodies before limiting log length."""
         if request.method in ("GET", "HEAD", "DELETE"):
             return ""
 
@@ -129,32 +124,19 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
         if not raw:
             return ""
 
-        # 截断大 body
-        raw_str = raw.decode("utf-8", errors="replace")
-        if len(raw_str) > MAX_BODY_LOG_LEN:
-            raw_str = raw_str[:MAX_BODY_LOG_LEN] + "..."
+        # 完整解析后再脱敏，不能截断原文后回退记录敏感内容。
+        media_type = content_type.split(";", 1)[0].strip()
+        try:
+            if media_type == "application/json" or media_type.endswith("+json"):
+                data = json.loads(raw)
+            elif media_type == "application/x-www-form-urlencoded":
+                data = dict(parse_qsl(raw.decode("utf-8"), keep_blank_values=True, errors="strict"))
+            else:
+                return "<unlogged_body>"
+            body_str = json.dumps(RequestLogMiddleware._mask_body(data), ensure_ascii=False)
+        except (ValueError, UnicodeError, RecursionError):
+            return "<invalid_body>"
 
-        # JSON body → 脱敏后返回
-        if "application/json" in content_type:
-            try:
-                data = json.loads(raw_str)
-                if isinstance(data, dict):
-                    data = RequestLogMiddleware._mask_body_dict(data)
-                return json.dumps(data, ensure_ascii=False)
-            except json.JSONDecodeError:
-                pass  # 非标准 JSON，回退原始字符串
-
-        # form-urlencoded → 脱敏后返回
-        if "application/x-www-form-urlencoded" in content_type:
-            try:
-                from urllib.parse import parse_qsl
-
-                params = dict(parse_qsl(raw_str))
-                for key in params:
-                    if key.lower() in SENSITIVE_KEYS:
-                        params[key] = "***"
-                return json.dumps(params, ensure_ascii=False)
-            except Exception:
-                pass
-
-        return raw_str
+        if len(body_str) > MAX_BODY_LOG_LEN:
+            return body_str[:MAX_BODY_LOG_LEN - 3] + "..."
+        return body_str
