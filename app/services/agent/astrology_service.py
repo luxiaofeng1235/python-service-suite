@@ -139,6 +139,14 @@ class AstrologyService:
         req: HoroscopeToolRequest,
     ) -> dict[str, JsonValue]:
         """Return a shared fortune cache hit or an explicit missing-data result."""
+        business_now = datetime.now(ZoneInfo(settings.AGENT_TIMEZONE))
+        fortune_date = req.fortune_date or business_now.date()
+        result: dict[str, JsonValue] = {
+            "current_date": business_now.date().isoformat(),
+            "timezone": settings.AGENT_TIMEZONE,
+            "fortune_date": fortune_date.isoformat(),
+            "aspect": req.aspect,
+        }
         constellation = req.constellation
         if constellation is None:
             constellation = await db.scalar(
@@ -147,8 +155,8 @@ class AstrologyService:
                 )
             )
         if not constellation:
-            return {"found": False, "message": "请提供星座或先完善星座档案"}
-        fortune_date = req.fortune_date or datetime.now(ZoneInfo(settings.AGENT_TIMEZONE)).date()
+            return {**result, "found": False, "message": "请提供星座或先完善星座档案"}
+        result["constellation"] = constellation
         row = await db.scalar(
             select(HoroscopeCache).where(
                 HoroscopeCache.constellation == constellation,
@@ -156,11 +164,6 @@ class AstrologyService:
                 HoroscopeCache.aspect == req.aspect,
             )
         )
-        result: dict[str, JsonValue] = {
-            "constellation": constellation,
-            "fortune_date": fortune_date.isoformat(),
-            "aspect": req.aspect,
-        }
         if row is None or (row.expires_at is not None and row.expires_at <= datetime.now()):
             return {**result, "found": False, "message": "暂无对应日期和领域的运势数据"}
         return {
