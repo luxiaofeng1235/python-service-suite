@@ -1,8 +1,8 @@
 """
 ============================================
-商品执行包装器 - 本轮事实门禁与分阶段输出
+商品执行包装器 - 商品知识开场、平台查询与结果输出
 ============================================
-复用公共工具循环，屏蔽查询决策文字，只在本轮取得商品事实后流式介绍。
+先流式介绍一般商品知识，再复用公共工具循环查询平台，取得本轮事实后展示推荐。
 历史只保留商品定位信息，价格和库存使用后端依据本轮查询生成的事实片段。
 """
 
@@ -20,6 +20,7 @@ from app.schemas.agent.goods_data import ProductDTO
 SEARCH_TOOL_NAME = "tool_semantic_product_search"
 PRODUCT_TOOL_NAME = "tool_check_sku_stock_and_price"
 GOODS_TOOL_NAMES = frozenset({SEARCH_TOOL_NAME, PRODUCT_TOOL_NAME})
+MAX_INTRODUCTION_BYTES = 2000
 MAX_NARRATIVE_BYTES = 12000
 MAX_FACT_TEXT_BYTES = 40000
 MAX_SUMMARY_DESCRIPTION_CHARS = 500
@@ -32,14 +33,48 @@ class GoodsRunner:
     name = "goods"
 
     def __init__(
-        self, decision_runner: FunctionCallingRunner, summary_runner: FunctionCallingRunner
+        self,
+        decision_runner: FunctionCallingRunner,
+        summary_runner: FunctionCallingRunner,
+        *,
+        introduction_runner: FunctionCallingRunner | None = None,
     ):
+        """组合现有运行器，各阶段共用模型、工具协议和聊天消息生命周期。"""
+        self.introduction_runner = introduction_runner
         self.decision_runner = decision_runner
         self.summary_runner = summary_runner
 
     async def run(self, history: list[LLMMessage]) -> AsyncIterator[AgentStep]:
-        """先查询后介绍，最终只有一次 done 交给公共聊天服务收尾。"""
+        """先解释商品，再查询并推荐；整轮只发送一次 done。"""
         clean_history = self._clean_history(history)
+        introduction_usage: dict[str, JsonValue] = {}
+        if self.introduction_runner is not None:
+            introduction = self.introduction_runner.run(clean_history)
+            introduction_bytes = 0
+            try:
+                async for step in introduction:
+                    if step.type == "delta":
+                        introduction_bytes += len(step.content.encode())
+                        if introduction_bytes > MAX_INTRODUCTION_BYTES:
+                            raise AppException(msg="商品知识介绍过长，请缩小问题范围")
+                        yield step
+                    elif step.type == "model_start":
+                        yield step
+                    elif step.type == "assistant":
+                        if step.message is None or step.message.tool_calls:
+                            raise AppException(msg="商品知识介绍返回了无效结果")
+                        # 开场说明独立保存，分隔符也入库，保证历史与前端文字一致。
+                        yield AgentStep("delta", content="\n\n")
+                        message = step.message.model_copy(
+                            update={"content": (step.message.content or "") + "\n\n"}
+                        )
+                        yield replace(step, message=message)
+                    elif step.type == "done":
+                        introduction_usage = step.usage
+                    # 介绍阶段不开放工具，也不公开推理，不提前结束整轮响应。
+            finally:
+                await introduction.aclose()
+
         products: dict[int, ProductDTO] = {}
         outcomes: list[dict[str, JsonValue]] = []
         decision_usage: dict[str, JsonValue] = {}
@@ -73,7 +108,7 @@ class GoodsRunner:
                 elif step.type == "tool_start":
                     yield step
                 elif step.type == "done":
-                    decision_usage = step.usage
+                    decision_usage = self._merge_usage(introduction_usage, step.usage)
                 # delta 和 reasoning 不流出查询决策阶段。
         finally:
             await stream.aclose()
@@ -266,7 +301,7 @@ class GoodsRunner:
     def _merge_usage(
         first: dict[str, JsonValue], second: dict[str, JsonValue]
     ) -> dict[str, JsonValue]:
-        """累计两阶段模型用量，保持现有 done 事件格式。"""
+        """累计各阶段模型用量，保持现有 done 事件格式。"""
         merged = dict(first)
         for key, value in second.items():
             if isinstance(value, int) and not isinstance(value, bool):

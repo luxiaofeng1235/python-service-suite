@@ -11,7 +11,7 @@ app/
 ├── agents/                  # Agent 定义和公共编排运行器
 │   ├── llm/                 # 对话与 Embedding 适配、统一消息和流式分片协议
 │   ├── astrology/           # 星座提示词、工具注册、运势内容生成
-│   └── goods/               # 商品提示词、只读工具注册、查询与介绍分阶段输出
+│   └── goods/               # 商品知识开场、只读工具注册、平台查询与推荐输出
 ├── services/
 │   └── agent/               # Agent 业务、数据库操作、会话和消息管理
 ├── api/
@@ -31,7 +31,7 @@ config/                      # AI、商品索引等后端业务配置
 | [AstrologyService](../app/services/agent/astrology_service.py) | 绑定当前用户的工具，查询和保存档案、读取和保存运势缓存 |
 | [AgentChatService](../app/services/agent/chat_service.py) | 会话归属、历史上下文、执行租约、消息入库和异常收尾 |
 | [星座 Agent 定义](../app/agents/astrology/agent.py) | 系统提示词、业务日期注入、工具声明和运行器创建 |
-| [商品 Agent 定义](../app/agents/goods/agent.py) / [GoodsRunner](../app/agents/goods/runner.py) | 商品提示词、工具注册、查询决策与最终输出分阶段执行 |
+| [商品 Agent 定义](../app/agents/goods/agent.py) / [GoodsRunner](../app/agents/goods/runner.py) | 商品知识开场、工具注册、平台查询与推荐分阶段执行 |
 | [GoodsService](../app/services/agent/goods_service.py) | 品牌解析、向量召回与实时查询衔接、内部索引维护 |
 | [GoodsDataService](../app/services/agent/goods_data_service.py) / [GoodsVectorService](../app/services/agent/goods_vector_service.py) | 前者查询 MySQL 并组装商品；后者管理 Chroma 持久化、向量同步和召回 |
 | [FunctionCallingRunner](../app/agents/runtime.py) | 拼接工具调用参数、校验、执行工具、多轮模型调用 |
@@ -165,12 +165,13 @@ MySQL 过滤商品上架和 SKU 在售状态，组装品牌、类目、`cover_im
 
 ### 查询、结构化数据与文字输出
 
-1. `GoodsRunner` 复用公共工具循环，查询决策阶段只公开 `tool_start` / `tool_end`，隐藏该阶段的自由文本和推理。
-2. 全部工具决策结束后，收集本轮最终有效的 `ProductDTO`，先发送一次 `data.kind=products` 的结构化事件。后续查询失败、下架或无匹配会作废先前事实，无有效商品时发送空列表。
-3. 有商品时，再调用无工具的总结模型流式介绍，随后由后端固定追加本轮 SKU、售价、库存和查询时间；无商品时使用后端兜底答复。常见单工具查询包含决策、决策终止和最终总结共 3 次模型请求。
-4. 共用 `AgentChatService` 保存工具调用、工具结果及最终助手回复，完成后发送一次 `done` 并释放租约。旧商品事实不作为当前售价库存依据，续聊重新查询。
+1. 先使用同一千问适配器进行无工具的简短开场，通过 `delta` 解释商品用途和相关选购要点。例如蓝牙耳机的连接方式、通勤用途以及降噪、续航等关注点。仅使用一般商品知识，不声称已联网或已查到平台商品。直接追问价格库存时，只简短提示将核实信息。
+2. `GoodsRunner` 随后复用公共工具循环，查询决策阶段只公开 `tool_start` / `tool_end`，隐藏该阶段的自由文本和推理。
+3. 全部工具决策结束后，收集本轮最终有效的 `ProductDTO`，发送一次 `data.kind=products` 结构化事件。查询阶段后续失败、下架或无匹配会作废先前事实，无有效商品时发送空列表。
+4. 有商品时，再调用无工具的总结模型流式介绍平台商品，随后由后端固定追加本轮 SKU、售价、库存和查询时间；无商品时使用后端兜底答复。常见单工具查询包含开场、决策、决策终止和最终总结共 4 次模型请求，比原查询流程增加一次简短模型调用。
+5. 共用 `AgentChatService` 保存开场、工具调用、工具结果及最终推荐回复，整轮完成后只发送一次 `done` 并释放租约。开场是独立助手消息；最终推荐与商品卡片关联另一个 `message_id`。任一阶段中断时保留已输出内容，旧商品事实不作为当前售价库存依据。
 
-结构化商品事件由后端序列化查询结果产生，**封面地址无需模型生成，也不靠提示词约定返回**。它与文字流属于同一次 HTTP/SSE 响应，前端可以先展示商品卡片，再接收介绍文字。
+结构化商品事件由后端序列化查询结果产生，**封面地址无需模型生成，也不靠提示词约定返回**。它与开场和推荐文字属于同一次 HTTP/SSE 响应。开场不提供具体平台售价、库存或推荐清单；具体商品事实仍须经过本轮工具查询。
 
 ### 数据变动后的索引维护
 
@@ -178,7 +179,7 @@ MySQL 过滤商品上架和 SKU 在售状态，组装品牌、类目、`cover_im
 
 商品名称、描述、品牌、类目发生变化，或重新导入商品数据后，需要显式同步。品牌和类目变化应覆盖关联商品。价格、库存或 `cover_image` 变化无需重建向量，下次查询直接读取 MySQL。空库生成的完整空索引也会被复用，因此后续导入数据仍要触发同步。
 
-完整配置、部署和维护说明见 [商品查询 Agent](goods_agent.md)。
+后端检索参数见 [config/goods.py](../config/goods.py)，部署所需表结构及公共配置见下文“会话、数据与配置”。
 
 ## 5. 接口与 SSE 协议
 
@@ -282,7 +283,7 @@ data: {"type":"done","session_id":"11111111-1111-4111-8111-111111111111","agent"
 
 ### 商品卡片事件与前端消费
 
-商品流通常为：`session → tool_start / tool_end（可多轮）→ data → delta（多个）→ done`。下面展示 `data` 事件的格式，商品和地址仅作示例：
+商品流通常为：`session → delta（商品知识开场）→ tool_start / tool_end（可多轮）→ data → delta（平台推荐）→ done`。下面展示 `data` 事件的格式，商品和地址仅作示例：
 
 ```text
 data: {"type":"data","session_id":"11111111-1111-4111-8111-111111111111","agent":"goods","message_id":30,"data":{"kind":"products","products":[{"product_id":9,"name":"降噪耳机","brand_id":15,"brand_name":"索尼","category_id":6,"category_name":"音频设备","cover_image":"https://example.com/headphones.jpg","description":"主动降噪，适合差旅。","spec_type":2,"availability":"in_stock","queried_at":"2026-11-12T18:30:00+08:00","skus":[{"sku_id":18,"sku_code":"SKU-XM5-BLK","spec_name":"黑色 / 标准版","price":"2299.00","stock":35}]}]}}
@@ -291,11 +292,11 @@ data: {"type":"data","session_id":"11111111-1111-4111-8111-111111111111","agent"
 
 - 前端按 JSON 的 `type=data` 且 `data.kind=products` 识别商品数据，使用 `data.products` 渲染卡片。这里的 SSE `data:` 前缀、JSON 事件 `type` 和 JSON 内的 `data` 对象分别属于协议、事件类型和业务载荷。
 - 封面字段为 `cover_image`，直接返回数据库值；为空时返回 `""`，由前端显示占位图。不会自动拼装不存在的图片地址。
-- 卡片展示后保持连接，继续追加 `delta.content`；`done` 表示本轮正常结束。`message_id` 用于关联同一条回复的商品数据与文字，`data` 不会另存为一条聊天文本，原始商品工具结果仍保存在消息表。
+- 收到最初的 `delta` 即可展示商品知识开场，卡片展示后保持连接继续接收推荐文字，`done` 才表示本轮正常结束。开场与最终推荐是两条助手消息；按 `message_id` 分别关联，或在同一轮回答中依次展示。`data.message_id` 与最终推荐及 `done` 一致。`data` 不会另存为一条聊天文本，原始商品工具结果仍保存在消息表。
 - `products: []` 表示本轮没有有效商品；复用推荐区时应清空该区域，避免把上一轮商品误作本轮结果。
 - 发送商品数据后，文字生成仍可能失败；收到 `error` 即按失败结束，不等待必有的 `done`。
 
-`done.usage` 当前统计编排运行器各轮模型调用的整数用量字段，商品会合并决策和总结阶段用量；不包含 Embedding 请求或工具内部独立生成运势的模型用量，不能直接作为整条链路的计费总量。
+`done.usage` 当前统计编排运行器各轮模型调用的整数用量字段，商品会合并开场、决策和总结阶段用量；不包含 Embedding 请求或工具内部独立生成运势的模型用量，不能直接作为整条链路的计费总量。
 
 输入、认证、会话归属和会话占用等在首个事件前校验，失败沿用项目 JSON 错误响应；流开始后的异常使用 `error` 事件，此时不能再切换 HTTP 响应格式。客户端收到 `error` 后按失败结束，不要求后面一定有 `done`。
 

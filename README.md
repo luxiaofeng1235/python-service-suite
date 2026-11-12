@@ -308,11 +308,11 @@ make clean           # 清理缓存/tmp/log
 
 `POST /api/agent/goods/stream`：商品只读查询，复用千问 Function Calling、登录认证、会话存储和上述请求体。例如提交 `{"message":"帮我找适合出差使用的降噪耳机，列出规格、价格和库存。"}`。后端通过 Chroma 语义召回商品 ID，再从 MySQL 核验上架状态、品牌、SKU 规格、实时售价和库存；支持品牌筛选、多商品推荐及多轮追问。
 
-商品流先返回工具状态，查询完成后通过 `type=data`、`data.kind=products` 返回 `data.products` 商品数组，包含 `cover_image`、规格、售价、库存和查询时间。前端可先渲染商品卡片，再继续接收 `delta` 文字分片，收到 `done` 后结束本轮。商品数据直接来自后端查询；封面为空时返回空字符串，无有效商品时返回空数组。
+商品流先通过 `delta` 简述商品用途和选购要点，再查询平台商品。查询完成后通过 `type=data`、`data.kind=products` 返回 `data.products` 商品数组，包含 `cover_image`、规格、售价、库存和查询时间，随后继续输出平台推荐文字，收到 `done` 后结束本轮。开场使用模型一般知识，具体商品数据来自后端查询；封面为空时返回空字符串，无有效商品时返回空数组。
 
 部署时运行 `alembic upgrade head`，会补建 `goods_categories`、`goods_brands`、`goods_products`、`goods_skus` 四表，已有表保留，商品数据需另行准备。启用后由 `app/setup/agents.py` 在后台初始化：分批读取 MySQL 商品资料 → 千问 `text-embedding-v4` 向量化 → Chroma 本地持久化。后续请求和重启复用有效索引，每次语义搜索只为查询文本生成向量。
 
-Docker 已挂载 `data/chroma_db`，同一索引路径使用单个应用进程。商品资料或品牌、类目变动及重新导入数据后，通过内部 `refresh_index` / `rebuild_index` 同步；价格、库存和封面直接回查 MySQL，无需重建向量。当前不提供商品增删改或索引维护 HTTP 接口。配置和维护说明见 [商品 Agent](docs/goods_agent.md)。
+Docker 已挂载 `data/chroma_db`，同一索引路径使用单个应用进程。商品资料或品牌、类目变动及重新导入数据后，通过内部 `refresh_index` / `rebuild_index` 同步；价格、库存和封面直接回查 MySQL，无需重建向量。当前不提供商品增删改或索引维护 HTTP 接口。配置和维护说明见 [商品 Agent](docs/agent-development.md#4-商品查询与向量索引)。
 
 开发流程、缓存机制和完整调用示例见 [Function Calling LLM / Agent 开发流程](docs/agent-development.md)。
 
@@ -344,7 +344,7 @@ Docker 已挂载 `data/chroma_db`，同一索引路径使用单个应用进程�
 
 ## LLM / RAG 待开发规划
 
-当前已实现原生 Function Calling 星座 Agent，以及结合 Chroma 语义召回和 MySQL 实时核验的商品 Agent。开发方式见 [Agent 开发流程](docs/agent-development.md) 和 [商品 Agent](docs/goods_agent.md)。LangChain / LangGraph 编排和通用文档知识库作为后续扩展。
+当前已实现原生 Function Calling 星座 Agent，以及结合 Chroma 语义召回和 MySQL 实时核验的商品 Agent。开发方式见 [Agent 开发流程](docs/agent-development.md) 和 [商品 Agent](docs/agent-development.md#4-商品查询与向量索引)。LangChain / LangGraph 编排和通用文档知识库作为后续扩展。
 
 早期规划参考见 [LLM / RAG 待开发规划](docs/business.md#llm--rag-待开发规划)，当前代码分层以 Agent 开发文档为准。
 

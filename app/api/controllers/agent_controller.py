@@ -72,7 +72,7 @@ async def astrology_stream(
     response_class=EventSourceResponse,
     responses={
         200: {
-            "description": "沿用 Agent SSE 事件；data 事件返回封面与商品规格，delta 返回文字，done 表示结束。",
+            "description": "先用 delta 简述商品知识，再查询平台商品；data 返回封面与商品规格，后续 delta 返回推荐介绍，done 表示结束。",
             "content": {"text/event-stream": {"schema": {"type": "string"}}},
         },
     },
