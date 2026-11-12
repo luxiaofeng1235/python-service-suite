@@ -5,10 +5,13 @@
 """
 
 import os
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.common.view import display
 from app.core.config import settings
 from app.routes import admin_router, api_router
 
@@ -20,15 +23,17 @@ def register_routes(app: FastAPI) -> None:
 
 
 def register_static_files(app: FastAPI) -> None:
-    """挂载上传文件静态目录"""
+    """挂载上传文件和公开静态资源目录"""
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+    public_dir = Path(__file__).resolve().parents[2] / "public"
+    app.mount("/public", StaticFiles(directory=public_dir), name="public")
 
 
 def register_root_route(app: FastAPI) -> None:
     """注册根路径路由"""
 
-    @app.get("/", tags=["基础"])
-    async def root():
-        """根路径，重定向到文档"""
-        return {"message": f"欢迎使用 {settings.PROJECT_NAME}", "docs": "/docs"}
+    @app.get("/", tags=["基础"], response_class=HTMLResponse)
+    async def root(request: Request) -> HTMLResponse:
+        """根路径居中展示项目介绍图片"""
+        return display(request, "index.html", {"title": settings.PROJECT_NAME})

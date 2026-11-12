@@ -97,6 +97,7 @@ Controller → Service → Model    Controller → Service → Model
 │   ├── services/            # 跨模块复用的公共服务
 │   ├── models/              # ORM 数据库表映射
 │   ├── schemas/             # 请求校验和响应序列化
+│   ├── templates/           # 服务端 HTML 模板，按模块组织页面
 │   ├── constants/           # 业务常量、状态枚举和静态业务数据
 │   ├── routes/              # 前台、后台路由聚合
 │   ├── setup/               # 应用生命周期、中间件和路由注册
@@ -126,6 +127,7 @@ Controller → Service → Model    Controller → Service → Model
 |------|------|
 | `fastapi` | Web 框架 |
 | `uvicorn[standard]` | ASGI 服务器 |
+| `jinja2` | 服务端 HTML 模板渲染 |
 | `pydantic` | 数据验证 |
 | `pydantic-settings` | 配置管理（从 .env 读取） |
 | `python-jose[cryptography]` | JWT 令牌编码/解码 |
@@ -140,6 +142,25 @@ Controller → Service → Model    Controller → Service → Model
 | `alembic` | 数据库迁移 |
 | `ipip-ipdb` | IP 地址解析（ipip.net .ipdb 格式） |
 | `loguru` | 日志框架（按业务域分流到独立文件） |
+
+## 页面模板渲染
+
+服务端页面统一放在 `app/templates/`，使用 `app.common.view.display` 渲染，类似 PHP 的 `display`。首页模板为 `app/templates/index.html`，后续页面可按模块建立子目录，例如 `app/templates/admin/users.html`。
+
+```python
+from fastapi import Request
+from fastapi.responses import HTMLResponse
+
+from app.common.view import display
+
+
+@router.get("/page", response_class=HTMLResponse)
+async def page(request: Request) -> HTMLResponse:
+    """渲染页面并传入模板数据。"""
+    return display(request, "index.html", {"title": "项目介绍"})
+```
+
+模板使用 `{{ title }}` 读取数据，可使用 Jinja2 的循环、条件和模板继承。公开的图片、CSS 和 JavaScript 放在 `public/`，模板通过 `{{ url_for('public', path='/index_intro.jpg') }}` 获取资源地址。HTML 模板通过 `display` 返回，JSON API 继续使用统一的 `Response` 工具类。
 
 ## 环境变量配置
 
