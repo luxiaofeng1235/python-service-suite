@@ -306,9 +306,13 @@ make clean           # 清理缓存/tmp/log
 
 续聊时增加 `session_id`，使用首个 `session` 事件返回的会话 ID。客户端按事件的 `type` 处理工具状态、回答分片和结束通知。
 
-`POST /api/agent/goods/stream`：商品只读查询，复用上述认证、请求体及 SSE 会话协议。通过 Chroma 召回商品 ID，再从 MySQL 核验上架状态、SKU 规格、实时售价和库存；支持品牌筛选及多轮追问，不提供商品增删改接口。
+`POST /api/agent/goods/stream`：商品只读查询，复用千问 Function Calling、登录认证、会话存储和上述请求体。例如提交 `{"message":"帮我找适合出差使用的降噪耳机，列出规格、价格和库存。"}`。后端通过 Chroma 语义召回商品 ID，再从 MySQL 核验上架状态、品牌、SKU 规格、实时售价和库存；支持品牌筛选、多商品推荐及多轮追问。
 
-运行 `alembic upgrade head` 会补建商品模块的 `goods_categories`、`goods_brands`、`goods_products`、`goods_skus` 四表，已有表保留，商品数据需另行准备。启用后后台初始化本地索引，Docker 已挂载 `data/chroma_db`；同一索引路径使用单个应用进程。配置和索引维护见 [商品 Agent](docs/goods_agent.md)。
+商品流先返回工具状态，查询完成后通过 `type=data`、`data.kind=products` 返回 `data.products` 商品数组，包含 `cover_image`、规格、售价、库存和查询时间。前端可先渲染商品卡片，再继续接收 `delta` 文字分片，收到 `done` 后结束本轮。商品数据直接来自后端查询；封面为空时返回空字符串，无有效商品时返回空数组。
+
+部署时运行 `alembic upgrade head`，会补建 `goods_categories`、`goods_brands`、`goods_products`、`goods_skus` 四表，已有表保留，商品数据需另行准备。启用后由 `app/setup/agents.py` 在后台初始化：分批读取 MySQL 商品资料 → 千问 `text-embedding-v4` 向量化 → Chroma 本地持久化。后续请求和重启复用有效索引，每次语义搜索只为查询文本生成向量。
+
+Docker 已挂载 `data/chroma_db`，同一索引路径使用单个应用进程。商品资料或品牌、类目变动及重新导入数据后，通过内部 `refresh_index` / `rebuild_index` 同步；价格、库存和封面直接回查 MySQL，无需重建向量。当前不提供商品增删改或索引维护 HTTP 接口。配置和维护说明见 [商品 Agent](docs/goods_agent.md)。
 
 开发流程、缓存机制和完整调用示例见 [Function Calling LLM / Agent 开发流程](docs/agent-development.md)。
 
@@ -555,4 +559,4 @@ alembic revision --autogenerate -m "change description"
 
 ## 详细文档
 
-AI、OSS 上传、抽奖和接口签名等说明见 [业务流程与调用示例](docs/business.md)；Agent 编排、工具调用和运势缓存见 [Function Calling LLM / Agent 开发流程](docs/agent-development.md)。
+AI、OSS 上传、抽奖和接口签名等说明见 [业务流程与调用示例](docs/business.md)；Agent 编排、工具调用、运势缓存、商品检索及结构化 SSE 输出见 [Function Calling LLM / Agent 开发流程](docs/agent-development.md)。
