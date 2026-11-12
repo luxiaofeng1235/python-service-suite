@@ -24,3 +24,4 @@ from app.models.user_astrology_profile import UserAstrologyProfile  # noqa: F401
 from app.models.chat_session import ChatSession  # noqa: F401
 from app.models.chat_message import ChatMessage  # noqa: F401
 from app.models.horoscope_cache import HoroscopeCache  # noqa: F401
+from app.models.goods import GoodsCategory, GoodsBrand, GoodsProduct, GoodsSku  # noqa: F401

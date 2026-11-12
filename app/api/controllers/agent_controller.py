@@ -1,8 +1,8 @@
 """
 ============================================
-Agent 接口控制器 - 星座档案与业务对话
+Agent 接口控制器 - 星座档案与商品查询对话
 ============================================
-接收当前用户的星座档案查询、保存及流式对话请求，业务处理统一交给 Service。
+接收星座档案、星座对话及商品查询请求，业务处理统一交给 Service。
 """
 
 from fastapi import APIRouter, Depends
@@ -11,11 +11,13 @@ from sse_starlette.sse import EventSourceResponse
 from starlette.responses import JSONResponse
 
 from app.common.response import Response
+from app.core.agent_dependency import get_goods_service
 from app.core.dependency import get_current_user
 from app.database import get_session
 from app.schemas.agent.astrology import AstrologyProfileUpdateRequest
 from app.schemas.agent.chat import AgentChatRequest
 from app.services.agent.astrology_service import AstrologyService
+from app.services.agent.goods_service import GoodsService
 from app.utils.sse import SSEUtil
 
 router = APIRouter(prefix="/api/agent", tags=["Agent 服务"])
@@ -60,5 +62,28 @@ async def astrology_stream(
     """执行当前用户的星座流式对话，未传会话 ID 时创建新会话。"""
     return await SSEUtil.prepare_stream_response(
         AstrologyService().stream_sse(req, user_id=current_user["user_id"]),
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post(
+    "/goods/stream",
+    summary="商品 Agent 流式查询",
+    response_class=EventSourceResponse,
+    responses={
+        200: {
+            "description": "沿用 Agent SSE 事件，支持商品语义搜索和实时规格价格库存查询。",
+            "content": {"text/event-stream": {"schema": {"type": "string"}}},
+        },
+    },
+)
+async def goods_stream(
+    req: AgentChatRequest,
+    current_user: dict = Depends(get_current_user),
+    service: GoodsService = Depends(get_goods_service),
+) -> EventSourceResponse:
+    """执行当前用户的商品只读查询，复用会话归属校验和公共 SSE 响应。"""
+    return await SSEUtil.prepare_stream_response(
+        service.stream_sse(req, user_id=current_user["user_id"]),
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

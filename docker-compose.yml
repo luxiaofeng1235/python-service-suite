@@ -16,6 +16,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./uploads:/app/uploads
+      - ./data/chroma_db:/app/data/chroma_db
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

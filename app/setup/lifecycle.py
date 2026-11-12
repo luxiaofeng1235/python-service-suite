@@ -6,14 +6,16 @@
 """
 
 import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.pkg.redis_client import redis_client
 from app.database import engine, init_db
+from app.pkg.logging import app_logger
+from app.pkg.redis_client import redis_client
+from app.setup.agents import start_goods_agent, stop_goods_agent
 
 
 @asynccontextmanager
@@ -37,6 +39,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         print("  ℹ️  未配置 REDIS_URL，跳过 Redis 连接（如需缓存请设置 REDIS_URL）")
 
+    await start_goods_agent(app)
+
     print(f"  {settings.PROJECT_NAME} v{settings.VERSION} 启动成功")
     print(f"  Swagger 文档: http://localhost:{settings.PORT}/docs")
     print(f"  ReDoc 文档:   http://localhost:{settings.PORT}/redoc")
@@ -48,12 +52,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         pass
     finally:
         # ==================== shutdown ====================
-        try:
-            await engine.dispose()
-            await redis_client.close()
-            print("  服务正在关闭... 数据库连接已释放")
-        except asyncio.CancelledError:
-            # 事件循环关闭中，资源释放被中断是预期行为
-            pass
-        except Exception:
-            pass
+        # 单个资源关闭失败不影响后续连接池和 Redis 的回收。
+        for name, close in (
+            ("商品 Agent", lambda: stop_goods_agent(app)),
+            ("数据库", engine.dispose),
+            ("Redis", redis_client.close),
+        ):
+            try:
+                await close()
+            except asyncio.CancelledError:
+                continue
+            except Exception as exc:
+                app_logger.warning("{} 资源关闭失败，异常类型={}", name, type(exc).__name__)
+        app_logger.info("服务关闭资源回收已完成")

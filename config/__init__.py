@@ -8,5 +8,6 @@ from .upload import *
 from .smtp import *
 from .oss import *
 from .ai import *
+from .goods import *
 
 __all__ = [k for k in dir() if k.isupper()]

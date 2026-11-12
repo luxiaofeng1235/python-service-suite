@@ -19,3 +19,4 @@ uploads
 .mypy_cache
 tmp
 temp
+data/chroma_db/

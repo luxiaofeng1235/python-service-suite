@@ -33,3 +33,6 @@ loguru>=0.7.0
 captcha>=0.6.0
 
 python-dateutil>=2.8.2
+
+# === 商品语义检索（本地持久化） ===
+chromadb==1.5.9

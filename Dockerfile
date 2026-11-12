@@ -33,7 +33,7 @@ ENV PATH=/root/.local/bin:$PATH
 COPY . .
 
 # Create persistent directories
-RUN mkdir -p logs uploads
+RUN mkdir -p logs uploads data/chroma_db
 
 # Expose port
 EXPOSE 8000

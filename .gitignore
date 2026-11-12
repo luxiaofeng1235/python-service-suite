@@ -80,3 +80,5 @@ temp/
 
 # AtomCode local-scope configs (machine-specific)
 .atomcode/local/
+data/chroma_db/
+!docs/goods_agent.md

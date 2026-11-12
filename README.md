@@ -306,6 +306,10 @@ make clean           # 清理缓存/tmp/log
 
 续聊时增加 `session_id`，使用首个 `session` 事件返回的会话 ID。客户端按事件的 `type` 处理工具状态、回答分片和结束通知。
 
+`POST /api/agent/goods/stream`：商品只读查询，复用上述认证、请求体及 SSE 会话协议。通过 Chroma 召回商品 ID，再从 MySQL 核验上架状态、SKU 规格、实时售价和库存；支持品牌筛选及多轮追问，不提供商品增删改接口。
+
+商品模块需已有 `goods_categories`、`goods_brands`、`goods_products`、`goods_skus` 四表。启用后后台初始化本地索引，Docker 已挂载 `data/chroma_db`；同一索引路径使用单个应用进程。配置和索引维护见 [商品 Agent](docs/goods_agent.md)。
+
 开发流程、缓存机制和完整调用示例见 [Function Calling LLM / Agent 开发流程](docs/agent-development.md)。
 
 ## 多模态流式转发
@@ -336,7 +340,7 @@ make clean           # 清理缓存/tmp/log
 
 ## LLM / RAG 待开发规划
 
-当前已实现原生 Function Calling 星座 Agent，开发方式见 [Agent 开发流程](docs/agent-development.md)。LangChain / LangGraph 编排和 RAG 知识检索作为后续扩展，尚未接入。
+当前已实现原生 Function Calling 星座 Agent，以及结合 Chroma 语义召回和 MySQL 实时核验的商品 Agent。开发方式见 [Agent 开发流程](docs/agent-development.md) 和 [商品 Agent](docs/goods_agent.md)。LangChain / LangGraph 编排和通用文档知识库作为后续扩展。
 
 早期规划参考见 [LLM / RAG 待开发规划](docs/business.md#llm--rag-待开发规划)，当前代码分层以 Agent 开发文档为准。
 

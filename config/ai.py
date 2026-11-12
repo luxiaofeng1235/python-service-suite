@@ -21,6 +21,12 @@ QWEN_IMAGE_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image
 QWEN_VIDEO_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
 QWEN_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks"
 
+# 商品向量化复用千问密钥和公共 HTTP 请求，仅使用独立的 Embedding 地址。
+QWEN_EMBEDDING_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+QWEN_EMBEDDING_MODEL = "text-embedding-v4"
+QWEN_EMBEDDING_DIMENSIONS = 1024
+QWEN_EMBEDDING_TIMEOUT = 20.0
+
 # 图片和视频任务共用的 HTTP 超时（秒），生成进度由客户端轮询。
 QWEN_REQUEST_TIMEOUT = 60.0
 QWEN_CONNECT_TIMEOUT = 30.0
