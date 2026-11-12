@@ -6,6 +6,7 @@
 from app.utils.debugger import  DebugHelper
 """
 import sys
+import time
 import traceback
 from typing import Any
 
@@ -13,18 +14,28 @@ from typing import Any
 class DebugHelper:
     @staticmethod
     def hang(*args: Any, tag: str = "DEBUG", **kwargs: Any):
-        # 1. 打印标题栏
-        print(f"\n{'=' * 20} [{tag}] 调试输出 {'=' * 20}")
+        # 1. 获取当前精确时间，方便多请求并发时区分先后
+        timestamp = time.strftime("%H:%M:%S", time.localtime()) + f".{int(time.time() * 1000) % 1000:03d}"
 
-        # 2. 把位置参数 (*args) 和 关键字参数的值 (**kwargs) 合并到一起
-        # 这样不管你是怎么传的，最终都统一按顺序编号
+        # 2. 打印标题栏（修复了原代码中的拼接瑕疵）
+        print(f"\n{'=' * 15} [{tag}] 调试输出 @ {timestamp} {'=' * 15}")
+
+        # 3. 合并所有传入的参数
         all_values = list(args) + list(kwargs.values())
 
         if all_values:
             print(f"--- 变量输出 (共 {len(all_values)} 个) ---")
             for i, val in enumerate(all_values):
-                print(f"[第{i}个输出]: {val}")
+                # 尝试安全地获取类型，防止部分对象打印崩掉
+                val_type = type(val).__name__
+                try:
+                    print(f"[第{i+1}个输出] ({val_type}): {val}")
+                except Exception as e:
+                    print(f"[第{i+1}个输出] ({val_type}): <无法打印的对象: {e}>")
 
-        # 3. 打印调用栈追踪
+        # 4. 打印调用栈追踪
+        print(f"--- 调用栈信息 ---")
         traceback.print_stack(file=sys.stdout, limit=5)
+
+        # 5. 底部收尾分隔符（修复了原代码中的瑕疵）
         print(f"{'=' * 50}\n")
