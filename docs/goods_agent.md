@@ -80,7 +80,7 @@ curl -N -sS 'http://127.0.0.1:8001/api/agent/goods/stream' \
 - `config/ai.py`：Embedding 地址、模型、维度、超时，默认 `text-embedding-v4`、1024 维，每批最多 10 条，查询与建库保持一致。接口约束见 [阿里云 Embedding 文档](https://www.alibabacloud.com/help/en/model-studio/embedding-interfaces-compatible-with-openai)。
 - `config/goods.py`：功能开关、索引路径、集合、批量大小、Top-K、返回数量和距离阈值。默认阈值 `0.65` 需按实际数据校准。
 
-部署前需准备上述四张商品表。应用不自动导入样例 SQL，也不增加迁移；**样例 SQL 含 DROP TABLE，不能直接对已有业务库执行**。启动后后台初始化索引，失败不阻断星座等模块。冷启动查询可能等待初始化，超出工具预算会提示重试；建议索引就绪后测试商品搜索。`GOODS_AGENT_ENABLED=False` 可关闭商品模块。
+部署时先运行 `alembic upgrade head`，迁移 `20261112_0001` 会创建缺失的四张商品表及索引，已有表和数据保持原样；仅创建结构，不插入商品。价格仍由 SKU 提供，不增加 SPU 价格或最低价字段。应用不自动导入样例 SQL；**样例 SQL 含 DROP TABLE，不能直接对已有业务库执行**。启动后后台初始化索引，失败不阻断星座等模块。冷启动查询可能等待初始化，超出工具预算会提示重试；建议索引就绪后测试商品搜索。`GOODS_AGENT_ENABLED=False` 可关闭商品模块。
 
 本地目录默认 `./data/chroma_db`，Docker Compose 已挂载宿主机目录，索引不进入 Git 或镜像构建上下文。**同一路径只运行一个应用进程 / 一个维护实例**；多 worker 或多副本需独立索引目录，或后续接入服务端向量库。
 

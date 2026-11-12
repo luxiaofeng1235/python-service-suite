@@ -21,6 +21,10 @@ from app.models import (
     ChatSession,  # noqa: F401
     CmsArticle,  # noqa: F401
     CmsTag,  # noqa: F401
+    GoodsBrand,  # noqa: F401
+    GoodsCategory,  # noqa: F401
+    GoodsProduct,  # noqa: F401
+    GoodsSku,  # noqa: F401
     HoroscopeCache,  # noqa: F401
     LotteryConfig,  # noqa: F401
     Permission,  # noqa: F401

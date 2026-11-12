@@ -308,7 +308,7 @@ make clean           # 清理缓存/tmp/log
 
 `POST /api/agent/goods/stream`：商品只读查询，复用上述认证、请求体及 SSE 会话协议。通过 Chroma 召回商品 ID，再从 MySQL 核验上架状态、SKU 规格、实时售价和库存；支持品牌筛选及多轮追问，不提供商品增删改接口。
 
-商品模块需已有 `goods_categories`、`goods_brands`、`goods_products`、`goods_skus` 四表。启用后后台初始化本地索引，Docker 已挂载 `data/chroma_db`；同一索引路径使用单个应用进程。配置和索引维护见 [商品 Agent](docs/goods_agent.md)。
+运行 `alembic upgrade head` 会补建商品模块的 `goods_categories`、`goods_brands`、`goods_products`、`goods_skus` 四表，已有表保留，商品数据需另行准备。启用后后台初始化本地索引，Docker 已挂载 `data/chroma_db`；同一索引路径使用单个应用进程。配置和索引维护见 [商品 Agent](docs/goods_agent.md)。
 
 开发流程、缓存机制和完整调用示例见 [Function Calling LLM / Agent 开发流程](docs/agent-development.md)。
 

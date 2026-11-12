@@ -15,3 +15,5 @@ alembic revision --autogenerate -m "change description"
 2026-11-11 修复：保留已部署 revision 编号，自动将 MySQL `alembic_version.version_num` 扩至 64 字符，兼容历史 37 字符编号。CMS 迁移兼容已有 `tag_ids` 字段；新增修复迁移补建缺失的 AI 任务、对话、CMS 标签、抽奖配置表以及用户登录字段，不覆盖已有业务记录。
 
 已有数据库先查看 `alembic current`，备份后执行 `alembic upgrade head`；空数据库可直接完整升级。不要对已有数据的数据库执行 `stamp head` 代替结构迁移。修复迁移无法区分原有表和新建表，因此禁止自动降级，回退需恢复备份。
+
+2026-11-12：新增 `20261112_0001` 商品初始化迁移，补建 `goods_categories`、`goods_brands`、`goods_products`、`goods_skus` 四表及索引，字段与 `sql/code-product.sql` 一致。已有表直接跳过，不修改已有商品数据；仅初始化表结构，不导入演示数据。价格继续保存在 SKU，不新增 SPU 价格或最低价字段。
