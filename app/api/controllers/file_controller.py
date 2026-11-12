@@ -6,10 +6,11 @@
 业务逻辑全部委托给 FileService。
 """
 
-from fastapi import APIRouter, Depends, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.services.file_service import FileService
+from app.common.exception import AppException
 from app.common.pagination import PageParams
 from app.common.response import Response
 from app.database import get_session
@@ -73,18 +74,55 @@ async def upload_video(
 # ==================== OSS 上传 ====================
 
 
-@router.post("/upload/oss", summary="上传附件到 OSS（图片、视频，无需登录和验签）")
+@router.post("/upload/oss", summary="上传附件到 OSS（支持本地和 URL，无需登录和验签）")
 async def upload_oss(
-    file: UploadFile,
+    file: UploadFile | None = None,
+    url: str | None = Form(None),
+    upload_type: str = Form("local"),
     db: AsyncSession = Depends(get_session),
 ):
-    """Upload an image or video to OSS through the public endpoint."""
-    attachment = await FileService.upload_oss_for_owner(
-        db,
-        owner_type=FileService.OWNER_USER,
-        owner_id=0,
-        file=file,
-    )
+    """Upload an image or video to OSS through the public endpoint.
+
+    Args:
+        file: 本地文件上传（upload_type=local 时必须提供）
+        url: 远程 URL 上传（upload_type=url 时必须提供）
+        upload_type: 上传类型，local（本地）或 url（远程），默认 local
+
+    Returns:
+        附件信息（id, url, originName, fileSize 等）
+    """
+    # 1. 校验 upload_type 参数
+    if upload_type not in ("local", "url"):
+        raise AppException(msg="upload_type 必须为 local 或 url")
+
+    # 2. 根据 upload_type 严格校验参数
+    if upload_type == "local":
+        # 本地上传模式
+        if not file:
+            raise AppException(msg="upload_type=local 时必须提供 file 参数")
+        if url:
+            raise AppException(msg="upload_type=local 时不应提供 url 参数")
+
+        attachment = await FileService.upload_oss_for_owner(
+            db,
+            owner_type=FileService.OWNER_USER,
+            owner_id=0,
+            file=file,
+        )
+    else:  # upload_type == "url"
+        # URL 上传模式
+        if not url:
+            raise AppException(msg="upload_type=url 时必须提供 url 参数")
+        if file:
+            raise AppException(msg="upload_type=url 时不应提供 file 参数")
+
+        attachment = await FileService.upload_oss_from_url(
+            db,
+            owner_type=FileService.OWNER_USER,
+            owner_id=0,
+            url=url,
+        )
+
     data = OSSUploadResponse.model_validate(attachment).model_dump(mode="json", by_alias=True)
     return Response.success(data, msg="附件上传成功")
 

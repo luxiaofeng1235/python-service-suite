@@ -1,46 +1,70 @@
 -- ============================================================
--- 电商商品 Agent 演示系统 - 完整 10 类目 & 50 商品数据库脚本
+-- 电商商品 Agent 演示系统 - 10 类目、20 品牌、50 商品与 65 条 SKU
 -- ============================================================
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- 1. 类目表 (支持无限级/二级分类)
-DROP TABLE IF EXISTS `categories`;
-CREATE TABLE `categories` (
+DROP TABLE IF EXISTS `goods_categories`;
+CREATE TABLE `goods_categories` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '类目ID',
   `name` VARCHAR(50) NOT NULL COMMENT '类目名称',
   `parent_id` BIGINT UNSIGNED DEFAULT NULL COMMENT '父级类目ID (NULL表示一级大类)',
   `sort_order` INT NOT NULL DEFAULT 0 COMMENT '排序权重',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_parent_id` (`parent_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品类目表';
 
--- 2. 商品 SPU 表
-DROP TABLE IF EXISTS `products`;
-CREATE TABLE `products` (
+-- 2. 商品品牌表
+DROP TABLE IF EXISTS `goods_brands`;
+CREATE TABLE `goods_brands` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '品牌ID',
+  `name` VARCHAR(100) NOT NULL DEFAULT '' COMMENT '品牌名称',
+  `image` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '品牌Logo图片',
+  `initial` CHAR(1) NOT NULL DEFAULT '' COMMENT '品牌首字母',
+  `is_recommend` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '是否推荐：0否、1是',
+  `sort` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '排序权重',
+  `remark` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '备注描述',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_initial` (`initial`),
+  KEY `idx_sort` (`sort`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品品牌表';
+
+-- 3. 商品 SPU 表
+DROP TABLE IF EXISTS `goods_products`;
+CREATE TABLE `goods_products` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'SPU ID',
-  `category_id` BIGINT UNSIGNED NOT NULL COMMENT '关联二级类目ID',
+  `category_id` BIGINT UNSIGNED NOT NULL COMMENT '关联商品类目ID，对应goods_categories.id',
   `name` VARCHAR(120) NOT NULL COMMENT '商品名称',
-  `brand` VARCHAR(50) NOT NULL COMMENT '品牌',
+  `brand_id` INT UNSIGNED NOT NULL COMMENT '关联商品品牌ID，对应goods_brands.id',
   `cover_image` VARCHAR(255) DEFAULT '' COMMENT '商品主图',
   `description` TEXT COMMENT '商品详细描述与卖点 (供Agent检索)',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态: 0-下架, 1-上架',
+  `spec_type` TINYINT NOT NULL DEFAULT 1 COMMENT '规格类型：1单规格、2多规格',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_category_id` (`category_id`),
-  KEY `idx_brand` (`brand`)
+  KEY `idx_brand_id` (`brand_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品SPU表';
 
--- 3. 商品 SKU 表
-DROP TABLE IF EXISTS `skus`;
-CREATE TABLE `skus` (
+-- 4. 商品 SKU 表
+DROP TABLE IF EXISTS `goods_skus`;
+CREATE TABLE `goods_skus` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'SKU ID',
-  `product_id` BIGINT UNSIGNED NOT NULL COMMENT '关联SPU ID',
+  `product_id` BIGINT UNSIGNED NOT NULL COMMENT '关联商品SPU ID，对应goods_products.id',
   `sku_code` VARCHAR(64) NOT NULL COMMENT 'SKU唯一编码',
   `spec_name` VARCHAR(100) NOT NULL COMMENT '规格描述 (如: 黑色 / 256GB)',
   `price` DECIMAL(10,2) NOT NULL COMMENT '售价',
   `stock` INT NOT NULL DEFAULT 0 COMMENT '库存',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态: 0-停售, 1-在售',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_sku_code` (`sku_code`),
   KEY `idx_product_id` (`product_id`)
@@ -52,7 +76,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- ============================================================
 -- 二、 插入 10 个类目 (4个一级大类 + 6个二级细分小类)
 -- ============================================================
-INSERT INTO `categories` (`id`, `name`, `parent_id`, `sort_order`) VALUES
+INSERT INTO `goods_categories` (`id`, `name`, `parent_id`, `sort_order`) VALUES
 (1, '数码电器', NULL, 1),
 (2, '服饰箱包', NULL, 2),
 (3, '户外运动', NULL, 3),
@@ -66,86 +90,110 @@ INSERT INTO `categories` (`id`, `name`, `parent_id`, `sort_order`) VALUES
 
 
 -- ============================================================
--- 三、 插入 50 个商品 SPU (分别挂载在 5~10 的二级类目下)
+-- 三、 插入 20 个品牌，商品通过 brand_id 随机关联，仅用于演示
+-- 创建时间和更新时间由数据库默认填入当前时间。
+-- ============================================================
+INSERT INTO `goods_brands` (`id`, `name`, `image`, `initial`, `is_recommend`, `sort`, `remark`) VALUES
+(1, '苹果', 'uploads/images/202106231548333d4b21360.jpeg', 'A', 0, 0, ''),
+(2, '三星', 'uploads/images/20210623155107f09056250.png', 'S', 0, 0, ''),
+(3, '黑莓', 'uploads/images/202106231552064ef503917.png', 'H', 0, 0, ''),
+(4, '茅台（MOUTAI）', 'uploads/images/20231107/202311071603323b48c7910.jpg', 'M', 1, 255, ''),
+(5, '五粮液（WULIANGYE）', 'uploads/images/20231107/20231107160332f63301449.jpg', 'W', 1, 255, ''),
+(6, '汾酒', 'uploads/images/20231107/202311071603325a3577947.jpg', 'F', 1, 255, ''),
+(7, '剑南春', 'uploads/images/20231107/202311071603326069a8162.jpg', 'J', 1, 255, ''),
+(8, '泸州老窖（LUZHOULAOJIAO）', 'uploads/images/20231107/20231107160332bca632302.jpg', 'L', 1, 255, ''),
+(9, '习酒', 'uploads/images/20231107/202311071603321a9242278.jpg', 'X', 1, 255, ''),
+(10, '潭', 'uploads/images/20231107/20231107160332f38329986.jpg', 'T', 1, 255, ''),
+(11, '西凤', 'uploads/images/20231107/2023110716033262a0e2453.jpg', 'X', 1, 255, ''),
+(12, '洋河（YANGHE）', 'uploads/images/20231107/20231107160332a1b2c3d01.jpg', 'Y', 1, 255, ''),
+(13, '华为（HUAWEI）', 'uploads/images/20231107/20231107160332a1b2c3d04.jpg', 'H', 1, 255, ''),
+(14, '小米（MI）', 'uploads/images/20231107/20231107160332a1b2c3d05.jpg', 'X', 1, 255, ''),
+(15, '索尼（SONY）', 'uploads/images/20231107/20231107160332a1b2c3d06.jpg', 'S', 1, 255, ''),
+(16, '美的（Midea）', 'uploads/images/20231107/20231107160332a1b2c3d10.jpg', 'M', 1, 255, ''),
+(17, '格力（GREE）', 'uploads/images/20231107/20231107160332a1b2c3d11.jpg', 'G', 1, 255, ''),
+(18, '海尔（Haier）', 'uploads/images/20231107/20231107160332a1b2c3d12.jpg', 'H', 1, 255, ''),
+(19, '耐克（NIKE）', 'uploads/images/20231107/20231107160332a1b2c3d14.jpg', 'N', 1, 255, ''),
+(20, '阿迪达斯（adidas）', 'uploads/images/20231107/20231107160332a1b2c3d15.jpg', 'A', 1, 255, '');
+
+
+-- ============================================================
+-- 四、 插入 50 个商品 SPU (分别挂载在 5~10 的二级类目下)
 -- ============================================================
 
 -- 类目 5: 智能手机 (共 8 个)
-INSERT INTO `products` (`id`, `category_id`, `name`, `brand`, `description`) VALUES
-(1, 5, 'iPhone 15 Pro Max', 'Apple', '搭载 A17 Pro 芯片，钛金属设计，5倍光学变焦。'),
-(2, 5, '华为 Mate 60 Pro', '华为', '卫星通话，玄武架构超可靠，鸿蒙OS系统。'),
-(3, 5, '小米 14 Ultra', '小米', '徕卡全明星四摄，一英寸主摄，专业影像旗舰。'),
-(4, 5, 'vivo X100 Pro', 'vivo', '天玑9300芯片，蔡司APO超级长焦，续航持久。'),
-(5, 5, 'OPPO Find X7 Ultra', 'OPPO', '双潜望长焦，哈苏专业影像，巅峰性能。'),
-(6, 5, '三星 Galaxy S24 Ultra', '三星', '内置 S Pen，AI 实时翻译，第三代骁龙8for Galaxy。'),
-(7, 5, '荣耀 Magic6 Pro', '荣耀', '巨犀玻璃，荣耀鸿燕通信，单反级鹰眼相机。'),
-(8, 5, '一加 12', '一加', '超越 Pro 的性能，东方屏，哈苏影像加持。');
+INSERT INTO `goods_products` (`id`, `category_id`, `name`, `brand_id`, `description`, `spec_type`) VALUES
+(1, 5, 'iPhone 15 Pro Max', 4, '搭载 A17 Pro 芯片，钛金属设计，5倍光学变焦。', 2),
+(2, 5, '华为 Mate 60 Pro', 1, '卫星通话，玄武架构超可靠，鸿蒙OS系统。', 2),
+(3, 5, '小米 14 Ultra', 18, '徕卡全明星四摄，一英寸主摄，专业影像旗舰。', 2),
+(4, 5, 'vivo X100 Pro', 2, '天玑9300芯片，蔡司APO超级长焦，续航持久。', 2),
+(5, 5, 'OPPO Find X7 Ultra', 6, '双潜望长焦，哈苏专业影像，巅峰性能。', 2),
+(6, 5, '三星 Galaxy S24 Ultra', 17, '内置 S Pen，AI 实时翻译，第三代骁龙8for Galaxy。', 2),
+(7, 5, '荣耀 Magic6 Pro', 4, '巨犀玻璃，荣耀鸿燕通信，单反级鹰眼相机。', 2),
+(8, 5, '一加 12', 5, '超越 Pro 的性能，东方屏，哈苏影像加持。', 2);
 
 -- 类目 6: 音频设备 (共 8 个)
-INSERT INTO `products` (`id`, `category_id`, `name`, `brand`, `description`) VALUES
-(9, 6, '索尼 WH-1000XM5 降噪耳机', '索尼', '行业领先主动降噪，30小时超长续航，佩戴舒适。'),
-(10, 6, 'Bose QuietComfort Ultra', 'Bose', '沉浸式音频，世界级消噪技术，至臻音质。'),
-(11, 6, 'AirPods Pro 2', 'Apple', 'H2 芯片驱动，主动降噪性能翻倍，个性化空间音频。'),
-(12, 6, 'JBS Pulse 4 蓝牙音箱', 'JBL', '360度炫彩 LED 灯效，震撼低音，防水便携。'),
-(13, 6, 'Marshall Stanmore III', '马歇尔', '摇滚经典复古设计，宽广声场，蓝牙5.2。'),
-(14, 6, '森海塞尔 Momentum 4', '森海塞尔', '发烧级音质，智能触控，60小时持久续航。'),
-(15, 6, '漫步者 S1000W', '漫步者', 'Hi-Res 高清认证，多模连接，木质箱体低音炮。'),
-(16, 6, 'B&W Px7 S2', '宝华韦健', '定制驱动单元，高解析度无线降噪耳机。');
+INSERT INTO `goods_products` (`id`, `category_id`, `name`, `brand_id`, `description`, `spec_type`) VALUES
+(9, 6, '索尼 WH-1000XM5 降噪耳机', 16, '行业领先主动降噪，30小时超长续航，佩戴舒适。', 2),
+(10, 6, 'Bose QuietComfort Ultra', 5, '沉浸式音频，世界级消噪技术，至臻音质。', 2),
+(11, 6, 'AirPods Pro 2', 19, 'H2 芯片驱动，主动降噪性能翻倍，个性化空间音频。', 1),
+(12, 6, 'JBS Pulse 4 蓝牙音箱', 18, '360度炫彩 LED 灯效，震撼低音，防水便携。', 1),
+(13, 6, 'Marshall Stanmore III', 19, '摇滚经典复古设计，宽广声场，蓝牙5.2。', 1),
+(14, 6, '森海塞尔 Momentum 4', 8, '发烧级音质，智能触控，60小时持久续航。', 1),
+(15, 6, '漫步者 S1000W', 10, 'Hi-Res 高清认证，多模连接，木质箱体低音炮。', 1),
+(16, 6, 'B&W Px7 S2', 9, '定制驱动单元，高解析度无线降噪耳机。', 1);
 
 -- 类目 7: 男装外套 (共 8 个)
-INSERT INTO `products` (`id`, `category_id`, `name`, `brand`, `description`) VALUES
-(17, 7, '北面 冲锋衣三合一', 'The North Face', '防水防风透气面料，可拆卸内胆，户外出行必备。'),
-(18, 7, '始祖鸟 Beta LT 冲锋衣', 'Arc\'teryx', 'GORE-TEX 顶级面料，轻量化硬壳防水夹克。'),
-(19, 7, '波司登 极寒系列羽绒服', '波司登', '90% 高蓬松鹅绒，蓄热锁温，严冬保暖。'),
-(20, 7, '迪卡侬 抓绒衣男士保暖外套', 'Decathlon', '轻便透气，亲肤舒适，春秋户外徒步休闲。'),
-(21, 7, '哥伦比亚 三合一防水外套', 'Columbia', 'Omni-Heat 自发热科技，全天候应对恶劣天气。'),
-(22, 7, '耐克 NSW 休闲夹克', 'Nike', '经典街头风设计，防风舒适，日常百搭。'),
-(23, 7, '阿迪达斯 经典三条纹运动外套', 'Adidas', '复古运动剪裁，透气面料，吸汗速干。'),
-(24, 7, '优衣库 登山夹克', 'Uniqlo', '简约剪裁，轻度防水，日常通勤必备。');
+INSERT INTO `goods_products` (`id`, `category_id`, `name`, `brand_id`, `description`, `spec_type`) VALUES
+(17, 7, '北面 冲锋衣三合一', 3, '防水防风透气面料，可拆卸内胆，户外出行必备。', 2),
+(18, 7, '始祖鸟 Beta LT 冲锋衣', 17, 'GORE-TEX 顶级面料，轻量化硬壳防水夹克。', 2),
+(19, 7, '波司登 极寒系列羽绒服', 18, '90% 高蓬松鹅绒，蓄热锁温，严冬保暖。', 2),
+(20, 7, '迪卡侬 抓绒衣男士保暖外套', 9, '轻便透气，亲肤舒适，春秋户外徒步休闲。', 1),
+(21, 7, '哥伦比亚 三合一防水外套', 1, 'Omni-Heat 自发热科技，全天候应对恶劣天气。', 1),
+(22, 7, '耐克 NSW 休闲夹克', 7, '经典街头风设计，防风舒适，日常百搭。', 1),
+(23, 7, '阿迪达斯 经典三条纹运动外套', 4, '复古运动剪裁，透气面料，吸汗速干。', 1),
+(24, 7, '优衣库 登山夹克', 13, '简约剪裁，轻度防水，日常通勤必备。', 1);
 
 -- 类目 8: 运动鞋靴 (共 8 个)
-INSERT INTO `products` (`id`, `category_id`, `name`, `brand`, `description`) VALUES
-(25, 8, '耐克 Air Zoom Pegasus 40', 'Nike', '回弹缓震，透气鞋面，专业公路跑步鞋。'),
-(26, 8, '阿迪达斯 UltraBoost Light', 'Adidas', '轻量化 BOOST 中底，终极能量反馈。'),
-(27, 8, 'HOKA ONE ONE Clifton 9', 'HOKA', '超厚缓震中底，长距离跑步无压力，轻量舒适。'),
-(28, 8, '萨洛蒙 XT-6 越野跑鞋', 'Salomon', '经典全地形越野鞋，Quicklace 快速系带系统。'),
-(29, 8, '亚瑟士 GEL-KAYANO 30', 'Asics', '顶级支撑稳定跑鞋，护膝保护，适合大体重。'),
-(30, 8, '新百伦 990v6 复古跑鞋', 'New Balance', '总统慢跑鞋，猪皮拼接网眼，复古潮流。'),
-(31, 8, '安踏 炽热专业篮球鞋', '安踏', '缓震耐磨，实战利器，透气包裹。'),
-(32, 8, '特步 氢风科技跑步鞋', '特步', '超轻透气，夏季清爽不闷脚。');
+INSERT INTO `goods_products` (`id`, `category_id`, `name`, `brand_id`, `description`, `spec_type`) VALUES
+(25, 8, '耐克 Air Zoom Pegasus 40', 10, '回弹缓震，透气鞋面，专业公路跑步鞋。', 2),
+(26, 8, '阿迪达斯 UltraBoost Light', 13, '轻量化 BOOST 中底，终极能量反馈。', 1),
+(27, 8, 'HOKA ONE ONE Clifton 9', 10, '超厚缓震中底，长距离跑步无压力，轻量舒适。', 1),
+(28, 8, '萨洛蒙 XT-6 越野跑鞋', 13, '经典全地形越野鞋，Quicklace 快速系带系统。', 1),
+(29, 8, '亚瑟士 GEL-KAYANO 30', 17, '顶级支撑稳定跑鞋，护膝保护，适合大体重。', 1),
+(30, 8, '新百伦 990v6 复古跑鞋', 11, '总统慢跑鞋，猪皮拼接网眼，复古潮流。', 1),
+(31, 8, '安踏 炽热专业篮球鞋', 19, '缓震耐磨，实战利器，透气包裹。', 1),
+(32, 8, '特步 氢风科技跑步鞋', 7, '超轻透气，夏季清爽不闷脚。', 1);
 
 -- 类目 9: 露营装备 (共 9 个)
-INSERT INTO `products` (`id`, `category_id`, `name`, `brand`, `description`) VALUES
-(33, 9, '牧高笛 自由之星2 户外帐篷', '牧高笛', '防暴雨级210T面料，自立式双十字支架。'),
-(34, 9, '挪客 云尚超轻双人帐篷', 'Naturehike', '20D硅布超轻防雨，登山徒步轻量化首选。'),
-(35, 9, '黑鹿 铝合金折叠蛋巢桌椅组合', 'BlackDeer', '便携式露营桌椅，组装简便，坚固耐用。'),
-(36, 9, 'Alpine Peak 户外车载冰箱', 'Alpine', '强力压缩机速冻，露营自驾冷饮必备。'),
-(37, 9, '火枫 星火便携式防风炉头', 'Fire-Maple', '大功率聚能燃烧，高海拔抗风露营炉具。'),
-(38, 9, 'Snow Peak 钛金双层马克杯', 'Snow Peak', '超轻钛金属材质，折叠手柄，露营泡茶神器。'),
-(39, 9, '科勒曼 营地车载推车', 'Coleman', '大容量折叠手推车，越野大轮，轻松拉货。'),
-(40, 9, '骆驼 充气床垫双人加厚', 'Camel', '自动充气防潮垫，露营帐篷内铺设，睡眠舒适。'),
-(41, 9, '伯希和 户外防水大天幕', 'Pelliot', '黑胶防晒涂层，遮阳隔热，搭建面积大。');
+INSERT INTO `goods_products` (`id`, `category_id`, `name`, `brand_id`, `description`, `spec_type`) VALUES
+(33, 9, '牧高笛 自由之星2 户外帐篷', 7, '防暴雨级210T面料，自立式双十字支架。', 1),
+(34, 9, '挪客 云尚超轻双人帐篷', 2, '20D硅布超轻防雨，登山徒步轻量化首选。', 1),
+(35, 9, '黑鹿 铝合金折叠蛋巢桌椅组合', 8, '便携式露营桌椅，组装简便，坚固耐用。', 1),
+(36, 9, 'Alpine Peak 户外车载冰箱', 16, '强力压缩机速冻，露营自驾冷饮必备。', 1),
+(37, 9, '火枫 星火便携式防风炉头', 20, '大功率聚能燃烧，高海拔抗风露营炉具。', 1),
+(38, 9, 'Snow Peak 钛金双层马克杯', 6, '超轻钛金属材质，折叠手柄，露营泡茶神器。', 1),
+(39, 9, '科勒曼 营地车载推车', 20, '大容量折叠手推车，越野大轮，轻松拉货。', 1),
+(40, 9, '骆驼 充气床垫双人加厚', 14, '自动充气防潮垫，露营帐篷内铺设，睡眠舒适。', 1),
+(41, 9, '伯希和 户外防水大天幕', 2, '黑胶防晒涂层，遮阳隔热，搭建面积大。', 1);
 
 -- 类目 10: 智能家电 (共 9 个)
-INSERT INTO `products` (`id`, `category_id`, `name`, `brand`, `description`) VALUES
-(42, 10, '戴森 V12 Detect Slim 无绳吸尘器', 'Dyson', '激光探测微尘，轻量化设计，强劲数码马达。'),
-(43, 10, '石头 G20 智能扫拖机器人', 'Roborock', '双螺旋自清洁扫拖，AI 避障，自动集尘上下水。'),
-(44, 10, '科沃斯 T20 PRO 扫拖一体机', 'ECOVACS', '55度热水洗拖布，自动回洗，边角深度清洁。'),
-(45, 10, '添可 芙万 3.0 智能洗地机', 'Tineco', '双贴边无死角，智能自清洁，洗拖烘一体。'),
-(46, 10, '小米 智能空气净化器 4 Pro', '小米', '高效除醛除菌，OLED 触控屏，低噪运行。'),
-(47, 10, '美的 变频冷暖空调 1.5匹', '美的', '新一级能效，ECO 节能模式，静音省电。'),
-(48, 10, '九阳 智能太空无油空气炸锅', 'Joyoung', '可视大容量，智能温控，健康低脂少油。'),
-(49, 10, '摩飞 便携式无线榨汁机', 'Morphy Richards', '双杯随行，强劲动力，随时随地鲜榨果汁。'),
-(50, 10, '追觅 H20 Ultra 智能洗地机', 'Dreame', '热风烘干，恒压活水洗地，毛发防缠绕。');
+INSERT INTO `goods_products` (`id`, `category_id`, `name`, `brand_id`, `description`, `spec_type`) VALUES
+(42, 10, '戴森 V12 Detect Slim 无绳吸尘器', 20, '激光探测微尘，轻量化设计，强劲数码马达。', 1),
+(43, 10, '石头 G20 智能扫拖机器人', 8, '双螺旋自清洁扫拖，AI 避障，自动集尘上下水。', 1),
+(44, 10, '科沃斯 T20 PRO 扫拖一体机', 12, '55度热水洗拖布，自动回洗，边角深度清洁。', 1),
+(45, 10, '添可 芙万 3.0 智能洗地机', 15, '双贴边无死角，智能自清洁，洗拖烘一体。', 1),
+(46, 10, '小米 智能空气净化器 4 Pro', 14, '高效除醛除菌，OLED 触控屏，低噪运行。', 1),
+(47, 10, '美的 变频冷暖空调 1.5匹', 15, '新一级能效，ECO 节能模式，静音省电。', 1),
+(48, 10, '九阳 智能太空无油空气炸锅', 11, '可视大容量，智能温控，健康低脂少油。', 1),
+(49, 10, '摩飞 便携式无线榨汁机', 12, '双杯随行，强劲动力，随时随地鲜榨果汁。', 1),
+(50, 10, '追觅 H20 Ultra 智能洗地机', 3, '热风烘干，恒压活水洗地，毛发防缠绕。', 1);
 
 
 -- ============================================================
--- 四、 为部分商品批量生成测试 SKU 规格与库存
--- ============================================================
--- ============================================================
--- 50个商品专属高清手写级 SKU 规格与库存数据
+-- 五、 插入 50 个商品的 65 条 SKU 规格与库存数据
 -- ============================================================
 
-INSERT INTO `skus` (`product_id`, `sku_code`, `spec_name`, `price`, `stock`, `status`) VALUES
+INSERT INTO `goods_skus` (`product_id`, `sku_code`, `spec_name`, `price`, `stock`, `status`) VALUES
 -- 1. iPhone 15 Pro Max
 (1, 'SKU-IP15PM-BLK-128', '白色钛金属 / 128GB', 6999.00, 15, 1),
 (1, 'SKU-IP15PM-BLK-256', '黑色钛金属 / 256GB', 9999.00, 15, 1),

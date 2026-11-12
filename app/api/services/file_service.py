@@ -8,6 +8,7 @@
 
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import UploadFile
 from sqlalchemy import func, select
@@ -288,6 +289,99 @@ class FileService:
                 await OSSStorage.delete_object(object_key)
             except AppException:
                 app_logger.error("附件保存失败，OSS 文件清理失败，object_key={}", object_key)
+            raise
+
+    # ==================== URL 上传到 OSS ====================
+
+    @classmethod
+    async def upload_oss_from_url(
+        cls,
+        db: AsyncSession,
+        owner_type: str,
+        owner_id: int,
+        url: str,
+    ) -> Attachment:
+        """从远程 URL 下载文件到 OSS，支持自动类型识别和校验。
+
+        Args:
+            db: 数据库会话
+            owner_type: 所有者类型（user/admin/system）
+            owner_id: 所有者 ID
+            url: 远程文件 URL（http:// 或 https://）
+
+        Returns:
+            创建的 Attachment 记录
+        """
+        # 1. URL 格式校验
+        if not url or len(url) > 2048:
+            raise AppException(msg="URL 格式错误或过长，最多 2048 字符")
+        if not url.startswith(("http://", "https://")):
+            raise AppException(msg="URL 必须以 http:// 或 https:// 开头")
+
+        # 2. 从 URL 路径推断文件名和类型
+        path_part = urlsplit(url).path.lower()
+        original_name = Path(path_part).name or "download"
+        ext = Path(original_name).suffix.lower()
+
+        # 若无后缀，尝试添加默认后缀
+        if not ext:
+            ext = ".jpg"
+            original_name = f"{original_name}{ext}"
+
+        # 3. 校验文件类型
+        file_type = get_file_type(ext)
+        if file_type not in {"image", "video"}:
+            raise AppException(msg="不支持的附件格式，仅支持配置中允许的图片和视频")
+
+        # 4. 预校验格式（无 file_size）
+        validator = validate_image if file_type == "image" else validate_video
+        validator(ext, 0)
+
+        # 5. OSS 配置校验
+        OSSStorage.validate_config()
+
+        # 6. 生成存储路径
+        stored_name, _, _ = generate_stored_name(original_name)
+        directory = "images" if file_type == "image" else "videos"
+        object_key = f"uploads/{directory}/{datetime.now():%Y/%m}/{stored_name}"
+
+        # 7. 预校验 OSS URL 长度
+        if len(OSSStorage.get_url(object_key)) > 500:
+            raise AppException(msg="OSS 文件访问地址过长，请检查域名配置")
+
+        # 8. 从 URL 下载并上传到 OSS（会校验大小）
+        max_size = IMAGE_MAX_SIZE if file_type == "image" else VIDEO_MAX_SIZE
+        try:
+            oss_url = await OSSStorage.upload_url(
+                url,
+                object_key,
+                max_size=max_size,
+            )
+        except AppException as exc:
+            # 保留原始错误信息（已经过滤认证信息）
+            raise exc
+
+        # 9. 创建数据库记录
+        try:
+            return await cls._create_attachment(
+                db=db,
+                user_id=cls._legacy_user_id(owner_type, owner_id),
+                owner_type=owner_type,
+                owner_id=owner_id,
+                original_name=original_name,
+                stored_name=stored_name,
+                file_path=oss_url,  # OSS 完整 URL
+                file_size=0,  # URL 上传时无法获取准确大小，后续可从 OSS 元数据更新
+                mime_type="application/octet-stream",
+                file_type=file_type,
+            )
+        except Exception:
+            await db.rollback()
+            # 入库失败时清理 OSS 文件
+            try:
+                await OSSStorage.delete_object(object_key)
+            except AppException:
+                app_logger.error("URL 文件保存失败，OSS 文件清理失败，object_key={}", object_key)
             raise
 
     # ==================== 文件已落盘后创建记录 ====================
