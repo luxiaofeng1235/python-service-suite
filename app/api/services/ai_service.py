@@ -113,10 +113,10 @@ class AIService(CoreAIService):
 
     @staticmethod
     async def list_chat_logs(
-        db: AsyncSession,
+        db:AsyncSession,
         user_id: int,
-        page_params: PageParams,
-        model_id: int | None = None,
+        page_params : PageParams,
+        model_id :int | None = None,
     ) -> dict[str, Any]:
         """分页查询当前用户的聊天记录，可按模型筛选，按记录 ID 倒序返回。"""
         conditions = [AiChatLog.user_id == user_id]
