@@ -80,6 +80,15 @@ class GoodsRunner:
 
         if not pending_assistant:
             raise AppException(msg="商品查询阶段未正常结束")
+        # 全部工具决策结束后只发一次最终商品数据，避免推送随后已失效的早期结果。
+        # 空列表也发送，便于前端在续聊无结果时清除上一轮商品卡片。
+        yield AgentStep(
+            "data",
+            data={
+                "kind": "products",
+                "products": [product.model_dump(mode="json") for product in products.values()],
+            },
+        )
         if not products:
             text = self._fallback(outcomes)
             yield AgentStep("delta", content=text)

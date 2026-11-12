@@ -42,10 +42,10 @@ class AgentTool:
 
 @dataclass(frozen=True)
 class AgentStep:
-    """Represent model and tool lifecycle steps without exposing provider objects."""
+    """表示模型、工具和结构化业务数据步骤，不暴露厂商专属对象。"""
 
     type: Literal[
-        "model_start", "delta", "reasoning", "assistant", "tool_start", "tool_end", "done"
+        "model_start", "delta", "reasoning", "assistant", "tool_start", "tool_end", "data", "done"
     ]
     content: str = ""
     message: LLMMessage | None = None
@@ -53,6 +53,7 @@ class AgentStep:
     tool_call_id: str | None = None
     success: bool = True
     usage: dict[str, JsonValue] = field(default_factory=dict)
+    data: dict[str, JsonValue] | None = None
 
 
 class AgentRunner(Protocol):

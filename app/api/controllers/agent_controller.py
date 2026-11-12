@@ -72,7 +72,7 @@ async def astrology_stream(
     response_class=EventSourceResponse,
     responses={
         200: {
-            "description": "沿用 Agent SSE 事件，支持商品语义搜索和实时规格价格库存查询。",
+            "description": "沿用 Agent SSE 事件；data 事件返回封面与商品规格，delta 返回文字，done 表示结束。",
             "content": {"text/event-stream": {"schema": {"type": "string"}}},
         },
     },

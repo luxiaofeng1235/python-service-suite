@@ -268,7 +268,7 @@ class AgentChatService:
         state: _RunState,
         step: AgentStep,
     ) -> AgentStreamEvent | None:
-        """Persist lifecycle changes before exposing their stream notifications."""
+        """先保存消息生命周期变化，再输出通知；文字和业务数据直接转发。"""
         if step.type == "delta":
             state.content_bytes += len(step.content.encode())
             if state.content_bytes > MAX_MESSAGE_BYTES:
@@ -279,6 +279,11 @@ class AgentChatService:
             return self._event(
                 state, "reasoning", content=step.content, message_id=state.assistant_id
             )
+        if step.type == "data":
+            # 数据由具体 Agent 组装；不拼入助手文本，避免前端从自然语言解析商品信息。
+            if step.data is None:
+                raise AppException(msg="Agent 业务数据为空")
+            return self._event(state, "data", data=step.data, message_id=state.assistant_id)
 
         await self._lock_run(db, state)
         if step.type == "model_start":

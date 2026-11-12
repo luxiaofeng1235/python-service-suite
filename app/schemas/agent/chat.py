@@ -1,8 +1,8 @@
 """
 ============================================
-Agent Chat Schemas - Requests and stream events
+Agent 对话模型 - 请求参数与流式事件
 ============================================
-Keeps the application contract independent of model providers and Agent frameworks.
+定义与模型厂商及 Agent 框架无关的请求、文字分片和结构化业务数据协议。
 """
 
 from typing import Literal
@@ -12,35 +12,36 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 
 class AgentChatRequest(BaseModel):
-    """Accept one user message and an optional existing session."""
+    """接收一条用户消息，可指定已有会话。"""
 
     model_config = ConfigDict(extra="forbid")
 
-    message: str = Field(..., min_length=1, max_length=4000, description="User message")
-    session_id: UUID | None = Field(
-        None, description="Existing session UUID; null creates a session"
-    )
+    message: str = Field(..., min_length=1, max_length=4000, description="用户消息")
+    session_id: UUID | None = Field(None, description="已有会话 UUID，未传时创建新会话")
 
     @field_validator("message")
     @classmethod
     def validate_message(cls, value: str) -> str:
-        """Reject whitespace-only messages while preserving their original text."""
+        """拒绝纯空白消息，保留用户原始文本。"""
         if not value.strip():
             raise ValueError("消息内容不能为空")
         return value
 
 
 class AgentStreamEvent(BaseModel):
-    """Expose stable stream events to future HTTP controllers."""
+    """统一输出文字、工具状态和结构化业务数据事件。"""
 
-    type: Literal["session", "delta", "reasoning", "tool_start", "tool_end", "done", "error"] = (
-        Field(..., description="Stream event type")
+    type: Literal[
+        "session", "delta", "reasoning", "tool_start", "tool_end", "data", "done", "error"
+    ] = Field(..., description="流式事件类型")
+    session_id: str = Field(..., description="会话 UUID")
+    agent: str = Field(..., description="Agent 标识")
+    message_id: int | None = Field(None, description="已保存的消息 ID")
+    content: str | None = Field(None, description="文字分片或面向用户的状态说明")
+    tool_name: str | None = Field(None, description="工具名称")
+    tool_call_id: str | None = Field(None, description="工具调用关联 ID")
+    success: bool | None = Field(None, description="工具是否执行成功")
+    usage: dict[str, JsonValue] | None = Field(None, description="累计模型 Token 用量")
+    data: dict[str, JsonValue] | None = Field(
+        None, description="后端结构化业务数据，kind 标记数据类型，例如 products 商品列表"
     )
-    session_id: str = Field(..., description="Session UUID")
-    agent: str = Field(..., description="Agent identifier")
-    message_id: int | None = Field(None, description="Persisted message ID")
-    content: str | None = Field(None, description="Text delta or user-facing status")
-    tool_name: str | None = Field(None, description="Tool name")
-    tool_call_id: str | None = Field(None, description="Tool call correlation ID")
-    success: bool | None = Field(None, description="Whether tool execution succeeded")
-    usage: dict[str, JsonValue] | None = Field(None, description="Accumulated model token usage")

@@ -71,7 +71,13 @@ curl -N -sS 'http://127.0.0.1:8001/api/agent/goods/stream' \
 {"message":"商品 ID 9 现在多少钱，还有哪些规格？","session_id":"首个事件返回的会话UUID"}
 ```
 
-沿用 `session`、`tool_start`、`tool_end`、`delta`、`done`、`error` 事件，`delta.content` 为回答分片。前端不传用户 ID、模型、API Key 或索引维护参数。
+沿用 `session`、`tool_start`、`tool_end`、`delta`、`done`、`error` 事件，`delta.content` 为回答分片。商品流新增通用 `data` 事件，在本轮全部工具查询结束、文字介绍开始前返回一次最终商品列表。前端不传用户 ID、模型、API Key 或索引维护参数。
+
+```json
+{"type":"data","session_id":"会话UUID","agent":"goods","message_id":30,"data":{"kind":"products","products":[{"product_id":9,"name":"降噪耳机","cover_image":"https://example.com/headphones.jpg","brand_id":15,"brand_name":"索尼","category_id":6,"category_name":"音频设备","description":"主动降噪，适合差旅。","spec_type":2,"availability":"in_stock","queried_at":"2026-11-12T18:30:00+08:00","skus":[{"sku_id":18,"sku_code":"SKU-XM5-BLK","spec_name":"黑色 / 标准版","price":"2299.00","stock":35}]}]}}
+```
+
+前端识别 `type=data` 且 `data.kind=products` 后，使用 `data.products` 渲染封面与商品卡片，继续拼接 `delta.content` 展示文字。封面直接来自 MySQL 的 `cover_image`，数据库为空时返回空字符串，可由前端展示占位图；无有效商品时仍发送 `products: []`，用于清除上一轮卡片。此数据由后端查询结果生成，不依赖模型输出图片地址；原工具结果仍按已有机制存入消息表。
 
 ## 配置与部署
 
