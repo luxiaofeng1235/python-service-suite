@@ -3,7 +3,7 @@
 文件上传业务逻辑层
 ============================================
 职责：文件上传流程编排、数据库记录写入、文件列表查询、URL 生成。
-不在本层做文件 I/O 和校验（委托给 storage 模块）。
+文件 I/O 和格式、大小校验委托给 storage 模块。
 """
 
 from datetime import datetime
@@ -233,6 +233,44 @@ class FileService:
         )
 
     # ==================== OSS 上传 ====================
+
+    @classmethod
+    async def upload_oss(
+        cls,
+        db: AsyncSession,
+        *,
+        owner_type: str,
+        owner_id: int,
+        upload_type: str = "local",
+        file: UploadFile | None = None,
+        url: str | None = None,
+    ) -> Attachment:
+        """统一校验上传参数，并按类型分发本地文件或远程 URL 的 OSS 上传。"""
+        if upload_type not in ("local", "url"):
+            raise AppException(msg="upload_type 必须为 local 或 url")
+
+        if upload_type == "local":
+            if file is None:
+                raise AppException(msg="upload_type=local 时必须提供 file 参数")
+            if url:
+                raise AppException(msg="upload_type=local 时不应提供 url 参数")
+            return await cls.upload_oss_for_owner(
+                db,
+                owner_type=owner_type,
+                owner_id=owner_id,
+                file=file,
+            )
+
+        if not url:
+            raise AppException(msg="upload_type=url 时必须提供 url 参数")
+        if file is not None:
+            raise AppException(msg="upload_type=url 时不应提供 file 参数")
+        return await cls.upload_oss_from_url(
+            db,
+            owner_type=owner_type,
+            owner_id=owner_id,
+            url=url,
+        )
 
     @classmethod
     async def upload_oss_for_owner(
