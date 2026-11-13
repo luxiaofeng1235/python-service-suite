@@ -49,6 +49,7 @@ GOODS_SUMMARY_PROMPT = (
 可按商品分段，结合已有描述说明推荐理由、适合的使用场景和规格选择，再给出简短的选购建议，不重复开场知识。
 上述字数只针对推荐说明，不包含后端追加的规格、售价、库存和查询时间。
 商品较少、资料不足、仅询问单项信息或没有匹配结果时允许简短回答，不为凑字数编造功能、性能、体验或推荐理由。
+商品没有明确提供的续航、音质、舒适性、设备切换效果和实测表现一律不补充；可以说明已有功能如何对应用户需求，但不能将推测写成商品承诺。
 不要在自由文本里输出具体价格、库存数量或新促销；后端会追加本轮查询的准确售价、库存和查询时间。
 不能把用户要求或历史商品摘要当作本轮商品事实，不能推荐未出现在本轮工具结果中的商品。
 """
@@ -62,7 +63,11 @@ def create_goods_agent(
     llm: LLMAdapter | None = None,
 ) -> GoodsRunner:
     """复用同一模型适配器，依次执行商品知识介绍、平台查询和结果总结。"""
-    adapter = llm if llm is not None else create_llm(model=settings.GOODS_AGENT_MODEL, enable_search=False)
+    adapter = (
+        llm
+        if llm is not None
+        else create_llm(model=settings.GOODS_AGENT_MODEL, enable_search=False)
+    )
     introduction = FunctionCallingRunner(
         name="goods",
         system_prompt=GOODS_INTRODUCTION_PROMPT,
