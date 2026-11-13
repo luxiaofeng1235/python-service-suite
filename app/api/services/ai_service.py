@@ -10,7 +10,7 @@ from contextlib import AsyncExitStack
 from typing import Any
 
 import anyio
-import httpx
+import httpx2
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.background import BackgroundTask
@@ -20,7 +20,13 @@ from app.common.exception import AppException
 from app.common.pagination import PageParams, paginate
 from app.models.ai_chat_log import AiChatLog
 from app.pkg.logging import app_logger
-from app.schemas.ai import ChatRequest, ChatTTSRequest, ImageRequest, OmniStreamRequest, VideoRequest
+from app.schemas.ai import (
+    ChatRequest,
+    ChatTTSRequest,
+    ImageRequest,
+    OmniStreamRequest,
+    VideoRequest,
+)
 from app.services.ai_image_service import AIImageService
 from app.services.ai_stream_service import AIService as CoreAIService
 from app.services.ai_video_service import AIVideoService
@@ -57,9 +63,9 @@ class AIService(CoreAIService):
         async def forward_stream() -> AsyncGenerator[bytes, None]:
             try:
                 # 分片可能跨越 SSE 事件边界，直接转发即可；不解析或重复添加 data:。
-                async for chunk in upstream.aiter_bytes():
+                async for chunk in upstream.iter_bytes():
                     yield chunk
-            except httpx.HTTPError:
+            except (AppException, httpx2.HTTPError):
                 app_logger.warning("千问多模态流式连接异常")
                 # 流已开始，使用与 PHP 一致的 SSE 错误提示，不伪造正常结束标记。
                 yield "\n\ndata: [ERROR] 千问多模态流式连接中断，请重试\n\n".encode()
@@ -80,9 +86,7 @@ class AIService(CoreAIService):
         return await AIVideoService.to_video(db, req, user_id)
 
     @staticmethod
-    async def get_video(
-        db: AsyncSession, task_id: str, user_id: int
-    ) -> dict[str, list[str]] | str:
+    async def get_video(db: AsyncSession, task_id: str, user_id: int) -> dict[str, list[str]] | str:
         """查询视频进度，生成后由公共服务加水印、上传 OSS 并缓存结果。"""
         return await AIVideoService.get_video(db, task_id, user_id)
 
@@ -113,10 +117,10 @@ class AIService(CoreAIService):
 
     @staticmethod
     async def list_chat_logs(
-        db:AsyncSession,
+        db: AsyncSession,
         user_id: int,
-        page_params : PageParams,
-        model_id :int | None = None,
+        page_params: PageParams,
+        model_id: int | None = None,
     ) -> dict[str, Any]:
         """分页查询当前用户的聊天记录，可按模型筛选，按记录 ID 倒序返回。"""
         conditions = [AiChatLog.user_id == user_id]

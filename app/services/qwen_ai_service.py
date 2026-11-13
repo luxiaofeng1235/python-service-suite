@@ -1,17 +1,32 @@
 """
 ============================================
-Qwen AI Service - upstream streaming client
+千问公共服务 - SDK 流式请求与原生接口调用
 ============================================
-Builds Qwen requests for text streams, multimodal SSE and speech synthesis.
+通过 OpenAI 异步 SDK 接收普通对话和 Agent 分片，转发多模态原始 SSE。
+统一读取后端密钥、配置连接策略并处理异常，原生 TTS 和向量接口保留 HTTP 调用。
 """
 
 import json
 from collections.abc import AsyncGenerator, AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
+import anyio
 import httpx
+import httpx2
+from openai import (
+    APIConnectionError,
+    APIError,
+    APIResponseValidationError,
+    APIStatusError,
+    AsyncAPIResponse,
+    AsyncOpenAI,
+    AsyncStream,
+    DefaultAsyncHttpxClient,
+    Timeout,
+)
+from openai.types.chat import ChatCompletionChunk
 
 from app.common.exception import AppException
 from app.core.config import settings
@@ -19,7 +34,7 @@ from app.core.config import settings
 
 @dataclass(frozen=True)
 class QwenChatConfig:
-    """Resolved settings for one Qwen chat completion."""
+    """一次普通千问对话使用的模型、提示词和联网开关。"""
 
     model: str
     system_prompt: str
@@ -27,7 +42,7 @@ class QwenChatConfig:
 
 
 class QwenAIService:
-    """Qwen-compatible chat completion client."""
+    """集中维护千问兼容接口和原生接口的请求能力。"""
 
     SYSTEM_PROMPT = (
         "你是一个通用 AI 服务平台的智能助手，请根据用户的问题提供准确、清晰、有帮助的回答。"
@@ -38,7 +53,7 @@ class QwenAIService:
 
     @classmethod
     def resolve_config(cls, model_id: int, is_deep_reflection: int = 0) -> QwenChatConfig:
-        """Resolve the supported search model and its prompt."""
+        """根据普通对话参数选择模型，不影响 Agent 的独立模型配置。"""
         if model_id != 1:
             raise AppException(msg="不支持的模型类型")
 
@@ -58,24 +73,119 @@ class QwenAIService:
         messages: list[dict[str, Any]],
         config: QwenChatConfig,
     ) -> AsyncGenerator[tuple[str, str], None]:
-        """Yield reasoning and answer deltas from the Qwen SSE response."""
+        """从 SDK 分片提取思考与正文，保持普通对话的业务返回格式。"""
         payload = {
             "model": config.model,
             "messages": messages,
             "stream": True,
             "enable_search": config.enable_search,
         }
-        async with cls._request(payload) as response:
-            async for raw_line in response.aiter_lines():
-                for event in cls._parse_sse_line(raw_line):
-                    yield event
+        async with cls.chat_stream(payload) as stream:
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                reasoning = getattr(delta, "reasoning_content", None)
+                if isinstance(reasoning, str) and reasoning:
+                    yield "reasoning", reasoning
+                if delta.content:
+                    yield "delta", delta.content
+
+    @classmethod
+    @asynccontextmanager
+    async def chat_stream(
+        cls,
+        payload: dict[str, Any],
+    ) -> AsyncIterator[AsyncStream[ChatCompletionChunk]]:
+        """由 SDK 拆解上游 SSE，供普通对话及所有 Agent 共用。"""
+        async with cls._chat_response(payload) as response:
+            async with await response.parse() as stream:
+                yield stream
+
+    @classmethod
+    @asynccontextmanager
+    async def _chat_response(
+        cls,
+        payload: dict[str, Any],
+    ) -> AsyncIterator[AsyncAPIResponse[AsyncStream[ChatCompletionChunk]]]:
+        """打开 SDK 流式响应，兼容对象解析与多模态原始字节转发。"""
+        stack = AsyncExitStack()
+        try:
+            client = await stack.enter_async_context(cls._create_sdk_client())
+            # 标准选项直接交给 SDK；千问扩展参数通过 extra_body 透传。
+            options = {
+                key: payload[key]
+                for key in (
+                    "stream_options",
+                    "tools",
+                    "tool_choice",
+                    "parallel_tool_calls",
+                    "modalities",
+                    "audio",
+                )
+                if key in payload
+            }
+            extra_body = {
+                key: value
+                for key, value in payload.items()
+                if key not in {"model", "messages", "stream", *options}
+            }
+            response = await stack.enter_async_context(
+                client.chat.completions.with_streaming_response.create(
+                    model=payload["model"],
+                    messages=payload["messages"],
+                    stream=True,
+                    extra_body=extra_body,
+                    extra_headers={"Accept": "text/event-stream"},
+                    **options,
+                )
+            )
+            content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
+            if content_type.lower() != "text/event-stream":
+                raise AppException(msg="千问服务未返回事件流，请稍后重试")
+            yield response
+        except APIStatusError as exc:
+            body = await exc.response.aread()
+            raise AppException(msg=cls._extract_error_message(exc.status_code, body)) from exc
+        except (APIConnectionError, httpx2.HTTPError) as exc:
+            raise AppException(msg="千问服务网络异常，请稍后重试") from exc
+        except (APIResponseValidationError, json.JSONDecodeError) as exc:
+            raise AppException(msg="千问服务返回格式错误，请稍后重试") from exc
+        except APIError as exc:
+            raise AppException(msg="千问流式服务异常，请稍后重试") from exc
+        finally:
+            # 即使客户端断开或任务被取消，也释放响应及 SDK 的 HTTP 连接。
+            with anyio.CancelScope(shield=True):
+                await stack.aclose()
+
+    @staticmethod
+    def _create_sdk_client() -> AsyncOpenAI:
+        """从完整聊天地址派生 SDK 根地址，保持原有超时与无重试策略。"""
+        if not settings.QWEN_API_KEY:
+            raise AppException(msg="QWEN_API_KEY 未配置")
+        url = settings.QWEN_CHAT_URL.rstrip("/")
+        if not url:
+            raise AppException(msg="QWEN_CHAT_URL 未配置")
+        suffix = "/chat/completions"
+        if not url.endswith(suffix):
+            raise AppException(msg="QWEN_CHAT_URL 必须配置完整的 /chat/completions 接口地址")
+        return AsyncOpenAI(
+            api_key=settings.QWEN_API_KEY,
+            base_url=url[: -len(suffix)],
+            timeout=Timeout(300.0, connect=settings.QWEN_CONNECT_TIMEOUT),
+            # 禁止 SDK 自动重发请求，避免额外等待和重复生成。
+            max_retries=0,
+            http_client=DefaultAsyncHttpxClient(trust_env=False),
+            _strict_response_validation=True,
+        )
 
     @classmethod
     @asynccontextmanager
     async def stream_omni(
-        cls, messages: list[dict[str, Any]],
-    ) -> AsyncIterator[httpx.Response]:
-        """Open an Omni stream using backend model and audio settings."""
+        cls,
+        messages: list[dict[str, Any]],
+    ) -> AsyncIterator[AsyncAPIResponse[AsyncStream[ChatCompletionChunk]]]:
+        """使用 SDK 打开多模态原始 SSE，保留音频、用量及结束标记。"""
         payload = {
             "model": settings.QWEN_OMNI_MODEL,
             "messages": messages,
@@ -89,15 +199,12 @@ class QwenAIService:
             # 音频输出使用非思考模式，联网搜索参数不沿用普通文本对话。
             "enable_thinking": False,
         }
-        async with cls._request(payload) as response:
-            content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
-            if content_type.lower() != "text/event-stream":
-                raise AppException(msg="千问多模态服务未返回事件流，请稍后重试")
+        async with cls._chat_response(payload) as response:
             yield response
 
     @classmethod
     async def chattts(cls, text: str) -> dict[str, Any]:
-        """Synthesize speech and return the original completed audio response."""
+        """调用原生语音合成接口，返回生成完成的音频地址与用量。"""
         if not settings.QWEN_TTS_URL:
             raise AppException(msg="QWEN_TTS_URL 未配置")
         payload = {
@@ -143,8 +250,7 @@ class QwenAIService:
         url: str | None = None,
         stream: bool = True,
     ) -> AsyncIterator[httpx.Response]:
-        """Expose shared HTTP transport without applying a conversation policy."""
-        # Agent 自行组装模型、提示词和工具参数，底层共用后端鉴权及异常处理。
+        """提供原生 HTTP 请求，供向量等非流式接口复用鉴权及异常处理。"""
         async with cls._request(payload, url=url, stream=stream) as response:
             yield response
 
@@ -157,7 +263,7 @@ class QwenAIService:
         url: str | None = None,
         stream: bool = True,
     ) -> AsyncIterator[httpx.Response]:
-        """Share backend authentication, connection policy and HTTP error checks."""
+        """统一原生接口的后端鉴权、连接策略和 HTTP 错误检查。"""
         if not settings.QWEN_API_KEY:
             raise AppException(msg="QWEN_API_KEY 未配置")
         request_url = settings.QWEN_CHAT_URL if url is None else url
@@ -187,58 +293,15 @@ class QwenAIService:
 
     @staticmethod
     def _create_client() -> httpx.AsyncClient:
-        """Create an HTTP client with the chat stream timeout policy."""
+        """创建原生接口 HTTP 客户端，保持已有连接策略。"""
         return httpx.AsyncClient(
             timeout=httpx.Timeout(300.0, connect=30.0),
             trust_env=False,
         )
 
-    @classmethod
-    def _parse_sse_line(cls, raw_line: str) -> list[tuple[str, str]]:
-        """Parse one OpenAI-compatible SSE data line."""
-        line = raw_line.strip()
-        if not line.startswith("data:"):
-            return []
-
-        payload = line[5:].strip()
-        if not payload or payload == "[DONE]":
-            return []
-
-        try:
-            data = json.loads(payload)
-        except json.JSONDecodeError:
-            return []
-        if not isinstance(data, dict):
-            return []
-
-        error = data.get("error")
-        if error:
-            if isinstance(error, dict):
-                message = error.get("message") or error.get("code")
-            else:
-                message = str(error)
-            raise AppException(msg=message or "上游服务返回错误")
-
-        choices = data.get("choices") or []
-        if not choices or not isinstance(choices[0], dict):
-            return []
-
-        delta = choices[0].get("delta") or {}
-        if not isinstance(delta, dict):
-            return []
-
-        events: list[tuple[str, str]] = []
-        reasoning = delta.get("reasoning_content")
-        content = delta.get("content")
-        if isinstance(reasoning, str) and reasoning:
-            events.append(("reasoning", reasoning))
-        elif isinstance(content, str) and content:
-            events.append(("delta", content))
-        return events
-
     @staticmethod
     def _extract_error_message(status_code: int, body: bytes) -> str:
-        """Extract a useful message from an upstream HTTP error response."""
+        """从上游 HTTP 错误响应中提取可读提示。"""
         try:
             data = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):

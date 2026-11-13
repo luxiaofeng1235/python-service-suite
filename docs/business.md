@@ -64,7 +64,7 @@ curl -sS 'http://127.0.0.1:8001/api/file/upload/oss' \
 
 说明：
 
-- 上游使用 OpenAI 兼容协议，当前流程按千问模型与联网搜索策略处理
+- 上游使用 OpenAI 兼容协议，通过公共 `AsyncOpenAI` SDK 请求和解析分片，普通对话与 Agent 共用；当前流程按千问模型与联网搜索策略处理
 - 后端从 `.env` 读取 `QWEN_API_KEY`，从 `config/ai.py` 读取 `QWEN_CHAT_URL`，调用千问时自动附加认证；前端无需传千问密钥
 - 两个流式接口均返回 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`X-Accel-Buffering: no`
 - AI 对话接口使用项目登录 Token 校验用户身份并隔离上下文；此 Token 与千问 API Key 无关
@@ -96,6 +96,7 @@ curl -N \
 - 复用 `QWEN_CHAT_URL` 和后端 `.env` 的 `QWEN_API_KEY`；模型 `qwen3-omni-flash`、音色 `Cherry`、音频格式 `wav` 集中维护在 `config/ai.py`。
 - 兼容 `messages` 字段和 PHP 的表单提交方式，消息 `content` 可为文本或多模态内容数组；历史上下文由请求提供，不重复拼接，也不写入聊天记录。
 - 返回原始 `choices/delta/audio/usage` 结构，完整转发空 `choices` 的用量分片和上游结束标记。前端自行解析 SSE、解码音频并播放。
+- 通过公共 SDK 的原始流式响应转发字节，不重复解析或包装 SSE；连接中断时关闭响应及客户端，不伪造正常结束标记。
 - 此入口不附加普通对话的联网搜索参数；实时天气等问题需要另外接入实时数据。
 
 ```bash

@@ -292,7 +292,7 @@ make clean           # 清理缓存/tmp/log
 
 核心流程：从 Token 获取用户 → 创建或读取当前用户的对话 → 组装系统提示词和历史消息 → 请求千问并逐段返回 SSE → 将用户消息、完整回复和推理内容保存到 `ai_chat_log.chat`。流式服务独立管理数据库会话，异常或客户端断开时尝试保存已收到的部分结果；系统提示词不入库，消息按原始文本保存。
 
-详细说明见 [AI 流式输出](docs/business.md#ai-流式输出)。
+普通对话和 Agent 的上游流式请求统一使用 `AsyncOpenAI` SDK，业务层继续负责工具调用、消息存储和前端 SSE 事件。详细说明见 [AI 流式输出](docs/business.md#ai-流式输出)。
 
 ## Agent 流式对话（Function Calling）
 

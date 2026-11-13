@@ -37,7 +37,7 @@ config/                      # AI、商品索引等后端业务配置
 | [FunctionCallingRunner](../app/agents/runtime.py) | 拼接工具调用参数、校验、执行工具、多轮模型调用 |
 | [运势内容生成](../app/agents/astrology/horoscope.py) | 缓存缺失时调用模型，生成并校验结构化娱乐内容 |
 | [LLM 适配层](../app/agents/llm/base.py) | 用 `LLMAdapter`、`LLMMessage`、`LLMChunk` 隔离模型厂商 |
-| [QwenLLM](../app/agents/llm/qwen.py) / [QwenAIService](../app/services/qwen_ai_service.py) | 前者转换 Agent 消息和分片，后者复用 HTTP 请求、后端密钥及错误处理 |
+| [QwenLLM](../app/agents/llm/qwen.py) / [QwenAIService](../app/services/qwen_ai_service.py) | 前者将 SDK 分片转换为 `LLMChunk`，后者统一维护 `AsyncOpenAI` 请求、后端密钥、超时和错误处理 |
 | [Embedding 适配层](../app/agents/llm/embedding.py) / [启动入口](../app/setup/agents.py) | 复用千问请求生成向量；应用启动时创建共享商品服务并后台初始化索引 |
 
 Controller 只负责入口。Agent 层管理提示词和编排，Service 层处理身份、数据和业务规则；模型不能直接操作数据库。
@@ -337,7 +337,9 @@ data: {"type":"data","session_id":"11111111-1111-4111-8111-111111111111","agent"
 | `AGENT_TOOL_TIMEOUT` | `30.0` 秒 | 单次工具执行及运势生成超时 |
 | `AGENT_RUN_TIMEOUT` | `300.0` 秒 | 整轮执行超时 |
 
-Agent 复用已有 `QWEN_API_KEY` 和 `QWEN_CHAT_URL`，鉴权、请求发送及 HTTP 错误处理集中在 `QwenAIService`。已有普通聊天、多模态流式转发和 TTS 接口继续使用各自协议与业务服务，Agent 接口使用本页定义的事件协议。
+Agent 复用已有 `QWEN_API_KEY` 和 `QWEN_CHAT_URL`，鉴权、请求发送及错误处理集中在 `QwenAIService`。普通对话和所有 Agent 统一通过 `AsyncOpenAI` 接收上游分片，不再手动拆解 SSE；`QwenLLM` 只转换正文、思考、工具参数片段、结束原因和用量，工具参数组装及执行仍由 `FunctionCallingRunner` 负责。
+
+`QWEN_CHAT_URL` 继续填写完整的 `/chat/completions` 地址，由公共服务派生 SDK 的 `base_url`。SDK 请求关闭自动重试，保持原有调用策略；取消或断开时关闭响应及客户端。多模态接口通过同一 SDK 的原始流式响应转发字节，保留音频、用量和结束标记。原生 TTS、图片、视频和商品 Embedding 保持已有调用方式，各接口对前端的协议不变。
 
 商品 Embedding 模型、维度和地址也维护在 `config/ai.py`；功能开关、持久化路径、集合名称、索引批量大小、Top-K、距离阈值及返回数量在 [config/goods.py](../config/goods.py) 统一维护。密钥继续从后端读取，前端只提交业务请求。
 
