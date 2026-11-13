@@ -223,6 +223,7 @@ result = await AIService.get_image(db, task_id, user_id)
 沿用 PHP `toVideo/getVideo`：提交异步任务 → 保存 `ai_to_work`（`type=2`、`status=0`）→ 前端轮询 → 下载视频到本地 → FFmpeg 叠加 PNG 水印 → 上传 OSS → 保存 URL 数组并设置 `status=1` → 删除本地成片。上传或入库失败时保留成片供重试，关闭 OSS 时保留本地文件。查询已完成任务直接返回缓存。
 
 - `POST /api/ai/to_video`：支持 JSON、URL 编码表单和 multipart 表单；统一使用 `wan3.0-video` 标准版。原有 `{"to":2,"prompt":"..."}` 请求继续可用，`to` 默认 2；图生视频传 `to=1` 和 `image_url`（兼容 `img_url`），后端转换为 `input.media` 的 `first_frame`。两种方式的作品都保存为 `type=2`。
+- `to` 只选择生成方式，不选择模型；文生视频和图生视频均使用 `config/qwenai.py` 中 `QWEN_VIDEO_MODEL` 配置的 `wan3.0-video`。
 - 默认生成 `720P`、`5` 秒、`16:9`、带声音的视频；可传 `resolution`（480P/720P/1080P）、`duration`（2～30 秒整数）、`ratio`（adaptive/21:9/16:9/4:3/1:1/3:4/9:16）、`audio`（布尔值）。提示词必传，1～20000 字符。`to=1` 缺少参考图或 `to=2` 携带参考图均在提交前拒绝；不使用自动时长，避免时长不确定。
 - 参考图使用模型可直接访问的 HTTP(S) 地址，接口不代为上传本地图片；可先通过附件接口上传获得地址。上游要求 JPEG/JPG/PNG（不支持透明通道）/BMP/WEBP，单边 240～8000 像素，长宽比不超过 8:1，大小不超过 20 MB；具体图片内容限制由上游检查。
 - `GET /api/ai/get_video?task_id=...`：生成中返回任务 ID，完成返回 `{"code":1,"msg":"视频生成成功","data":{"video":["https://video.example.com/uploads/ai_videos/xxx.mp4"]}}`，域名取部署时配置的 `AI_VIDEO_BASE_URL`。

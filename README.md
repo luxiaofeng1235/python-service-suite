@@ -202,8 +202,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 - **流式对话**：用户提问 → 读取历史上下文 → 普通回答或深度思考 → 流式返回 → 保存聊天记录。
 - **多模态流式转发**：`POST /api/chat/stream_new` 提交消息数组 → 后端补充模型、音色和音频格式 → 原样转发文字、音频和用量 SSE 分片；上下文由请求提供。
 - **文本转语音**：`POST /api/chat/chattts` 提交文本 → 后端补充模型、音色和语言 → 返回音频临时地址、过期时间及用量。
-- **图片生成**：支持文生图和参考图生图，默认万相 2.7 基础版 → 返回任务 ID → 查询生成进度 → 保存图片并上传 OSS → 返回图片地址，支持多张图片。
-- **视频生成**：Wan 3.0 支持文生视频与首帧图生视频 → 返回任务 ID → 查询生成进度 → 下载视频并加水印 → 上传 OSS → 返回视频地址。
+- **图片生成**：支持文生图和参考图生图，默认 `wan2.7-image`（`model=1`），专业版 `wan2.7-image-pro`（`model=2`）→ 返回任务 ID → 查询生成进度 → 保存图片并上传 OSS → 返回图片地址，支持多张图片。
+- **视频生成**：`wan3.0-video` 标准版统一支持文生视频与首帧图生视频，默认 720P、5 秒 → 返回任务 ID → 查询生成进度 → 下载视频并加水印 → 上传 OSS → 返回视频地址。
 - **任务与作品查询**：按登录用户隔离任务，生成中返回进度，完成后读取缓存结果，失败返回原因；图片缓存支持缺失补传。
 - **通用 OSS 附件上传**：`POST /api/file/upload/oss` 公共上传图片或视频 → 校验格式和大小 → 上传 OSS → 保存附件记录 → 返回完整地址及原文件名等信息；无需 Token 和验签。
 
@@ -345,7 +345,7 @@ Docker 已挂载 `data/chroma_db`，同一索引路径使用单个应用进程�
 
 **运行环境必须安装 FFmpeg**，用于生成视频后的水印处理；安装 Python 依赖不会安装 FFmpeg。安装方式见 [FFmpeg 安装与检查](docs/business.md#ffmpeg-安装与检查)。
 
-统一使用 `wan3.0-video` 标准版：`POST /api/ai/to_video` 默认 `to=2` 文生视频，传 `to=1` 和 `image_url` 为首帧图生视频（兼容 `img_url`）。默认 720P、5 秒、16:9、带声音，可通过 `resolution`、`duration`、`ratio`、`audio` 调整；模型及默认参数在 `config/qwenai.py` 维护。原文生视频请求参数继续可用，进度和结果统一通过 `GET /api/ai/get_video` 查询，完成返回 `data.video`。
+统一使用 `wan3.0-video` 标准版：`POST /api/ai/to_video` 默认 `to=2` 文生视频，传 `to=1` 和 `image_url` 为首帧图生视频（兼容 `img_url`）；`to` 只选择生成方式，两者使用同一模型。默认 720P、5 秒、16:9、带声音，可通过 `resolution`、`duration`、`ratio`、`audio` 调整；模型及默认参数在 `config/qwenai.py` 维护。原文生视频请求参数继续可用，进度和结果统一通过 `GET /api/ai/get_video` 查询，完成返回 `data.video`。
 
 沿用 PHP 的作品处理流程：提交异步任务 → 保存 `ai_to_work`（`type=2`、`status=0`）→ 前端轮询 → 下载视频到本地 → FFmpeg 叠加 PNG 水印 → 上传 OSS → 保存 URL 数组并设置 `status=1` → 删除本地成片。上传或入库失败时保留成片供重试，关闭 OSS 时保留本地文件。查询已完成任务直接返回缓存。
 
