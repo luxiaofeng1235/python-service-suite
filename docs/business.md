@@ -129,11 +129,15 @@ curl -sS -X POST 'http://127.0.0.1:8001/api/chat/chattts' \
 
 接口如下：
 
-- `POST /api/ai/to_image`：提交文生图任务，支持 JSON、URL 编码表单和 multipart 表单。
+- `POST /api/ai/to_image`：提交文生图或图生图任务，支持 JSON、URL 编码表单和 multipart 表单。
 - `GET /api/ai/get_image`：通过查询参数 `task_id` 获取生成进度和结果。
 - 两个接口均需要项目登录 Token，用户 ID 由后端从 Token 获取，前端无需传 `user_id`。任务保存和查询始终限定当前登录用户。千问密钥仍由后端读取。
-- 提交参数全部必传：`model`（1或2）、`prompt`（1～500字符）、`size`（如 `1024~1024`）、`n`（1～4）、`watermark`（1开启、2关闭）。宽高各为720～1440整数，总像素不超过200万。
+- `prompt` 必传，1～5000 字符。`model` 默认 `1`（`wan2.7-image` 基础版），`2` 为 `wan2.7-image-pro` 专业版；`n` 默认 `1`，范围 1～4；`watermark` 默认 `2`（关闭），`1` 开启。
+- `size` 默认 `2K`，支持 `1K`、`2K` 和原有的 `宽~高`（如 `1024~1024`）。基础版和所有图生图场景的总像素为 768×768～2048×2048；专业版文生图可使用 `4K`，总像素最高 4096×4096。自定义尺寸须为正整数，宽高比在 1:8～8:1 之间，不能仅按单边长度判断。实际输出尺寸可能略有调整。
+- `image_urls` 可选，传 1～9 个公网 HTTP/HTTPS 图片地址即为图生图，不传或传空数组为文生图。JSON 请求传数组，表单字段传 JSON 数组字符串。可先通过公共 OSS 上传接口取得地址，不接受服务端本地文件路径或 Base64。上游要求参考图为 JPEG/JPG/PNG（无透明通道）/BMP/WEBP，单图不超过 20MB，宽高为 240～8000，宽高比 1:8～8:1；文件内容由上游校验。
 - 水印与 PHP 一致：`watermark=1` 请求千问添加默认水印，`watermark=2` 关闭。`getImage` 仅下载原图并上传 OSS，不再叠加本地 `public/watermark.png`。需要无水印图片时传 `watermark=2`；历史已完成图片仍返回原有结果。
+
+上游参数依据：[阿里云万相图像生成与编辑 2.7 API 参考](https://help.aliyun.com/zh/model-studio/wan-image-generation-and-editing-api-reference)。
 
 ```bash
 curl -X POST 'http://127.0.0.1:8001/api/ai/to_image' \
@@ -146,19 +150,29 @@ curl -G 'http://127.0.0.1:8001/api/ai/get_image' \
   --data-urlencode 'task_id=<提交时返回的任务ID>'
 ```
 
+图生图沿用同一提交和查询接口，例如：
+
+```json
+{
+  "prompt": "把参考图中的小猫改成水彩插画，保留主体特征",
+  "size": "2K",
+  "image_urls": ["https://你的资源域名/uploads/images/cat.jpg"]
+}
+```
+
 提交成功及生成中返回 `{"code":1,"msg":"图片生成中","data":"任务ID"}`；成功后返回 `{"code":1,"msg":"图片生成成功","data":{"image":[...]}}`。
 
 - `app/services/ai_image_service.py`：提交任务、按用户查询任务、下载生成图片和缓存结果。
 - 图片、视频服务按任务查询、缓存读取、上游状态分发、成功和失败处理拆分。数据库状态由 `app/constants/ai.py` 的 `TaskStatus` 枚举维护；`app/services/ai_task_service.py` 共用 JSON 记录解析、缓存错误提取和失败落库方法。
-- `app/pkg/qwen_client.py`：图片和视频共用的千问任务客户端，统一通过官方 `dashscope==2.0.4` 的 `AsyncClient` 调用 `images.jobs.create/fetch` 和 `videos.jobs.create/fetch`，集中维护后端认证、任务结果兼容和错误转换。提交只返回任务 ID，不使用 SDK 的等待完成方法；前端继续轮询原有接口。
+- `app/pkg/qwen_client.py`：图片和视频共用的千问任务客户端，使用官方 `dashscope==2.0.4` 的 `AsyncClient`。该版本图片快捷方法尚未识别 Wan 2.7，图片提交改用 SDK 通用 `AsyncJobs.create`，发送 `input.messages[].content`；图片查询仍用 `images.jobs.fetch`，视频继续用 `videos.jobs.create/fetch`。集中维护后端认证、任务结果兼容和错误转换。提交只返回任务 ID，不使用 SDK 的等待完成方法；前端继续轮询原有接口。
 - SDK 根地址由现有 `QWEN_IMAGE_URL`、`QWEN_VIDEO_URL`、`QWEN_TASK_URL` 派生，无需新增 `.env` 配置。请求与连接超时继续使用 `../config/qwenai.py` 的 `QWEN_REQUEST_TIMEOUT`、`QWEN_CONNECT_TIMEOUT`。禁用 SDK 自动重试，避免重复提交生成任务；正常结束、异常和取消时均关闭客户端连接。
-- SDK 返回值在请求层还原为原有 `output` 结构。查询得到明确失败任务时，交给业务层保存 `status=2` 和错误信息；网络或格式异常只返回错误，保留任务待处理状态。生成后的下载、图片 OSS 同步、视频 FFmpeg 水印及上传流程保持原有职责分层。
+- SDK 返回值在请求层还原为原有 `output` 结构，并将 Wan 2.7 的 `output.choices[].message.content[].image` 统一为图片结果数组，兼容旧模型的 `output.results[].url`。查询得到明确失败任务时，交给业务层保存 `status=2` 和错误信息；网络或格式异常只返回错误，保留任务待处理状态。生成后的下载、图片 OSS 同步、视频 FFmpeg 水印及上传流程保持原有职责分层。
 - `app/api/services/ai_service.py`：提供 `to_image(db, req, user_id)`、`get_image(db, task_id, user_id)` 调用入口。
 - `app/models/ai_to_work.py`：按现有 PHP `ai_to_work` 表映射，`task_id` 为可空的 `VARCHAR(255)`，`work` 可空；`type=1` 图片、`type=2` 视频；状态为 `0` 生成中、`1` 成功、`2` 失败、`3` 已删除。文生图只处理图片任务，已删除任务按不存在处理。
 - 已有 `ai_to_work` 表可直接复用；新环境或缺表环境执行 `alembic upgrade head`，迁移会补建任务表并保留已有数据。
-- 认证复用后端 `.env` 的 `QWEN_API_KEY`。`QWEN_IMAGE_URL` 和 `QWEN_TASK_URL` 统一维护在 `../config/qwenai.py`，使用 PHP 中的 DashScope 地址。
-- 模型沿用 PHP：`model=1` 为 `wanx2.1-t2i-turbo`，`model=2` 为 `wanx2.1-t2i-plus`。
-- 图片按千问返回内容原样下载到 `UPLOAD_DIR/ai_images/`。启用 `OSS_ENABLED=True` 后，再通过公共 `app/storage/oss.py` 上传至 `OSS_BUCKET` 的 `uploads/ai_images/...`，所有图片上传成功后才保存作品地址并设置 `status=1`。返回域名使用 `OSS_VIEW_DOMAIN`，只填写域名，不包含 `/uploads`。
+- 认证复用后端 `.env` 的 `QWEN_API_KEY`。`QWEN_IMAGE_URL`、`QWEN_IMAGE_MODEL`、`QWEN_IMAGE_PRO_MODEL` 和 `QWEN_TASK_URL` 统一维护在 `../config/qwenai.py`。图片提交地址为 `/api/v1/services/aigc/image-generation/generation`，查询仍为 `/api/v1/tasks/{task_id}`，SDK 自动附加异步任务请求头。按账号地域或业务空间要求修改对应域名，提交与查询需使用同一地域。
+- 不传参考图时只发送提示词，传参考图时按数组顺序组装图片和提示词；不发送 Wan 2.7 不支持的 `negative_prompt` 或 `prompt_extend`。当前不开放组图模式及框选编辑参数。
+- 图片按千问返回内容原样下载到 `UPLOAD_DIR/ai_images/`，下载上限单独由 `config/qwenai.py` 的 `AI_IMAGE_MAX_SIZE` 控制（默认 64MB，适配 4K PNG），普通附件上传仍使用原有限制。启用 `OSS_ENABLED=True` 后，再通过公共 `app/storage/oss.py` 上传至 `OSS_BUCKET` 的 `uploads/ai_images/...`，所有图片上传成功后才保存作品地址并设置 `status=1`。返回域名使用 `OSS_VIEW_DOMAIN`，只填写域名，不包含 `/uploads`。
 - 已完成任务查询时会检查本站图片是否存在于 OSS：存在则直接复用；缺失且本地文件还在时自动补传，无需重新生成。上传或查询异常不会伪装成成功，也不会把已有本地文件删除。
 - 关闭 OSS 时仍保留原本地存储方式，访问域名前缀使用 `FILE_BASE_URL`；这个前缀只用于拼接 URL，本身不会上传文件。只有域名正确映射到本地目录时才能直接访问。
 

@@ -14,7 +14,7 @@ import anyio
 import httpx
 from dashscope import AsyncClient
 from dashscope.errors import APIConnectionError, DashScopeError
-from dashscope.resources._jobs import Job
+from dashscope.resources._jobs import AsyncJobs, Job
 
 from app.common.exception import AppException
 from app.core.config import settings
@@ -26,7 +26,7 @@ class QwenTaskClient:
     """复用 DashScope 异步客户端，供图片和视频业务提交、查询任务。"""
 
     _SUBMIT_PATHS: ClassVar[dict[TaskMediaType, str]] = {
-        "图片": "/services/aigc/text2image/image-synthesis",
+        "图片": "/services/aigc/image-generation/generation",
         "视频": "/services/aigc/video-generation/video-synthesis",
     }
 
@@ -83,7 +83,16 @@ class QwenTaskClient:
         try:
             async with cls._create_client(base_url) as client:
                 jobs = client.images.jobs if media_type == "图片" else client.videos.jobs
-                if method == "POST":
+                if method == "POST" and media_type == "图片":
+                    # SDK 2.0.4 的图片快捷方法尚未识别 Wan 2.7，使用通用任务方法发送原生消息。
+                    image_jobs = AsyncJobs(client, "aigc/image-generation/generation", "aigc")
+                    job = await image_jobs.create(
+                        model=payload["model"],
+                        input=payload["input"],
+                        parameters=payload.get("parameters"),
+                        timeout=timeout,
+                    )
+                elif method == "POST":
                     job = await jobs.create(
                         model=payload["model"],
                         prompt=payload["input"]["prompt"],
@@ -122,6 +131,12 @@ class QwenTaskClient:
         if not isinstance(job.output, dict):
             raise AppException(msg=format_error)
         output = dict(job.output)
+        # Wan 2.7 返回 choices，旧模型返回 results；交由 SDK 统一提取图片地址。
+        if "choices" in output and "results" not in output:
+            try:
+                output["results"] = [{"url": url} for url in job.image_urls]
+            except (AttributeError, TypeError, ValueError) as exc:
+                raise AppException(msg=format_error) from exc
         output.setdefault("task_id", job.task_id)
         output.setdefault("task_status", job.status)
         data = {"request_id": job.request_id, "output": output}

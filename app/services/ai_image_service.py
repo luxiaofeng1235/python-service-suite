@@ -1,11 +1,11 @@
 """
 ============================================
-AI Image Service - PHP image generation workflow
+AI 图片服务 - 文生图和图生图任务
 ============================================
-Ports AiLogic.php toImage/getTask/getImage into asynchronous Python services.
+提交千问图片任务、查询进度并保存作品，复用现有下载、OSS 上传和缓存流程。
 """
 
-from typing import Any, NoReturn
+from typing import Any, ClassVar, NoReturn
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,15 +22,21 @@ from app.storage.oss import OSSStorage
 
 
 class AIImageService:
-    """Submit image tasks and retrieve owned, persisted generation results."""
+    """提交图片任务，按用户归属查询并持久化生成结果。"""
 
-    IMAGE_MODELS = {1: "wanx2.1-t2i-turbo", 2: "wanx2.1-t2i-plus"}
+    IMAGE_MODELS: ClassVar[dict[int, str]] = {
+        1: settings.QWEN_IMAGE_MODEL,
+        2: settings.QWEN_IMAGE_PRO_MODEL,
+    }
 
     @classmethod
     async def to_image(cls, db: AsyncSession, req: ImageRequest, user_id: int) -> str:
-        """Submit an image task and persist its parameters, returning the task ID."""
+        """将提示词和参考图组装为单轮消息，提交异步任务并保存参数。"""
         if settings.OSS_ENABLED:
             OSSStorage.validate_config()
+        content = [{"image": str(url)} for url in req.image_urls]
+        content.append({"text": req.prompt})
+        size = req.size if isinstance(req.size, str) else f"{req.size[0]}*{req.size[1]}"
         # 对应 PHP toImage：异步提交后只保存任务，不在请求中等待图片生成。
         data = await QwenTaskClient.request(
             "POST",
@@ -38,9 +44,9 @@ class AIImageService:
             media_type="图片",
             payload={
                 "model": cls.IMAGE_MODELS[req.model],
-                "input": {"prompt": req.prompt},
+                "input": {"messages": [{"role": "user", "content": content}]},
                 "parameters": {
-                    "size": f"{req.size[0]}*{req.size[1]}",
+                    "size": size,
                     "n": req.n,
                     # 与 PHP toImage 一致，由千问处理默认水印。
                     "watermark": req.watermark == 1,
@@ -67,7 +73,7 @@ class AIImageService:
     async def get_image(
         cls, db: AsyncSession, task_id: str, user_id: int
     ) -> dict[str, list[str]] | str:
-        """Return cached image URLs, or the task ID while generation is pending."""
+        """已完成时返回缓存地址，生成中返回任务 ID。"""
         task = await cls._get_task(db, task_id, user_id)
         cached = await cls._try_get_cached_result(task)
         if cached is not None:
@@ -78,7 +84,7 @@ class AIImageService:
 
     @staticmethod
     async def _get_task(db: AsyncSession, task_id: str, user_id: int) -> AiToWork:
-        """Find an image task owned by the current user."""
+        """查询属于当前用户的图片任务。"""
         result = await db.execute(
             select(AiToWork).where(
                 AiToWork.task_id == task_id,
@@ -93,7 +99,7 @@ class AIImageService:
 
     @classmethod
     async def _try_get_cached_result(cls, task: AiToWork) -> dict[str, list[str]] | None:
-        """Return repaired cached images or raise a stored terminal error."""
+        """读取并补传缓存图片，失败或删除状态按业务错误处理。"""
         if task.status == TaskStatus.DELETED:
             raise AppException(msg="任务不存在")
         if task.status not in {TaskStatus.COMPLETED, TaskStatus.FAILED}:
@@ -115,7 +121,7 @@ class AIImageService:
     async def _handle_upstream_status(
         cls, db: AsyncSession, task: AiToWork, output: dict[str, Any]
     ) -> dict[str, list[str]] | str:
-        """Route an upstream task state to its business operation."""
+        """根据上游状态分发生成中、成功和失败处理。"""
         status = output.get("task_status")
         if status in PENDING_TASK_STATUSES:
             return task.task_id
@@ -130,7 +136,7 @@ class AIImageService:
     async def _handle_success(
         cls, db: AsyncSession, task: AiToWork, output: dict[str, Any]
     ) -> dict[str, list[str]]:
-        """Download and upload every image before committing the completed task."""
+        """全部图片下载和上传成功后，再提交任务成功状态。"""
         urls: list[str] = []
         for index, item in enumerate(output.get("results") or [], start=1):
             if not isinstance(item, dict) or not item.get("url"):
@@ -151,7 +157,7 @@ class AIImageService:
     async def _handle_failure(
         db: AsyncSession, task: AiToWork, output: dict[str, Any]
     ) -> NoReturn:
-        """Translate and persist a terminal upstream failure."""
+        """转换上游明确失败的原因并持久化。"""
         if output.get("task_status") == "UNKNOWN":
             message = "任务不存在"
         elif output.get("code"):
@@ -162,7 +168,7 @@ class AIImageService:
 
     @staticmethod
     def _format_result(urls: object) -> dict[str, list[str]]:
-        """Return image URLs under the image field."""
+        """补齐历史相对地址，统一通过 image 字段返回图片数组。"""
         if not isinstance(urls, list) or not all(isinstance(url, str) for url in urls):
             raise AppException(msg="图片任务记录格式错误")
         # 历史任务可能缓存相对路径，返回时补齐当前配置的文件访问域名。

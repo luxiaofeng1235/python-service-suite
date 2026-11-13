@@ -167,7 +167,7 @@ async def get_video(
 
 @router.post(
     "/ai/to_image",
-    summary="提交AI文生图任务",
+    summary="提交AI文生图或图生图任务",
     openapi_extra={
         "requestBody": {
             "required": True,
@@ -183,7 +183,7 @@ async def to_image(
     db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):
-    """Submit a validated image task for the authenticated user."""
+    """为当前登录用户提交已校验的图片生成或编辑任务。"""
     task_id = await AIService.to_image(
         db,
         req,
@@ -194,7 +194,7 @@ async def to_image(
 
 @router.get("/ai/get_image", summary="获取AI生图进度和结果")
 async def get_image(
-    task_id: str = Query(..., min_length=1, max_length=255, description="文生图任务ID"),
+    task_id: str = Query(..., min_length=1, max_length=255, description="图片生成任务ID"),
     db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):

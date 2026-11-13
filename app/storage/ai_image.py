@@ -1,8 +1,8 @@
 """
 ============================================
-AI Image Storage - generated image downloads
+AI 图片存储 - 生成图片下载与 OSS 同步
 ============================================
-Downloads generated images and optionally stores them in OSS.
+原样下载生成图片，按配置上传 OSS，并补传历史任务缺失的文件。
 """
 
 import asyncio
@@ -18,7 +18,7 @@ from app.storage.oss import OSSStorage
 
 
 async def save_generated_image(url: str, task_id: str, index: int) -> str:
-    """Download an image unchanged and return its upload path."""
+    """按 AI 图片独立大小上限下载原图并返回上传路径。"""
     # 文件名使用任务 ID 的安全形式，避免上游任务标识影响本地目录。
     safe_id = uuid.uuid5(uuid.NAMESPACE_URL, task_id).hex
     relative_path = f"ai_images/{safe_id}_{index}.png"
@@ -33,7 +33,7 @@ async def save_generated_image(url: str, task_id: str, index: int) -> str:
                 with temporary_path.open("wb") as output:
                     async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
                         size += len(chunk)
-                        if size > settings.FILE_IMAGE_MAX_SIZE:
+                        if size > settings.AI_IMAGE_MAX_SIZE:
                             raise AppException(msg="生成图片大小超过存储限制")
                         await asyncio.to_thread(output.write, chunk)
                 if size == 0:

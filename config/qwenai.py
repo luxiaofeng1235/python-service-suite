@@ -1,8 +1,8 @@
 """
 ============================================
-AI Configuration - endpoints, models and video processing
+AI 配置 - 模型地址、模型策略和视频处理
 ============================================
-Maintain AI options here; backend API credentials are read from .env.
+集中维护 AI 业务配置，调用密钥由后端 .env 读取。
 """
 
 # 千问地址和默认模型；QWEN_API_KEY 由后端 .env 提供。
@@ -17,7 +17,12 @@ QWEN_TTS_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-g
 QWEN_TTS_MODEL = "qwen3-tts-flash"
 QWEN_TTS_VOICE = "Cherry"
 QWEN_TTS_LANGUAGE_TYPE = "Chinese"
-QWEN_IMAGE_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+QWEN_IMAGE_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
+# 图片模型：默认基础版，可通过接口 model=2 选择专业版。
+QWEN_IMAGE_MODEL = "wan2.7-image"
+QWEN_IMAGE_PRO_MODEL = "wan2.7-image-pro"
+# 4K PNG 可能超过普通附件的 10MB 上限，生成图片使用独立下载限制。
+AI_IMAGE_MAX_SIZE = 64 * 1024 * 1024
 QWEN_VIDEO_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
 QWEN_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks"
 

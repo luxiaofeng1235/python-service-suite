@@ -6,9 +6,18 @@ AI 对话数据模型模块
 """
 
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, WithJsonSchema, field_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    WithJsonSchema,
+    field_validator,
+    model_validator,
+)
 
 # ==================== 请求体 ====================
 
@@ -100,50 +109,77 @@ class OmniStreamRequest(BaseModel):
 
 
 class ImageRequest(BaseModel):
-    """Image parameters matching AiLogic.php toImage."""
+    """万相 2.7 文生图和图生图参数，兼容原有模型编号和水印开关。"""
 
-    model: int = Field(..., ge=1, le=2, description="Image model: 1=turbo 2=plus")
-    prompt: str = Field(..., min_length=1, max_length=500, description="Text-to-image prompt")
-    size: tuple[int, int] = Field(..., description="Image size as [width, height]")
-    n: int = Field(..., ge=1, le=4, description="Number of images")
-    watermark: int = Field(..., ge=1, le=2, description="Watermark: 1=on 2=off")
+    model: int = Field(1, ge=1, le=2, description="图片模型：1=wan2.7-image，2=wan2.7-image-pro")
+    prompt: str = Field(..., min_length=1, max_length=5000, description="图片生成或编辑提示词")
+    size: tuple[int, int] | Literal["1K", "2K", "4K"] = Field(
+        "2K", description="图片尺寸：1K、2K、4K 或 [宽, 高]；仅专业版文生图支持 4K"
+    )
+    n: int = Field(1, ge=1, le=4, description="生成图片数量，1～4 张")
+    watermark: int = Field(2, ge=1, le=2, description="千问默认水印：1=开启，2=关闭")
+    image_urls: list[HttpUrl] = Field(
+        default_factory=list,
+        max_length=9,
+        description="参考图片的公网 HTTP/HTTPS 地址，最多 9 张；不传为文生图，传入为图生图",
+    )
 
     @field_validator("prompt")
     @classmethod
     def validate_prompt(cls, value: str) -> str:
-        """Reject empty prompts without changing user input."""
+        """拒绝空白提示词，保留用户原始输入。"""
         if not value.strip():
             raise ValueError("提示词不能为空")
         return value
 
-    @field_validator("size")
+    @field_validator("image_urls", mode="before")
     @classmethod
-    def validate_size(cls, value: tuple[int, int]) -> tuple[int, int]:
-        """Validate the dimensions and pixel limit from the PHP controller."""
-        if any(dimension < 720 or dimension > 1440 for dimension in value):
-            raise ValueError("size格式错误，宽高必须在720到1440之间")
-        if value[0] * value[1] > 2_000_000:
-            raise ValueError("尺寸过大，像素不能超过200万")
+    def parse_image_urls(cls, value: Any) -> Any:
+        """表单用 JSON 数组字符串传入参考图，JSON 请求直接传数组。"""
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError as exc:
+                raise ValueError("image_urls格式错误，请传图片地址数组") from exc
         return value
+
+    @model_validator(mode="after")
+    def validate_size(self) -> "ImageRequest":
+        """按模型及是否有参考图校验像素范围和宽高比。"""
+        supports_4k = self.model == 2 and not self.image_urls
+        if isinstance(self.size, str):
+            if self.size == "4K" and not supports_4k:
+                raise ValueError("仅wan2.7-image-pro的文生图支持4K，基础版和图生图最高支持2K")
+            return self
+
+        width, height = self.size
+        if width <= 0 or height <= 0 or max(width, height) > 8 * min(width, height):
+            raise ValueError("size格式错误，宽高必须为正整数，宽高比须在1:8到8:1之间")
+        max_pixels = 4096**2 if supports_4k else 2048**2
+        if not 768**2 <= width * height <= max_pixels:
+            raise ValueError(f"尺寸总像素必须在{768**2}到{max_pixels}之间")
+        return self
 
 
 class ToImageRequest(ImageRequest):
-    """PHP-compatible image API parameters, normalized for the core service."""
+    """图片接口参数，支持分辨率档位以及原有的宽~高格式。"""
 
     size: Annotated[
-        tuple[int, int],
-        WithJsonSchema({"type": "string", "examples": ["1024~1024"]}),
-    ] = Field(..., description="Image size as width~height, e.g. 1024~1024")
+        tuple[int, int] | Literal["1K", "2K", "4K"],
+        WithJsonSchema({"type": "string", "examples": ["2K", "1024~1024"]}),
+    ] = Field("2K", description="图片尺寸：1K、2K、4K 或宽~高，例如1024~1024")
 
     @field_validator("size", mode="before")
     @classmethod
-    def parse_size(cls, value: Any) -> tuple[int, int]:
-        """Convert the PHP size string into integer dimensions."""
+    def parse_size(cls, value: Any) -> tuple[int, int] | str:
+        """保留分辨率档位，将原有宽~高字符串转换为宽高元组。"""
+        if isinstance(value, str) and value in {"1K", "2K", "4K"}:
+            return value
         if not isinstance(value, str):
-            raise ValueError("size格式错误，请使用宽~高，例如1024~1024")
+            raise ValueError("size格式错误，请使用1K、2K、4K或宽~高，例如1024~1024")
         dimensions = value.split("~")
         if len(dimensions) != 2 or not all(part.isascii() and part.isdigit() for part in dimensions):
-            raise ValueError("size格式错误，请使用宽~高，例如1024~1024")
+            raise ValueError("size格式错误，请使用1K、2K、4K或宽~高，例如1024~1024")
         return int(dimensions[0]), int(dimensions[1])
 
 
