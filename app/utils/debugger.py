@@ -1,17 +1,13 @@
 """
 ============================================
-调试打印类
-============================================
-主要用于调试打印变量的基础信息，可以临时调试用，用于挂起当前操作快速定位
-from app.utils.debugger import  DebugHelper
-"""
-"""
-============================================
 调试打印类 (DebugHelper)
 ============================================
 主要用于调试打印变量的基础信息，支持 FastAPI 常驻内存及 CLI 临时调试。
-- hang(): 挂起打印，打印变量和调用栈，不中断程序。
-- dd(): Dump & Die，打印变量和调用栈后，主动抛出异常终止当前流程。
+- hang(): 打印变量和调用栈，业务继续执行，适合接口临时调试。
+- dump(): Dump & Die，打印变量和调用栈后，主动抛出异常终止当前流程，适合 CLI 调试。
+
+使用方式：
+    from app.utils.debugger import DebugHelper
 """
 import sys
 import time
@@ -20,14 +16,14 @@ from typing import Any
 
 
 class DebugStopException(Exception):
-    """用于 DebugHelper.dd() 强行终止当前请求/流程的自定义异常"""
+    """用于 DebugHelper.dump() 强行终止当前请求或 CLI 流程的自定义异常。"""
     pass
 
 
 class DebugHelper:
     @staticmethod
-    def hang(*args: Any, tag: str = "DEBUG", **kwargs: Any):
-        """挂起打印：仅打印变量与调用栈，程序继续向下执行"""
+    def hang(*args: Any, tag: str = "DEBUG", **kwargs: Any) -> None:
+        """打印变量和调用栈，程序继续向下执行。"""
         # 1. 获取精确到毫秒的时间戳，便于并发或多进程时辨别先后
         timestamp = time.strftime("%H:%M:%S", time.localtime()) + f".{int(time.time() * 1000) % 1000:03d}"
 
@@ -55,10 +51,8 @@ class DebugHelper:
         print(f"{'=' * 50}\n", flush=True)
 
     @staticmethod
-    def dump(*args: Any, tag: str = "DEBUG", **kwargs: Any):
-        """Dump & Die：打印变量及调用栈后，立刻抛出异常终止当前流程
-           一般用于打印cli直接返回结果的，执行中断看结果的这种流程
-        """
+    def dump(*args: Any, tag: str = "DEBUG", **kwargs: Any) -> None:
+        """打印变量和调用栈后抛出异常，适合 CLI 调试时终止当前流程。"""
         # 先调用 hang 把当前状态完整打印出来
         DebugHelper.hang(*args, tag=tag, **kwargs)
         # 抛出异常，强制中断后续业务逻辑
