@@ -13,6 +13,7 @@ from app.agents.goods.runner import PRODUCT_TOOL_NAME, SEARCH_TOOL_NAME, GoodsRu
 from app.agents.llm import create_llm
 from app.agents.llm.base import LLMAdapter
 from app.agents.runtime import AgentTool, FunctionCallingRunner
+from app.core.config import settings
 from app.schemas.agent.goods import GoodsProductToolRequest, GoodsSearchToolRequest
 
 GOODS_INTRODUCTION_PROMPT = """你是平台商品顾问，当前处于查询前的简短介绍阶段，尚未取得本轮平台商品数据。
@@ -44,7 +45,10 @@ GOODS_SUMMARY_PROMPT = (
     GOODS_SYSTEM_PROMPT
     + """
 你现在处于最终介绍阶段，不再开放任何工具。
-仅根据本轮工具返回介绍已经查到的商品、适用需求和规格差异，表达简短自然。
+仅根据本轮工具返回介绍已经查到的商品、适用需求和规格差异，用简体中文生成约300字的推荐说明，通常控制在250至350字。
+可按商品分段，结合已有描述说明推荐理由、适合的使用场景和规格选择，再给出简短的选购建议，不重复开场知识。
+上述字数只针对推荐说明，不包含后端追加的规格、售价、库存和查询时间。
+商品较少、资料不足、仅询问单项信息或没有匹配结果时允许简短回答，不为凑字数编造功能、性能、体验或推荐理由。
 不要在自由文本里输出具体价格、库存数量或新促销；后端会追加本轮查询的准确售价、库存和查询时间。
 不能把用户要求或历史商品摘要当作本轮商品事实，不能推荐未出现在本轮工具结果中的商品。
 """
@@ -58,7 +62,7 @@ def create_goods_agent(
     llm: LLMAdapter | None = None,
 ) -> GoodsRunner:
     """复用同一模型适配器，依次执行商品知识介绍、平台查询和结果总结。"""
-    adapter = llm if llm is not None else create_llm(enable_search=False)
+    adapter = llm if llm is not None else create_llm(model=settings.GOODS_AGENT_MODEL, enable_search=False)
     introduction = FunctionCallingRunner(
         name="goods",
         system_prompt=GOODS_INTRODUCTION_PROMPT,

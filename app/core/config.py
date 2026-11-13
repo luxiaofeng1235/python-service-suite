@@ -25,6 +25,7 @@ from config import (
     AGENT_RUN_TIMEOUT,
     AGENT_TIMEZONE,
     GOODS_AGENT_ENABLED,
+    GOODS_AGENT_MODEL,
     GOODS_CHROMA_PATH,
     GOODS_CHROMA_COLLECTION,
     GOODS_INDEX_BATCH_SIZE,
@@ -188,6 +189,7 @@ class Settings(BaseSettings):
 
     # ==================== 商品 Agent ====================
     GOODS_AGENT_ENABLED: bool = GOODS_AGENT_ENABLED
+    GOODS_AGENT_MODEL: str = Field(GOODS_AGENT_MODEL, min_length=1)
     GOODS_CHROMA_PATH: str = GOODS_CHROMA_PATH
     GOODS_CHROMA_COLLECTION: str = GOODS_CHROMA_COLLECTION
     GOODS_INDEX_BATCH_SIZE: int = Field(GOODS_INDEX_BATCH_SIZE, ge=1, le=500)

@@ -1,6 +1,8 @@
 """商品 Agent 的检索和本地索引配置，密钥沿用后端千问配置。"""
 
 GOODS_AGENT_ENABLED = True
+# 商品介绍、工具决策和推荐总结共用此模型，与其他 Agent 的默认模型独立。
+GOODS_AGENT_MODEL = "qwen-flash"
 GOODS_CHROMA_PATH = "./data/chroma_db"
 GOODS_CHROMA_COLLECTION = "products_semantic_search"
 GOODS_INDEX_BATCH_SIZE = 100

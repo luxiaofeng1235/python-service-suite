@@ -1,8 +1,8 @@
 """
 ============================================
-Agent LLM Factory - Provider selection
+Agent 模型工厂 - 厂商选择与业务模型配置
 ============================================
-Keeps provider selection in the Agent model layer and credentials in backend settings.
+统一创建模型适配器，支持各业务指定模型，密钥仍从后端配置读取。
 """
 
 from app.agents.llm.base import LLMAdapter
@@ -11,8 +11,8 @@ from app.common.exception import AppException
 from app.core.config import settings
 
 
-def create_llm(*, enable_search: bool | None = None) -> LLMAdapter:
-    """Build the configured Agent model adapter."""
+def create_llm(*, model: str | None = None, enable_search: bool | None = None) -> LLMAdapter:
+    """创建模型适配器，未指定模型时沿用公共 Agent 默认配置。"""
     if settings.AGENT_LLM_PROVIDER == "qwen":
-        return QwenLLM(enable_search=enable_search)
+        return QwenLLM(model=model, enable_search=enable_search)
     raise AppException(msg="不支持的 Agent 模型厂商")

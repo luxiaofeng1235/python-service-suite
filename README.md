@@ -308,7 +308,7 @@ make clean           # 清理缓存/tmp/log
 
 `POST /api/agent/goods/stream`：商品只读查询，复用千问 Function Calling、登录认证、会话存储和上述请求体。例如提交 `{"message":"帮我找适合出差使用的降噪耳机，列出规格、价格和库存。"}`。后端通过 Chroma 语义召回商品 ID，再从 MySQL 核验上架状态、品牌、SKU 规格、实时售价和库存；支持品牌筛选、多商品推荐及多轮追问。
 
-商品流先通过 `delta` 简述商品用途和选购要点，再查询平台商品。查询完成后通过 `type=data`、`data.kind=products` 返回 `data.products` 商品数组，包含 `cover_image`、规格、售价、库存和查询时间，随后继续输出平台推荐文字，收到 `done` 后结束本轮。开场使用模型一般知识，具体商品数据来自后端查询；封面为空时返回空字符串，无有效商品时返回空数组。
+商品 Agent 默认使用 `qwen-flash`，先通过 `delta` 简述商品用途和选购要点，再查询平台商品，最终推荐说明目标约 300 字。查询完成后通过 `type=data`、`data.kind=products` 返回 `data.products` 商品数组，包含 `cover_image`、规格、售价、库存和查询时间，随后继续输出平台推荐文字，收到 `done` 后结束本轮。开场使用模型一般知识，具体商品数据来自后端查询；封面为空时返回空字符串，无有效商品时返回空数组。
 
 部署时运行 `alembic upgrade head`，会补建 `goods_categories`、`goods_brands`、`goods_products`、`goods_skus` 四表，已有表保留，商品数据需另行准备。启用后由 `app/setup/agents.py` 在后台初始化：分批读取 MySQL 商品资料 → 千问 `text-embedding-v4` 向量化 → Chroma 本地持久化。后续请求和重启复用有效索引，每次语义搜索只为查询文本生成向量。
 
