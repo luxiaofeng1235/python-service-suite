@@ -96,6 +96,8 @@ class QwenTaskClient:
                     job = await jobs.create(
                         model=payload["model"],
                         prompt=payload["input"]["prompt"],
+                        # 将首帧素材交给 SDK，不能只转发提示词而丢失图生视频输入。
+                        media=payload["input"].get("media"),
                         parameters=payload.get("parameters"),
                         timeout=timeout,
                     )

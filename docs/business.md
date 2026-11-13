@@ -222,13 +222,16 @@ result = await AIService.get_image(db, task_id, user_id)
 
 沿用 PHP `toVideo/getVideo`：提交异步任务 → 保存 `ai_to_work`（`type=2`、`status=0`）→ 前端轮询 → 下载视频到本地 → FFmpeg 叠加 PNG 水印 → 上传 OSS → 保存 URL 数组并设置 `status=1` → 删除本地成片。上传或入库失败时保留成片供重试，关闭 OSS 时保留本地文件。查询已完成任务直接返回缓存。
 
-- `POST /api/ai/to_video`：支持 JSON、URL 编码表单和 multipart 表单；`prompt` 必传，1～500 字符，`to=2` 可省略。模型固定为 PHP 的 `wanx2.1-t2v-turbo`，当前只接文生视频。
+- `POST /api/ai/to_video`：支持 JSON、URL 编码表单和 multipart 表单；统一使用 `wan3.0-video` 标准版。原有 `{"to":2,"prompt":"..."}` 请求继续可用，`to` 默认 2；图生视频传 `to=1` 和 `image_url`（兼容 `img_url`），后端转换为 `input.media` 的 `first_frame`。两种方式的作品都保存为 `type=2`。
+- 默认生成 `720P`、`5` 秒、`16:9`、带声音的视频；可传 `resolution`（480P/720P/1080P）、`duration`（2～30 秒整数）、`ratio`（adaptive/21:9/16:9/4:3/1:1/3:4/9:16）、`audio`（布尔值）。提示词必传，1～20000 字符。`to=1` 缺少参考图或 `to=2` 携带参考图均在提交前拒绝；不使用自动时长，避免时长不确定。
+- 参考图使用模型可直接访问的 HTTP(S) 地址，接口不代为上传本地图片；可先通过附件接口上传获得地址。上游要求 JPEG/JPG/PNG（不支持透明通道）/BMP/WEBP，单边 240～8000 像素，长宽比不超过 8:1，大小不超过 20 MB；具体图片内容限制由上游检查。
 - `GET /api/ai/get_video?task_id=...`：生成中返回任务 ID，完成返回 `{"code":1,"msg":"视频生成成功","data":{"video":["https://video.example.com/uploads/ai_videos/xxx.mp4"]}}`，域名取部署时配置的 `AI_VIDEO_BASE_URL`。
 - 两个接口均使用项目登录 Token，用户 ID 从 Token 获取；千问和 OSS 密钥均由后端 `.env` 读取。
 - 水印默认使用 `public/watermark.png`，与 PHP `public/uploads/222.png` 是相同图片。FFmpeg 使用 `overlay=W-w-10:H-h-10`，按水印原始尺寸叠加，右边、底边各留 10 像素。
+- 提交时固定开启上游提示词智能改写，并关闭上游水印；本地 PNG 水印流程继续生效。关闭音频不降低万相 3.0 的生成单价。
 - MySQL 8 行锁覆盖任务查询和文件处理，同一任务被占用时其他轮询直接返回生成中；`status=3` 只表示已删除。下载、转码或上传失败保持待处理，可重试；上游明确失败保存 `status=2`。
 - 输入视频及临时输出自动清理；水印成片先保存在 `UPLOAD_DIR/ai_videos/`，OSS 上传和数据库提交均成功后删除本地成片，与 PHP 的成功清理流程一致。上传或入库失败时保留成片供重试，清理异常只记录日志，不回退已成功任务。OSS 对象使用 `uploads/ai_videos/` 前缀，视频访问域名单独取 `AI_VIDEO_BASE_URL`，图片访问域名取 `OSS_VIEW_DOMAIN`；关闭 OSS 时保留本地成片，访问前缀取 `FILE_BASE_URL`。
-- 原片下载和成片均受 `FILE_VIDEO_MAX_SIZE` 限制。FFmpeg 异步调用，超时或请求取消会终止进程。处理期间当前查询请求会等待，客户端和反向代理超时应覆盖下载、转码和上传耗时，建议每 3～5 秒轮询。
+- 原片下载和成片均受 `FILE_VIDEO_MAX_SIZE` 限制。FFmpeg 异步调用，超时或请求取消会终止进程。处理期间当前查询请求会等待，客户端和反向代理超时应覆盖下载、转码和上传耗时，建议每 15 秒轮询。
 
 调用链：`ai_controller.py → api/services/ai_service.py → services/ai_video_service.py → storage/ai_video.py → storage/oss.py`。复用现有作品表，无需新增表结构。
 
@@ -239,12 +242,19 @@ AI 地址、默认模型、水印文件、视频访问域名、FFmpeg 路径和�
 ```python
 # config/qwenai.py
 QWEN_VIDEO_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
+QWEN_VIDEO_MODEL = "wan3.0-video"
+AI_VIDEO_DEFAULT_RESOLUTION = "720P"
+AI_VIDEO_DEFAULT_DURATION = 5
+AI_VIDEO_DEFAULT_RATIO = "16:9"
+AI_VIDEO_DEFAULT_AUDIO = True
 QWEN_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks"
 AI_VIDEO_WATERMARK_PATH = "./public/watermark.png"
 AI_VIDEO_BASE_URL = "https://video.example.com"
 FFMPEG_BIN = "ffmpeg"
 AI_VIDEO_FFMPEG_TIMEOUT = 600
 ```
+
+模型、密钥和接口地址必须属于同一地域。当前保留项目已配置的 DashScope 地址；若账号控制台要求业务空间专属域名，将 `QWEN_VIDEO_URL` 和 `QWEN_TASK_URL` 同时改为同一业务空间的 `/api/v1/services/aigc/video-generation/video-synthesis` 和 `/api/v1/tasks`。不要将占位的业务空间 ID 直接用于请求。参数与地域端点见[万相 3.0 官方 API 文档](https://help.aliyun.com/zh/model-studio/wan3-video-generation-api-reference)。
 
 ### FFmpeg 安装与检查
 

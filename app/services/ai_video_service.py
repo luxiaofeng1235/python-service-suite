@@ -1,6 +1,6 @@
 """
 ============================================
-AI 视频服务 - 文生视频任务与作品持久化
+AI 视频服务 - 文生视频、图生视频任务与作品持久化
 ============================================
 沿用 PHP toVideo/getVideo，校验任务归属、串行处理视频并在保存成功后清理本地成片。
 """
@@ -26,18 +26,31 @@ from app.storage.ai_video import (
 
 
 class AIVideoService:
-    """Submit text-to-video tasks and persist watermarked video URLs."""
-
-    VIDEO_MODEL = "wanx2.1-t2v-turbo"
+    """使用万相 3.0 提交视频任务，复用作品持久化、水印和发布流程。"""
 
     @classmethod
     async def to_video(cls, db: AsyncSession, req: VideoRequest, user_id: int) -> str:
-        """Submit the PHP to=2 text-to-video model and save its task ID."""
+        """按生成方式组装原生参数，提交异步任务并保存用户归属和参数。"""
         await validate_video_storage()
+        video_input: dict[str, Any] = {"prompt": req.prompt}
+        if req.image_url is not None:
+            video_input["media"] = [{"type": "first_frame", "url": str(req.image_url)}]
         data = await QwenTaskClient.request(
             "POST", settings.QWEN_VIDEO_URL,
             media_type="视频",
-            payload={"model": cls.VIDEO_MODEL, "input": {"prompt": req.prompt}},
+            payload={
+                "model": settings.QWEN_VIDEO_MODEL,
+                "input": video_input,
+                "parameters": {
+                    "resolution": req.resolution,
+                    "duration": req.duration,
+                    "ratio": req.ratio,
+                    "audio": req.audio,
+                    "prompt_extend": True,
+                    # 仅使用本地 PNG 水印，关闭上游水印以免重复叠加。
+                    "watermark": False,
+                },
+            },
         )
         task_id = data["output"].get("task_id")
         if not isinstance(task_id, str) or not task_id or len(task_id) > 255:

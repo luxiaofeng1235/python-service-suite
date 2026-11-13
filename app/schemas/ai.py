@@ -19,6 +19,8 @@ from pydantic import (
     model_validator,
 )
 
+from app.core.config import settings
+
 # ==================== 请求体 ====================
 
 
@@ -184,18 +186,44 @@ class ToImageRequest(ImageRequest):
 
 
 class VideoRequest(BaseModel):
-    """PHP-compatible text-to-video parameters for the to=2 workflow."""
+    """万相 3.0 文生视频与首帧图生视频参数，兼容原有 to=2 请求。"""
 
-    to: int = Field(2, ge=2, le=2, description="Generation type: 2=text-to-video")
-    prompt: str = Field(..., min_length=1, max_length=500, description="Text-to-video prompt")
+    model_config = ConfigDict(validate_default=True)
+
+    to: int = Field(2, ge=1, le=2, description="生成方式：1 图生视频，2 文生视频，默认 2")
+    prompt: str = Field(..., min_length=1, max_length=20000, description="视频提示词")
+    image_url: HttpUrl | None = Field(
+        None,
+        validation_alias=AliasChoices("image_url", "img_url"),
+        description="图生视频的首帧图片公网 HTTP(S) 地址，兼容 img_url 字段",
+    )
+    resolution: Literal["480P", "720P", "1080P"] = Field(
+        settings.AI_VIDEO_DEFAULT_RESOLUTION, description="输出分辨率，默认 720P",
+    )
+    duration: int = Field(
+        settings.AI_VIDEO_DEFAULT_DURATION, ge=2, le=30, description="视频时长（秒），默认 5",
+    )
+    ratio: Literal["adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] = Field(
+        settings.AI_VIDEO_DEFAULT_RATIO, description="视频宽高比，默认 16:9；adaptive 自动选择",
+    )
+    audio: bool = Field(settings.AI_VIDEO_DEFAULT_AUDIO, description="是否生成音频，默认开启")
 
     @field_validator("prompt")
     @classmethod
     def validate_prompt(cls, value: str) -> str:
-        """Reject empty prompts without changing user input."""
+        """拒绝纯空白提示词，保留用户原始描述。"""
         if not value.strip():
             raise ValueError("提示词不能为空")
         return value
+
+    @model_validator(mode="after")
+    def validate_generation_mode(self) -> "VideoRequest":
+        """严格匹配生成方式与参考图，避免请求被当成另一种任务计费。"""
+        if self.to == 1 and self.image_url is None:
+            raise ValueError("to=1 图生视频必须提供 image_url")
+        if self.to == 2 and self.image_url is not None:
+            raise ValueError("to=2 文生视频不应提供 image_url；图生视频请传 to=1")
+        return self
 
 
 class ChatResponse(BaseModel):

@@ -70,7 +70,7 @@ async def _parse_to_image_request(request: Request) -> ToImageRequest:
 
 
 async def _parse_to_video_request(request: Request) -> VideoRequest:
-    """Validate a text-to-video request using the shared body parser."""
+    """复用请求解析器，校验文生视频或图生视频参数。"""
     return await _parse_ai_request(request, VideoRequest)
 
 
@@ -131,7 +131,7 @@ async def chat_stream_new(
 
 @router.post(
     "/ai/to_video",
-    summary="提交AI文生视频任务",
+    summary="提交AI文生视频或图生视频任务",
     openapi_extra={
         "requestBody": {
             "required": True,
@@ -147,14 +147,14 @@ async def to_video(
     db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):
-    """Submit a text-to-video task for the authenticated user."""
+    """为当前登录用户提交已校验的视频生成任务。"""
     task_id = await AIService.to_video(db, req, user_id=current_user["user_id"])
     return Response.success(data=task_id, msg="视频生成中")
 
 
 @router.get("/ai/get_video", summary="获取AI视频进度和带水印的结果")
 async def get_video(
-    task_id: str = Query(..., min_length=1, max_length=255, description="文生视频任务ID"),
+    task_id: str = Query(..., min_length=1, max_length=255, description="视频生成任务ID"),
     db: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):

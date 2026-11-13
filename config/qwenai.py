@@ -24,6 +24,12 @@ QWEN_IMAGE_PRO_MODEL = "wan2.7-image-pro"
 # 4K PNG 可能超过普通附件的 10MB 上限，生成图片使用独立下载限制。
 AI_IMAGE_MAX_SIZE = 64 * 1024 * 1024
 QWEN_VIDEO_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
+# 文生视频和首帧图生视频统一使用标准版，默认生成 720P、5 秒视频。
+QWEN_VIDEO_MODEL = "wan3.0-video"
+AI_VIDEO_DEFAULT_RESOLUTION = "720P"
+AI_VIDEO_DEFAULT_DURATION = 5
+AI_VIDEO_DEFAULT_RATIO = "16:9"
+AI_VIDEO_DEFAULT_AUDIO = True
 QWEN_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks"
 
 # 商品向量化复用千问密钥和公共 HTTP 请求，仅使用独立的 Embedding 地址。
