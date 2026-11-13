@@ -1,8 +1,8 @@
 """
 ============================================
-AI Video Service - text-to-video tasks and result persistence
+AI 视频服务 - 文生视频任务与作品持久化
 ============================================
-Port PHP toVideo/getVideo with ownership checks and serialized local processing.
+沿用 PHP toVideo/getVideo，校验任务归属、串行处理视频并在保存成功后清理本地成片。
 """
 
 from typing import Any, NoReturn
@@ -17,7 +17,12 @@ from app.models.ai_to_work import AiToWork
 from app.pkg.qwen_client import QwenTaskClient
 from app.schemas.ai import VideoRequest
 from app.services.ai_task_service import extract_task_error, fail_task, load_task_work
-from app.storage.ai_video import get_video_url, save_generated_video, validate_video_storage
+from app.storage.ai_video import (
+    cleanup_generated_video,
+    get_video_url,
+    save_generated_video,
+    validate_video_storage,
+)
 
 
 class AIVideoService:
@@ -119,7 +124,7 @@ class AIVideoService:
     async def _handle_success(
         db: AsyncSession, task: AiToWork, output: dict[str, Any]
     ) -> dict[str, list[str]]:
-        """Download, watermark and upload the video before committing success."""
+        """下载、加水印并上传视频，提交成功后清理本地成片。"""
         video_url = output.get("video_url")
         if not video_url and isinstance(output.get("results"), dict):
             video_url = output["results"].get("video_url")
@@ -130,6 +135,8 @@ class AIVideoService:
         task.work = [url]
         task.status = TaskStatus.COMPLETED
         await db.commit()
+        # 与 PHP 一致，上传和入库均成功后再删除；失败时保留成片供下次重试。
+        await cleanup_generated_video(task.task_id)
         return {"video": [url]}
 
     @staticmethod

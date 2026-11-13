@@ -345,7 +345,7 @@ Docker 已挂载 `data/chroma_db`，同一索引路径使用单个应用进程�
 
 **运行环境必须安装 FFmpeg**，用于生成视频后的水印处理；安装 Python 依赖不会安装 FFmpeg。安装方式见 [FFmpeg 安装与检查](docs/business.md#ffmpeg-安装与检查)。
 
-沿用 PHP `toVideo/getVideo`：提交异步任务 → 保存 `ai_to_work`（`type=2`、`status=0`）→ 前端轮询 → 下载视频到本地 → FFmpeg 叠加 PNG 水印 → 上传 OSS → 保存 URL 数组并设置 `status=1`。查询已完成任务直接返回缓存。
+沿用 PHP `toVideo/getVideo`：提交异步任务 → 保存 `ai_to_work`（`type=2`、`status=0`）→ 前端轮询 → 下载视频到本地 → FFmpeg 叠加 PNG 水印 → 上传 OSS → 保存 URL 数组并设置 `status=1` → 删除本地成片。上传或入库失败时保留成片供重试，关闭 OSS 时保留本地文件。查询已完成任务直接返回缓存。
 
 详细说明见 [文生视频服务和接口](docs/business.md#文生视频服务和接口)。
 

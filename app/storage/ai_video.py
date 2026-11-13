@@ -1,8 +1,8 @@
 """
 ============================================
-AI Video Storage - downloads, local watermarks and OSS uploads
+AI 视频存储 - 下载、水印、OSS 上传与本地文件清理
 ============================================
-Apply the PHP FFmpeg overlay before publishing any generated video.
+复用 PHP 的 FFmpeg 水印流程，发布生成视频并在业务确认成功后清理本地成片。
 """
 
 import asyncio
@@ -109,7 +109,7 @@ async def add_video_watermark(input_path: Path, output_path: Path) -> None:
 
 
 async def save_generated_video(url: str, task_id: str) -> str:
-    """Download, watermark, and upload a video, returning its published URL."""
+    """下载、加水印并上传视频，返回访问地址；成片待业务提交成功后清理。"""
     await validate_video_storage()
     safe_id = uuid.uuid5(uuid.NAMESPACE_URL, task_id).hex
     relative_path = f"ai_videos/{safe_id}.mp4"
@@ -137,3 +137,16 @@ async def save_generated_video(url: str, task_id: str) -> str:
             file_path, f"uploads/{relative_path}", content_type="video/mp4"
         )
     return get_video_url(f"uploads/{relative_path}")
+
+
+async def cleanup_generated_video(task_id: str) -> None:
+    """OSS 上传及数据库提交成功后清理成片；本地存储模式保留文件。"""
+    if not settings.OSS_ENABLED:
+        return
+    safe_id = uuid.uuid5(uuid.NAMESPACE_URL, task_id).hex
+    file_path = Path(settings.UPLOAD_DIR) / "ai_videos" / f"{safe_id}.mp4"
+    try:
+        await asyncio.to_thread(file_path.unlink, missing_ok=True)
+    except OSError as exc:
+        # 任务已成功入库，清理异常只记录日志，不影响已发布的视频结果。
+        app_logger.warning("视频已生成，本地成片清理失败，task_id={} error={}", task_id, exc)
