@@ -174,6 +174,8 @@ cp .env.example .env
 
 ## 快速启动
 
+运行依赖统一维护在 `requirements.txt`，新增或调整依赖只修改这一处。`pyproject.toml` 保留项目元信息、开发依赖和 Ruff / pytest 配置；项目安装时也从 `requirements.txt` 读取运行依赖。
+
 ```bash
 # 1. 安装依赖
 pip3 install -r requirements.txt
