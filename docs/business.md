@@ -65,7 +65,7 @@ curl -sS 'http://127.0.0.1:8001/api/file/upload/oss' \
 说明：
 
 - 上游使用 OpenAI 兼容协议，通过公共 `AsyncOpenAI` SDK 请求和解析分片，普通对话与 Agent 共用；当前流程按千问模型与联网搜索策略处理
-- 后端从 `.env` 读取 `QWEN_API_KEY`，从 `config/ai.py` 读取 `QWEN_CHAT_URL`，调用千问时自动附加认证；前端无需传千问密钥
+- 后端从 `.env` 读取 `QWEN_API_KEY`，从 `../config/qwenai.py` 读取 `QWEN_CHAT_URL`，调用千问时自动附加认证；前端无需传千问密钥
 - 两个流式接口均返回 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`X-Accel-Buffering: no`
 - AI 对话接口使用项目登录 Token 校验用户身份并隔离上下文；此 Token 与千问 API Key 无关
 - 流式输出兼容旧协议：`data:` 直接返回增量文本
@@ -74,7 +74,7 @@ curl -sS 'http://127.0.0.1:8001/api/file/upload/oss' \
 - 深度思考片段返回 JSON 字符串：`{"type":"reasoning_content","data":"..."}`
 - `chat_id=0` 表示新建对话；传已有 `chat_id` 表示续聊
 - `restart=1` 表示重新生成：丢弃历史中的最后一条消息且不追加本轮 `msg`，让模型基于剩余上下文重答（`restart=0` 时才会把 `msg` 作为新一轮用户提问追加）
-- `is_deep_reflection=1` 使用 `qwq-plus` 深度思考；为 `0` 或不传时使用 `qwen-max`，该流程不受 `config/ai.py` 的 `QWEN_MODEL` 影响
+- `is_deep_reflection=1` 使用 `qwq-plus` 深度思考；为 `0` 或不传时使用 `qwen-max`，该流程不受 `../config/qwenai.py` 的 `QWEN_MODEL` 影响
 - `model` 当前仅支持取值 `1`（对应千问 qwen-max）；对话列表接口 `GET /api/ai/chats` 的 `model_id` 查询参数同样限定为 `1`
 - 上述两个文字对话流接口默认开启千问联网搜索（`enable_search=true`）
 
@@ -93,7 +93,7 @@ curl -N \
 
 `POST /api/chat/stream_new`：携带项目登录 Token，提交 `message` 消息数组 → 后端补充模型和音频配置 → 请求千问 → 将文字、音频、用量及结束分片按原始 SSE 格式转发给前端。
 
-- 复用 `QWEN_CHAT_URL` 和后端 `.env` 的 `QWEN_API_KEY`；模型 `qwen3-omni-flash`、音色 `Cherry`、音频格式 `wav` 集中维护在 `config/ai.py`。
+- 复用 `QWEN_CHAT_URL` 和后端 `.env` 的 `QWEN_API_KEY`；模型 `qwen3-omni-flash`、音色 `Cherry`、音频格式 `wav` 集中维护在 `../config/qwenai.py`。
 - 兼容 `messages` 字段和 PHP 的表单提交方式，消息 `content` 可为文本或多模态内容数组；历史上下文由请求提供，不重复拼接，也不写入聊天记录。
 - 返回原始 `choices/delta/audio/usage` 结构，完整转发空 `choices` 的用量分片和上游结束标记。前端自行解析 SSE、解码音频并播放。
 - 通过公共 SDK 的原始流式响应转发字节，不重复解析或包装 SSE；连接中断时关闭响应及客户端，不伪造正常结束标记。
@@ -111,7 +111,7 @@ curl -N -X POST 'http://127.0.0.1:8001/api/chat/stream_new' \
 `POST /api/chat/chattts`：携带项目登录 Token，提交 `text` → 后端补充 `qwen3-tts-flash`、音色和语言 → 请求千问 → 返回完整音频地址及过期时间。
 
 - 支持 JSON、URL 编码表单和 multipart 表单，文本必填，最多 600 字符。
-- 地址 `QWEN_TTS_URL`、模型 `QWEN_TTS_MODEL`、音色 `QWEN_TTS_VOICE`（`Cherry`）和语言 `QWEN_TTS_LANGUAGE_TYPE`（`Chinese`）维护在 `config/ai.py`，复用后端 `.env` 的 `QWEN_API_KEY`。
+- 地址 `QWEN_TTS_URL`、模型 `QWEN_TTS_MODEL`、音色 `QWEN_TTS_VOICE`（`Cherry`）和语言 `QWEN_TTS_LANGUAGE_TYPE`（`Chinese`）维护在 `../config/qwenai.py`，复用后端 `.env` 的 `QWEN_API_KEY`。
 - 返回项目统一 JSON，原始千问结果保留在 `data`：音频地址读取 `data.output.audio.url`，过期时间读取 `data.output.audio.expires_at`，用量读取 `data.usage.characters`。地址是上游临时链接，此流程不写聊天记录、不下载音频或上传 OSS。
 
 ```bash
@@ -151,12 +151,12 @@ curl -G 'http://127.0.0.1:8001/api/ai/get_image' \
 - `app/services/ai_image_service.py`：提交任务、按用户查询任务、下载生成图片和缓存结果。
 - 图片、视频服务按任务查询、缓存读取、上游状态分发、成功和失败处理拆分。数据库状态由 `app/constants/ai.py` 的 `TaskStatus` 枚举维护；`app/services/ai_task_service.py` 共用 JSON 记录解析、缓存错误提取和失败落库方法。
 - `app/pkg/qwen_client.py`：图片和视频共用的千问任务客户端，统一通过官方 `dashscope==2.0.4` 的 `AsyncClient` 调用 `images.jobs.create/fetch` 和 `videos.jobs.create/fetch`，集中维护后端认证、任务结果兼容和错误转换。提交只返回任务 ID，不使用 SDK 的等待完成方法；前端继续轮询原有接口。
-- SDK 根地址由现有 `QWEN_IMAGE_URL`、`QWEN_VIDEO_URL`、`QWEN_TASK_URL` 派生，无需新增 `.env` 配置。请求与连接超时继续使用 `config/ai.py` 的 `QWEN_REQUEST_TIMEOUT`、`QWEN_CONNECT_TIMEOUT`。禁用 SDK 自动重试，避免重复提交生成任务；正常结束、异常和取消时均关闭客户端连接。
+- SDK 根地址由现有 `QWEN_IMAGE_URL`、`QWEN_VIDEO_URL`、`QWEN_TASK_URL` 派生，无需新增 `.env` 配置。请求与连接超时继续使用 `../config/qwenai.py` 的 `QWEN_REQUEST_TIMEOUT`、`QWEN_CONNECT_TIMEOUT`。禁用 SDK 自动重试，避免重复提交生成任务；正常结束、异常和取消时均关闭客户端连接。
 - SDK 返回值在请求层还原为原有 `output` 结构。查询得到明确失败任务时，交给业务层保存 `status=2` 和错误信息；网络或格式异常只返回错误，保留任务待处理状态。生成后的下载、图片 OSS 同步、视频 FFmpeg 水印及上传流程保持原有职责分层。
 - `app/api/services/ai_service.py`：提供 `to_image(db, req, user_id)`、`get_image(db, task_id, user_id)` 调用入口。
 - `app/models/ai_to_work.py`：按现有 PHP `ai_to_work` 表映射，`task_id` 为可空的 `VARCHAR(255)`，`work` 可空；`type=1` 图片、`type=2` 视频；状态为 `0` 生成中、`1` 成功、`2` 失败、`3` 已删除。文生图只处理图片任务，已删除任务按不存在处理。
 - 已有 `ai_to_work` 表可直接复用；新环境或缺表环境执行 `alembic upgrade head`，迁移会补建任务表并保留已有数据。
-- 认证复用后端 `.env` 的 `QWEN_API_KEY`。`QWEN_IMAGE_URL` 和 `QWEN_TASK_URL` 统一维护在 `config/ai.py`，使用 PHP 中的 DashScope 地址。
+- 认证复用后端 `.env` 的 `QWEN_API_KEY`。`QWEN_IMAGE_URL` 和 `QWEN_TASK_URL` 统一维护在 `../config/qwenai.py`，使用 PHP 中的 DashScope 地址。
 - 模型沿用 PHP：`model=1` 为 `wanx2.1-t2i-turbo`，`model=2` 为 `wanx2.1-t2i-plus`。
 - 图片按千问返回内容原样下载到 `UPLOAD_DIR/ai_images/`。启用 `OSS_ENABLED=True` 后，再通过公共 `app/storage/oss.py` 上传至 `OSS_BUCKET` 的 `uploads/ai_images/...`，所有图片上传成功后才保存作品地址并设置 `status=1`。返回域名使用 `OSS_VIEW_DOMAIN`，只填写域名，不包含 `/uploads`。
 - 已完成任务查询时会检查本站图片是否存在于 OSS：存在则直接复用；缺失且本地文件还在时自动补传，无需重新生成。上传或查询异常不会伪装成成功，也不会把已有本地文件删除。
@@ -220,10 +220,10 @@ result = await AIService.get_image(db, task_id, user_id)
 
 上游任务提交和查询复用 `app/pkg/qwen_client.py` 中的 DashScope 异步 SDK 适配，分别调用 `videos.jobs.create`、`videos.jobs.fetch`；接口仍按“提交任务 → 轮询结果”交互，查询成功后才进入本地下载、水印和 OSS 上传流程。
 
-AI 地址、默认模型、水印文件、视频访问域名、FFmpeg 路径和超时统一维护在 `config/ai.py`；AI 相关 `.env` 配置只维护 `QWEN_API_KEY`。修改配置后重启服务。Docker 已补充 FFmpeg，部署时需要重新构建镜像。
+AI 地址、默认模型、水印文件、视频访问域名、FFmpeg 路径和超时统一维护在 `../config/qwenai.py`；AI 相关 `.env` 配置只维护 `QWEN_API_KEY`。修改配置后重启服务。Docker 已补充 FFmpeg，部署时需要重新构建镜像。
 
 ```python
-# config/ai.py
+# config/qwenai.py
 QWEN_VIDEO_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
 QWEN_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks"
 AI_VIDEO_WATERMARK_PATH = "./public/watermark.png"
@@ -256,7 +256,7 @@ docker compose up -d --build omnicore
 docker compose exec omnicore ffmpeg -version
 ```
 
-FFmpeg 必须安装在实际运行后端的环境中；Docker 部署时在应用容器内检查，本机运行时在本机检查。默认 `config/ai.py` 的 `FFMPEG_BIN = "ffmpeg"`，通过 PATH 查找；自定义安装位置时可改为可执行文件的绝对路径。所用 FFmpeg 需支持 `overlay` 滤镜和 `libx264` 编码器。提交视频任务前会检查 FFmpeg 和水印文件，缺少 FFmpeg 时提示“FFmpeg 未安装或 FFMPEG_BIN 配置错误”。
+FFmpeg 必须安装在实际运行后端的环境中；Docker 部署时在应用容器内检查，本机运行时在本机检查。默认 `../config/qwenai.py` 的 `FFMPEG_BIN = "ffmpeg"`，通过 PATH 查找；自定义安装位置时可改为可执行文件的绝对路径。所用 FFmpeg 需支持 `overlay` 滤镜和 `libx264` 编码器。提交视频任务前会检查 FFmpeg 和水印文件，缺少 FFmpeg 时提示“FFmpeg 未安装或 FFMPEG_BIN 配置错误”。
 
 ### 接口调用示例
 

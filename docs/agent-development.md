@@ -322,7 +322,7 @@ data: {"type":"data","session_id":"11111111-1111-4111-8111-111111111111","agent"
 
 ### 后端配置
 
-默认值维护在 [config/ai.py](../config/ai.py)，统一通过 `app.core.config.settings` 使用；密钥等环境信息在本地 `.env` 中维护，不传给前端。
+默认值维护在 [config/ai.py](../config/qwenai.py)，统一通过 `app.core.config.settings` 使用；密钥等环境信息在本地 `.env` 中维护，不传给前端。
 
 | 配置 | 默认值 | 用途 |
 |------|--------|------|
@@ -342,7 +342,7 @@ Agent 复用已有 `QWEN_API_KEY` 和 `QWEN_CHAT_URL`，鉴权、请求发送及
 
 `QWEN_CHAT_URL` 继续填写完整的 `/chat/completions` 地址，由公共服务派生 SDK 的 `base_url`。SDK 请求关闭自动重试，保持原有调用策略；取消或断开时关闭响应及客户端。多模态接口通过同一 SDK 的原始流式响应转发字节，保留音频、用量和结束标记。原生 TTS、图片、视频和商品 Embedding 保持已有调用方式，各接口对前端的协议不变。
 
-商品 Embedding 模型、维度和地址也维护在 `config/ai.py`；商品 Agent 模型、功能开关、持久化路径、集合名称、索引批量大小、Top-K、距离阈值及返回数量在 [config/goods.py](../config/goods.py) 统一维护。模型工厂支持按业务指定模型，商品三个阶段共用同一适配器。仅切换商品对话模型无需重建向量索引。密钥继续从后端读取，前端只提交业务请求。
+商品 Embedding 模型、维度和地址也维护在 `../config/qwenai.py`；商品 Agent 模型、功能开关、持久化路径、集合名称、索引批量大小、Top-K、距离阈值及返回数量在 [config/goods.py](../config/goods.py) 统一维护。模型工厂支持按业务指定模型，商品三个阶段共用同一适配器。仅切换商品对话模型无需重建向量索引。密钥继续从后端读取，前端只提交业务请求。
 
 ## 7. 新增工具或 Agent 的开发步骤
 
