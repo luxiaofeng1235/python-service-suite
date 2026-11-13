@@ -150,7 +150,9 @@ curl -G 'http://127.0.0.1:8001/api/ai/get_image' \
 
 - `app/services/ai_image_service.py`：提交任务、按用户查询任务、下载生成图片和缓存结果。
 - 图片、视频服务按任务查询、缓存读取、上游状态分发、成功和失败处理拆分。数据库状态由 `app/constants/ai.py` 的 `TaskStatus` 枚举维护；`app/services/ai_task_service.py` 共用 JSON 记录解析、缓存错误提取和失败落库方法。
-- `app/pkg/qwen_client.py`：图片和视频共用的千问任务客户端，集中维护后端认证、异步请求头、HTTP 请求、任务查询和错误转换；请求与连接超时在 `config/ai.py` 的 `QWEN_REQUEST_TIMEOUT`、`QWEN_CONNECT_TIMEOUT` 中配置。
+- `app/pkg/qwen_client.py`：图片和视频共用的千问任务客户端，统一通过官方 `dashscope==2.0.4` 的 `AsyncClient` 调用 `images.jobs.create/fetch` 和 `videos.jobs.create/fetch`，集中维护后端认证、任务结果兼容和错误转换。提交只返回任务 ID，不使用 SDK 的等待完成方法；前端继续轮询原有接口。
+- SDK 根地址由现有 `QWEN_IMAGE_URL`、`QWEN_VIDEO_URL`、`QWEN_TASK_URL` 派生，无需新增 `.env` 配置。请求与连接超时继续使用 `config/ai.py` 的 `QWEN_REQUEST_TIMEOUT`、`QWEN_CONNECT_TIMEOUT`。禁用 SDK 自动重试，避免重复提交生成任务；正常结束、异常和取消时均关闭客户端连接。
+- SDK 返回值在请求层还原为原有 `output` 结构。查询得到明确失败任务时，交给业务层保存 `status=2` 和错误信息；网络或格式异常只返回错误，保留任务待处理状态。生成后的下载、图片 OSS 同步、视频 FFmpeg 水印及上传流程保持原有职责分层。
 - `app/api/services/ai_service.py`：提供 `to_image(db, req, user_id)`、`get_image(db, task_id, user_id)` 调用入口。
 - `app/models/ai_to_work.py`：按现有 PHP `ai_to_work` 表映射，`task_id` 为可空的 `VARCHAR(255)`，`work` 可空；`type=1` 图片、`type=2` 视频；状态为 `0` 生成中、`1` 成功、`2` 失败、`3` 已删除。文生图只处理图片任务，已删除任务按不存在处理。
 - 已有 `ai_to_work` 表可直接复用；新环境或缺表环境执行 `alembic upgrade head`，迁移会补建任务表并保留已有数据。
@@ -215,6 +217,8 @@ result = await AIService.get_image(db, task_id, user_id)
 - 原片下载和成片均受 `FILE_VIDEO_MAX_SIZE` 限制。FFmpeg 异步调用，超时或请求取消会终止进程。处理期间当前查询请求会等待，客户端和反向代理超时应覆盖下载、转码和上传耗时，建议每 3～5 秒轮询。
 
 调用链：`ai_controller.py → api/services/ai_service.py → services/ai_video_service.py → storage/ai_video.py → storage/oss.py`。复用现有作品表，无需新增表结构。
+
+上游任务提交和查询复用 `app/pkg/qwen_client.py` 中的 DashScope 异步 SDK 适配，分别调用 `videos.jobs.create`、`videos.jobs.fetch`；接口仍按“提交任务 → 轮询结果”交互，查询成功后才进入本地下载、水印和 OSS 上传流程。
 
 AI 地址、默认模型、水印文件、视频访问域名、FFmpeg 路径和超时统一维护在 `config/ai.py`；AI 相关 `.env` 配置只维护 `QWEN_API_KEY`。修改配置后重启服务。Docker 已补充 FFmpeg，部署时需要重新构建镜像。
 
