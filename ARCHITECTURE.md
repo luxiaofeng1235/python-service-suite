@@ -1,4 +1,4 @@
-# FastAPI AI Service — 架构说明
+# OmniCore Platform — 架构说明
 
 > 更新日期：2026-06-01
 

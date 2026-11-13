@@ -41,7 +41,7 @@ async def health_check():
         data={
             "status": "running" if all_healthy else "degraded",
             "version": settings.VERSION,
-            "service": "FastAPI AI Service",
+            "service": settings.PROJECT_NAME,
             **checks,
         },
         msg="服务运行正常" if all_healthy else "部分服务异常",

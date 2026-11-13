@@ -51,7 +51,7 @@ class EmailUtil:
         _user:      SMTP 登录用户名（通常为邮箱地址）
         _password:  SMTP 授权码（非邮箱登录密码）
         _sender:    发件人邮箱地址
-        _sender_name: 发件人显示名称（如 "LS FastAPI"）
+        _sender_name: 发件人显示名称（如 "OmniCore Platform"）
     """
 
     # ==================== 读取配置 ====================

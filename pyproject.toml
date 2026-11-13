@@ -1,7 +1,7 @@
 [project]
-name = "fastapi-ai-service"
+name = "omnicore-platform"
 version = "1.0.0"
-description = "企业级 FastAPI AI 接口服务（三层架构）"
+description = "全领域综合业务核心平台（FastAPI 三层架构）"
 requires-python = ">=3.11"
 # 运行依赖只维护 requirements.txt，项目安装时从同一文件读取。
 dynamic = ["dependencies"]

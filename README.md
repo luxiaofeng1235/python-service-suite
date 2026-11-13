@@ -1,7 +1,7 @@
-# FastAPI AI Service — 企业级 AI 接口服务脚手架
+# OmniCore Platform — 全领域综合业务核心平台
 
-> **不仅是一个 AI 服务框架，更是一套通用的企业级后端脚手架**。基于 FastAPI 三层架构，内置用户鉴权、SSE 流式输出、OpenAI 兼容接口（当前接入千问，可扩展 DeepSeek / OpenAI 等任意兼容服务）、对话管理全链路。  
-> 无论是搭建 **AI 聊天助手、电商后台、内容管理系统、SaaS 平台、API 网关**，还是星座/命理等垂直领域应用，这套脚手架都能让你**半天内完成核心模块落地，专注于业务逻辑，而非基础设施**。
+> **OmniCore** 是项目简称，**OmniCore Platform** 是平台全称，定位为**全领域综合业务核心平台**。基于 FastAPI 三层架构，统一提供用户鉴权、后台权限、数据库访问、文件存储与 AI 接入等公共能力。  
+> 面向 **AI 应用、电商业务、内容管理、SaaS 平台、API 服务**及垂直领域扩展，复用统一的业务底座；当前已具备流式对话、星座与商品 Agent、多模态、内容生成及通用附件上传等能力。
 
 ---
 
@@ -188,7 +188,8 @@ cp .env.example .env    # 从模板创建本地配置
 alembic upgrade head
 
 # 4. 启动服务
-cd /mnt/d/python_work/fastapi_server
+# 进入项目根目录（以下为示例路径）
+cd /path/to/omnicore-platform
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
@@ -214,6 +215,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 
 Docker Compose 启动 FastAPI 和 Redis；MySQL 使用宿主机上已运行的实例，不会作为容器启动。应用容器内监听 `8000`，默认从宿主机 `18000` 端口访问，Redis 默认映射到宿主机 `16379`。
 
+应用服务名为 `omnicore`，镜像名为 `omnicore-platform`，Redis 容器名为 `omnicore-redis`。从旧命名部署升级时，先执行 `docker compose down --remove-orphans`，再按下方步骤重新构建并启动；保留现有数据卷。
+
 ### 前置条件
 
 - Docker & Docker Compose v2+
@@ -235,7 +238,7 @@ make build
 make docker-up
 
 # 4. 首次部署时执行数据库迁移
-docker compose exec ai-server alembic upgrade head
+docker compose exec omnicore alembic upgrade head
 ```
 
 `host.docker.internal` 在 Compose 中映射到宿主机网关。若 MySQL 有网络访问限制，还需确认它监听 Docker 可达的地址，并允许对应来源连接。

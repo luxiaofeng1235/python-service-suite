@@ -1,6 +1,6 @@
 .PHONY: dev build docker-up docker-down docker-restart docker-logs docker-shell docker-clean clean test alembic-init alembic-migrate alembic-upgrade help
 
-APP_NAME = fastapi-ai
+APP_NAME = omnicore-platform
 PORT = 8000
 
 ## —— Local Development ——
@@ -25,10 +25,10 @@ docker-down:  ## 停止并移除所有 Docker 服务
 docker-restart: docker-down docker-up  ## 重启 Docker 服务
 
 docker-logs:  ## 查看 Docker 日志
-	docker compose logs -f ai-server
+	docker compose logs -f omnicore
 
 docker-shell:  ## 进入运行中的 app 容器
-	docker exec -it fastapi-ai /bin/bash
+	docker compose exec omnicore /bin/bash
 
 docker-clean:  ## 停止当前项目并删除 Redis 数据卷
 	docker compose down -v

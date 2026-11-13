@@ -1,12 +1,12 @@
 -- ============================================
--- FastAPI AI Service - 数据库初始化脚本
+-- OmniCore Platform - 数据库初始化脚本
 -- 目标数据库: MySQL 8.0+1
 -- 编码: utf8mb4
 -- 自动生成时间: 2025-07-13
 -- ============================================
 
 -- 创建数据库（如果尚未创建）
--- CREATE DATABASE IF NOT EXISTS fastapi_server
+-- CREATE DATABASE IF NOT EXISTS omnicore
 --     DEFAULT CHARACTER SET utf8mb4
 --     DEFAULT COLLATE utf8mb4_unicode_ci;
 

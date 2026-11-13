@@ -17,7 +17,7 @@
   <!-- 标题 -->
   <rect x="0" y="0" width="960" height="48" fill="#0f172a" rx="10"/>
   <rect x="0" y="30" width="960" height="18" fill="#0f172a"/>
-  <text x="480" y="30" text-anchor="middle" font-size="15" font-weight="700" fill="#f8fafc" letter-spacing="1">FastAPI AI Service — HTTP 请求生命周期</text>
+  <text x="480" y="30" text-anchor="middle" font-size="15" font-weight="700" fill="#f8fafc" letter-spacing="1">OmniCore Platform — HTTP 请求生命周期</text>
 
   <!-- 时间轴纵线 -->
   <line x1="100" y1="75" x2="100" y2="660" stroke="#e2e8f0" stroke-width="2"/>

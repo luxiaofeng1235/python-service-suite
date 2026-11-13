@@ -1,6 +1,6 @@
 """
 ============================================
-FastAPI AI Service - 应用入口
+OmniCore Platform - 应用入口
 ============================================
 组装各模块，保持简洁。具体实现在 app/setup/ 各子模块中。
 
@@ -59,7 +59,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
-        description="企业级 FastAPI AI 接口服务（三层架构）",
+        description="全领域综合业务核心平台（FastAPI 三层架构）",
         docs_url="/docs",
         redoc_url=None,  # 使用下方自定义路由（固定 ReDoc CDN 版本）
         openapi_url="/openapi.json",

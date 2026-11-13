@@ -1,8 +1,8 @@
 services:
-  ai-server:
+  omnicore:
     build: .
-    image: fastapi-ai-server
-    container_name: fastapi-ai
+    image: omnicore-platform
+    container_name: omnicore
     restart: unless-stopped
     ports:
       - "18000:8000"
@@ -27,7 +27,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: fastapi-redis
+    container_name: omnicore-redis
     restart: unless-stopped
     volumes:
       - redis-data:/data

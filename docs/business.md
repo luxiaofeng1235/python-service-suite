@@ -252,8 +252,8 @@ ffmpeg -version
 当前项目 Docker 镜像基于 `python:3.12-slim`（Debian），`Dockerfile` 已通过 `apt-get` 安装 FFmpeg。部署时重新构建并创建应用容器，再在容器内检查：
 
 ```bash
-docker compose up -d --build ai-server
-docker compose exec ai-server ffmpeg -version
+docker compose up -d --build omnicore
+docker compose exec omnicore ffmpeg -version
 ```
 
 FFmpeg 必须安装在实际运行后端的环境中；Docker 部署时在应用容器内检查，本机运行时在本机检查。默认 `config/ai.py` 的 `FFMPEG_BIN = "ffmpeg"`，通过 PATH 查找；自定义安装位置时可改为可执行文件的绝对路径。所用 FFmpeg 需支持 `overlay` 滤镜和 `libx264` 编码器。提交视频任务前会检查 FFmpeg 和水印文件，缺少 FFmpeg 时提示“FFmpeg 未安装或 FFMPEG_BIN 配置错误”。

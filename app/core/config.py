@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     """Redis 连接字符串，按需启用"""
 
     # ==================== 项目信息 ====================
-    PROJECT_NAME: str = "FastAPI AI Service"
+    PROJECT_NAME: str = "OmniCore Platform"
     VERSION: str = "1.0.0"
     DEBUG: bool = True
 
