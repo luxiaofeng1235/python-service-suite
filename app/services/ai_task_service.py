@@ -1,8 +1,8 @@
 """
 ============================================
-AI Task Helpers - shared result and failure handling
+AI 任务公共方法 - 结果读取与失败处理
 ============================================
-Decode stored task results and persist terminal failures for image and video tasks.
+统一读取图片和视频任务的已保存结果，并持久化生成失败状态。
 """
 
 import json
@@ -17,7 +17,7 @@ from app.pkg.qwen_client import TaskMediaType
 
 
 def load_task_work(work: object, *, media_type: TaskMediaType) -> object:
-    """Decode legacy JSON strings while preserving native JSON column values."""
+    """兼容历史 JSON 字符串，保留 JSON 字段原有的数据结构。"""
     if not isinstance(work, str):
         return work
     try:
@@ -27,7 +27,7 @@ def load_task_work(work: object, *, media_type: TaskMediaType) -> object:
 
 
 def extract_task_error(work: object, *, default: str) -> str:
-    """Read a cached error with a fallback for missing or empty messages."""
+    """读取已保存的错误信息，缺失或为空时使用默认提示。"""
     if isinstance(work, dict):
         return str(work.get("error") or default)
     return default
@@ -40,7 +40,7 @@ async def fail_task(
     *,
     media_type: TaskMediaType,
 ) -> NoReturn:
-    """Commit a terminal failure before raising its business exception."""
+    """先提交任务失败状态，再抛出业务异常。"""
     task.work = {"error": message}
     task.status = TaskStatus.FAILED
     # 先提交失败结果，再抛异常；后续请求可直接读取失败记录。

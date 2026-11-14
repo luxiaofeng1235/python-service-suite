@@ -1,173 +1,118 @@
 # OmniCore Platform — 架构说明
 
-> 更新日期：2026-06-01
+> 更新日期：2026-11-14
 
 ---
 
-## 一、当前现状
+## 一、当前运行架构
 
-整个项目是**一个 FastAPI 应用实例**，只服务前端（SPA / 移动端）。
+项目由一个 FastAPI 应用同时提供前台 API 和后台管理 API，共用数据库、公共服务与统一响应。
 
 ### 路由组织
 
+```text
+app/setup/routes.py
+  └── register_routes(app)
+       ├── app/routes/api.py    → /api/*，用户、AI、Agent、附件等前台接口
+       └── app/routes/admin.py  → /admin/*，管理员认证、用户管理、RBAC、CMS
 ```
-routes/api.py
-  └── api_router (无前缀)
-       ├── user_controller  →  /api/user/*
-       ├── ai_controller    →  /api/ai/*
-       ├── file_controller  →  /api/file/*
-       └── test_controller  →  /api/test/*
 
-setup/routes.py
-  └── register_routes(app) → app.include_router(api_router)
-```
+两个路由聚合器分别挂载控制器，共享一个应用实例和端口。业务接口的认证与权限通过依赖显式声明；路由使用 `/admin` 前缀本身不会自动产生保护。
 
 ### 认证方式
 
-- 普通接口：`Depends(get_current_user)` — JWT Token 校验
-- 管理员接口：`Depends(get_current_admin)` — 校验 `is_super=True`
-- 白名单路径：`AUTH_WHITE_LIST` 配置，免登录
+| 场景 | 依赖 | 数据来源 |
+|------|------|----------|
+| 前台用户 | `get_current_user` | `user_tokens` + `users` |
+| 后台管理员 | `get_current_admin_user` | `admin_tokens` + `auth_admins` |
+| 指定后台权限 | `require_permission(Perm.XXX)` | 后台身份 + 数据库角色策略 |
+| 仅限超管 | `require_super_admin` | `auth_admins.is_super` |
 
-> 当前授权只有「普通用户 / 超管」两级（`is_super` 布尔位），无细粒度权限。
-> 接口级 RBAC 的引入方案见 [第三章](#三接口级-rbac基于-casbin-二开)。
+登录使用数据库保存的短 Token，通过 `Authorization: Bearer <token>` 传入。鉴权检查 Token 有效性、过期时间和账号状态；前台还检查账号是否注销。前后台 Token 独立，不能相互替代。
 
-### 部署
+`AUTH_WHITE_LIST` 用于已接入前台鉴权依赖的公开路径及验签豁免，不会自动替代后台鉴权。后台登录公开，其余管理接口按职责声明依赖；CMS 分类列表要求 `cms:list`。
+
+### 启动
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-一个进程、一个端口。
+---
+
+## 二、目录分层与模块复用
+
+```text
+app/
+├── api/controllers/       # 前台路由与请求响应
+├── api/services/          # 前台专用业务
+├── admin/controllers/     # 后台路由与请求响应
+├── admin/services/        # 后台专用业务
+├── services/              # 跨模块公共业务，包括附件、AI、RBAC 和 Agent
+├── agents/                # Agent 编排、工具注册及 LLM 适配
+├── core/                  # 配置、身份依赖和权限依赖
+├── models/                # SQLAlchemy 数据库映射
+├── schemas/               # 请求验证与响应模型
+├── common/                # 统一响应、异常、分页等
+├── pkg/                   # 日志、Redis、模型客户端等基础设施
+├── storage/               # 本地文件和 OSS 存储
+├── routes/                # 前后台路由聚合
+└── setup/                 # 应用组装、生命周期及中间件注册
+```
+
+控制器接收参数、注入可信身份、调用服务、返回统一响应。SQL 查询、授权范围判断和业务事务放在服务层；Model 只映射表结构，Schema 负责参数约束与响应字段。
+
+跨前后台复用的能力放在 `app/services/`，例如附件服务和 RBAC。前后台各自的账户业务分别放在 `app/api/services/` 与 `app/admin/services/`。所有路由由 `app/setup/routes.py` 集中挂载。
 
 ---
 
-## 二、加入后台管理的实际改动
+## 三、接口级 RBAC 与授权范围
 
-### 2.1 新增 `app/admin/` 模块
+### 3.1 当前实现
 
-```
-app/admin/
-├── controllers/          # 后台控制器，prefix="/admin/xxx"
-├── services/             # 后台专用业务逻辑，跨模块能力复用 app/services
-├── schemas/              # 后台专属请求/响应模型（可选）
-└── routes.py             # 聚合 admin_router
-```
+当前使用 SQLAlchemy 直接查询 MySQL 策略表，未引入 PyCasbin、Casbin Adapter 或 Enforcer。`auth_casbin_rule` 保留历史命名，以 `p`、`g` 区分两种关系。
 
-### 2.2 现有文件改动
+| 表 | 职责 |
+|----|------|
+| `auth_permissions` | 可分配权限目录，使用 `resource + action` 表示权限 |
+| `auth_roles` | 角色定义 |
+| `auth_casbin_rule` | `g: 管理员 ID → 角色名`，`p: 角色名 → 资源 + 动作` |
 
-| 文件 | 改动 |
-|------|------|
-| `setup/routes.py` | 增加 `app.include_router(admin_router)`，共两行 |
-| `core/dependency.py` | 已有 `get_current_admin`，不动，后台直接复用 |
-| `controllers/*` | **不动** — 前台接口维持现有路径不变 |
-| `app/api/services/*` | 前台专用业务，如用户注册、登录和账户操作 |
-| `app/services/*` | 跨模块公共能力，如附件服务，供前台和后台共同调用 |
+`app/core/permissions.py` 的 `Perm` 集中维护执行点使用的权限名，如 `user:list`、`cms:list`。资源名是业务资源，不是 URL；动作也不直接等同于 HTTP 方法。
 
-### 2.3 当前 controller 里已有管理员接口怎么处理
+### 3.2 请求校验
 
-现有 `user_controller.py` 里的：
-
-| 路由 | 权限 | 归谁 |
-|------|------|------|
-| `/api/user/login` | 免登录 | 前台，不动 |
-| `/api/user/register` | 免登录 | 前台，不动 |
-| `/api/user/forgot-password` | 免登录 | 前台，不动 |
-| `/api/user/reset-password` | 免登录 | 前台，不动 |
-| `/api/user/logout` | 普通用户 | 前台，不动 |
-| `/api/user/center` | 普通用户 | 前台，不动 |
-| `/api/user/list` | 普通用户 | 前台，不动 |
-| `/api/user/delete` | 普通用户 | 前台，不动 |
-| `/api/user/tokens/expired` | **管理员** | **方案见下文** |
-
-两个方案：
-
-**方案 A（推荐）：保持现状，管理员接口留在前台不动**
-
-- `cleanup_expired_tokens` 是系统功能接口，放在前台 `/api/user/tokens/expired` 给前端管理面板调
-- 后台新增的管理功能写在自己的 controller 下，如 `/admin/users/*`
-- 优点：无需迁移旧接口，不改动稳定代码
-- 缺点：前台 API 文档里能看到管理员接口
-
-**方案 B：迁移到后台**
-
-- 将 `cleanup_expired_tokens` 从 `user_controller.py` 移到 `admin/controllers/` 下
-- 前台 `user_controller.py` 移除该路由
-- 优点：前后接口各归其位
-- 缺点：改了现有代码，需要重新测试
-
-### 2.4 后端最终路由总览
-
-```
-setup/routes.py
-  └── register_routes(app)
-       ├── app.include_router(api_router)     # /api/* 前端
-       └── app.include_router(admin_router)   # /admin/* 后台
+```text
+请求 → require_permission(Perm.XXX)
+          └── get_current_admin_user：校验后台 Token 和账号
+                ├── is_super=True：放行
+                └── 普通管理员：RbacService.check_permission
+                      ├── 查询 g 关系，取得管理员的角色
+                      └── 查询 p 策略，匹配资源和动作
 ```
 
-两个 `APIRouter` 独立，共享同一个 `FastAPI` 实例、同一个端口。
+缺少身份返回 HTTP 401，缺少接口权限返回 HTTP 403，由统一异常处理器输出错误。策略在请求时查询数据库，没有进程内 Enforcer 策略缓存；提交角色或权限变更后，后续请求即可读取。
 
----
+### 3.3 分配权限与角色
 
-## 三、接口级 RBAC（基于 Casbin 二开）
+接口权限和可授予范围分两步校验：
 
-### 3.1 选型结论
+1. `require_permission` 校验操作者能否访问分配接口，例如 `permission:assign` 或 `user_role:assign`。
+2. `RbacService` 从数据库核实操作者账号，再校验具体授权内容。普通管理员只能授予自身已持有的权限；分配整个角色时，该角色的全部权限都必须包含在操作者的现有权限中。超管可授予任意目录权限和角色。
 
-接口级 RBAC（角色 → 接口）选用 **Casbin** 生态，二开接入现有鉴权链路：
+操作者 ID 来自后台鉴权依赖，不能由请求体指定。目录中存在某权限，仅表示该权限可被管理，不代表任意拥有分配接口权限的管理员都能授予它。
 
-| 组件 | 作用 |
-|------|------|
-| `casbin` (PyCasbin) | 权限决策引擎，`subject-object-action` 模型 |
-| `casbin-async-sqlalchemy-adapter` | 策略存入现有 MySQL，复用 async 引擎，不用 CSV |
+### 3.4 初始化与迁移
 
-Casbin 的 `sub(角色) - obj(URL 路径) - act(HTTP 方法)` 模型天然就是接口级 RBAC，无需自造轮子。
+`sql/init.sql` 为手动建库提供权限种子。Alembic 通过 `20261114_0001` 补齐历史遗漏的权限目录、默认 `admin` / `editor` 角色及基础策略，与手动初始化保持一致；不覆盖已有描述、自定义权限或管理员角色绑定。
 
-> **不直接用 `fastapi-authz` 中间件**。它依赖 Starlette `AuthenticationMiddleware` 注入身份，与本项目「依赖注入式」鉴权（`get_current_user` 查 `UserToken` 表）机制不一致。本项目只引入 `casbin` 内核，鉴权入口仍走依赖注入。
+该迁移会补回默认角色缺失的基础权限。已有数据库执行：
 
-### 3.2 模型分层
-
-权限决策属于「鉴权」基础设施，**不下沉到业务 Service**，与 `get_current_user` 同层：
-
-```
-core/
-├── dependency.py        # 已有 get_current_user / get_current_admin
-├── rbac.py              # 新增 — Casbin enforcer 单例 + require_permission 依赖工厂
-└── ...
+```bash
+alembic upgrade head
 ```
 
-| 文件 | 改动 | 说明 |
-|------|------|------|
-| `core/rbac.py` | **新增** | 初始化 enforcer（async adapter），暴露 `require_permission()` 依赖工厂 |
-| `core/dependency.py` | **不动** | RBAC 复用 `get_current_user` 拿到的 `user_id` / `is_super` 作为 subject |
-| `services/rbac_service.py` | **新增** | 角色/权限/分配的 CRUD（管理后台用），是策略表的唯一数据源 |
-| `controllers/*` | 仅在需要鉴权的路由加 `dependencies=[Depends(require_permission(...))]` | 不动既有业务逻辑 |
-
-### 3.3 与现有鉴权的衔接（二开胶水点）
-
-1. ***subject 来源**：`require_permission` 内部 `Depends(get_current_user)`，用返回的角色/`user_id` 作为 Casbin 的 `sub`，不引入 Casbin 自带认证。
-2. **超管直通**：`is_super=True` 跳过 Casbin 校验，与现有 `get_current_admin` 语义一致。
-3. **白名单不变**：`AUTH_WHITE_LIST` 仍在 `get_current_user` 层生效，RBAC 只管「已登录用户能否访问该接口」。
-4. **失败响应统一**：鉴权不通过抛 `AppException`（或 403 `HTTPException`），由现有全局异常处理器转成统一 `Response.fail` 格式，不暴露 Casbin 默认 403。
-
-### 3.4 用法示例
-
-```python
-from app.core.rbac import require_permission
-
-@router.delete(
-    "/api/user/delete",
-    dependencies=[Depends(require_permission("user", "delete"))],
-)
-async def delete_user(...):
-    ...
-```
-
-策略与角色分配通过 `RbacService` 落库，运行时可动态变更、无需重启。
-
-### 3.5 待确认 / 实现时再定
-
-- 角色与权限表结构（`roles` / `role_permissions` / `user_roles`，或直接用 Casbin 的 `casbin_rule` 表 + 一张角色表）
-- `obj` 用 URL 路径还是抽象资源名（`user`/`order`）—— 影响策略可读性
-- 策略缓存与热更新策略（多进程部署下 enforcer 一致性）
+新增执行点权限时，应同时更新 `Perm`、初始化 SQL，并为已有数据库增加数据迁移，避免只有代码认识权限、数据库目录却无法分配的情况。
 
 ---
 
@@ -202,4 +147,4 @@ Nginx (可选)
 | 服务层是唯一数据源 | 所有 DB 操作经过 Service |
 | 统一响应 | `Response.success()` / `Response.fail()` |
 | 全局异常 | 不允许 try/catch 吞错误 |
-| 鉴权在依赖层 | 认证/权限校验走 `Depends`，不渗进业务 Service；Service 只信任已注入的 `user_id` |
+| 认证与授权分层 | 接口准入走 `Depends`；服务层使用可信操作者 ID 校验具体授权范围 |

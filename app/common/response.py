@@ -26,8 +26,8 @@ from pydantic import BaseModel
 def _serialize(obj: Any) -> Any:
     """递归序列化对象，支持 Pydantic BaseModel、SQLAlchemy ORM、列表、字典、日期等"""
     if isinstance(obj, BaseModel):
-        return obj.model_dump()
-    if isinstance(obj, list):
+        return _serialize(obj.model_dump(mode="json"))
+    if isinstance(obj, (list, tuple)):
         return [_serialize(item) for item in obj]
     if isinstance(obj, dict):
         return {key: _serialize(value) for key, value in obj.items()}
@@ -94,7 +94,7 @@ class Response:
             content={
                 "code": code,
                 "msg": msg,
-                "data": data,
+                "data": _serialize(data),
             },
             status_code=200,  # 业务错误仍返回 200，由 code 区分
         )

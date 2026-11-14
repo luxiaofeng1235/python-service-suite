@@ -1,9 +1,9 @@
 """
 ============================================
-AI Conversation Service - streaming workflow
+AI 对话服务 - 流式调用与记录保存
 ============================================
-Owns the model-specific conversation flow, upstream streaming, and chat-log persistence.
-Controllers should only validate input and expose the returned stream.
+组织模型对话、上游流式调用和聊天记录保存。
+控制器只负责参数校验和流式响应。
 """
 
 import asyncio
@@ -24,12 +24,12 @@ from app.utils.time_ import TimeUtil
 
 
 class AIService:
-    """AI conversation service with Qwen-compatible streaming."""
+    """复用千问客户端处理流式对话并保存上下文。"""
 
     @staticmethod
     async def stream_chat(req: ChatRequest, user_id: int = 0) -> AsyncGenerator[str, None]:
-        """Stream one conversation and persist the completed assistant message."""
-        # The stream can outlive FastAPI's yield dependency, so own this session here.
+        """逐段返回本轮回答，并保存完整的助手消息。"""
+        # 流的生命周期可能超过请求依赖，因此在生成器内部管理数据库会话。
         async with async_session() as db:
             chat: AiChatLog | None = None
             messages: list[dict[str, Any]] | None = None
@@ -87,7 +87,7 @@ class AIService:
         reply: str,
         reasoning: str,
     ) -> None:
-        """Persist received deltas after an upstream failure or disconnect."""
+        """上游异常或连接中断时，保存已接收的部分回答。"""
         if chat is None or messages is None:
             await db.rollback()
             return
@@ -106,7 +106,7 @@ class AIService:
         model_id: int,
         user_id: int,
     ) -> AiChatLog:
-        """Fetch an owned chat log or create a new one."""
+        """查询当前用户所属的聊天记录，或创建新记录。"""
         if chat_id > 0:
             result = await db.execute(
                 select(AiChatLog).where(
@@ -140,7 +140,7 @@ class AIService:
         restart: int,
         system_prompt: str,
     ) -> list[dict[str, Any]]:
-        """Build the system prompt, history, and current user message."""
+        """组合系统提示词、历史消息和本轮用户输入。"""
         history = AIService._load_history(chat.chat)
         if restart == 1:
             if history:
@@ -151,7 +151,7 @@ class AIService:
 
     @staticmethod
     def _load_history(chat_json: Any) -> list[dict[str, Any]]:
-        """Normalize a JSON column value into a message list."""
+        """兼容历史 JSON 字符串，将聊天内容转换为消息列表。"""
         if isinstance(chat_json, list):
             return [item for item in chat_json if isinstance(item, dict)]
         try:
@@ -162,7 +162,7 @@ class AIService:
 
     @staticmethod
     def _format_stream_content(content: str) -> str:
-        """Match the PHP stream format without changing persisted raw content."""
+        """将流内容转换为 PHP 兼容格式，数据库仍保存原始文本。"""
         return content.replace("\n", "<br/>").replace(" ", "&nbsp;")
 
     @staticmethod
@@ -173,7 +173,7 @@ class AIService:
         assistant_content: str,
         reasoning_content: str,
     ) -> None:
-        """Append the assistant answer and flush the chat log."""
+        """追加助手回答并将聊天记录刷新至数据库会话。"""
         history = [dict(item) for item in messages[1:]]
         history.append(
             {

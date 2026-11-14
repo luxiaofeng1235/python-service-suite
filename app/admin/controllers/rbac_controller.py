@@ -173,9 +173,13 @@ async def add_role_permission(
     role_id: int,
     req: PermissionAssignRequest,
     db: AsyncSession = Depends(get_session),
+    current_admin: dict = Depends(get_current_admin_user),
 ):
-    """为角色分配一条权限（需先在权限目录中存在）"""
-    await RbacService.add_role_permission(db, role_id, req.resource, req.action)
+    """分配目录中的权限，普通管理员仅可授予自身持有的权限。"""
+    await RbacService.add_role_permission(
+        db, role_id, req.resource, req.action,
+        operator_id=current_admin["user_id"],
+    )
     return Response.success(msg="权限添加成功")
 
 
@@ -220,9 +224,12 @@ async def assign_admin_role(
     admin_id: int,
     req: UserRoleRequest,
     db: AsyncSession = Depends(get_session),
+    current_admin: dict = Depends(get_current_admin_user),
 ):
-    """为管理员分配一个角色"""
-    await RbacService.assign_user_role(db, admin_id, req.role_id)
+    """分配角色，并校验角色权限未超出操作者的授权范围。"""
+    await RbacService.assign_user_role(
+        db, admin_id, req.role_id, operator_id=current_admin["user_id"],
+    )
     return Response.success(msg="角色分配成功")
 
 

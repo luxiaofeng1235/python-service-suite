@@ -387,7 +387,7 @@ Docker 已挂载 `data/chroma_db`，同一索引路径使用单个应用进程�
 
 ### RBAC 权限管理（`/admin/*`）
 
-基于 Casbin 的 RBAC 权限体系，三张核心表：
+基于 SQLAlchemy 查询策略表的 RBAC 权限体系，未引入 Casbin 引擎，三张核心表：
 
 | 表 | 说明 |
 |----|------|
@@ -408,6 +408,8 @@ Docker 已挂载 `data/chroma_db`，同一索引路径使用单个应用进程�
                    g, admin_id, role_name  →  获取角色
                    p, role_name, resource, action  →  判断是否有权限
 ```
+
+普通管理员只能分配自身持有的权限，分配整个角色时也会校验其全部权限；超管可完整授权。CMS 分类列表要求 `cms:list`。历史数据库执行 `alembic upgrade head` 补齐权限目录及默认角色策略，详见 [架构说明](ARCHITECTURE.md#三接口级-rbac-与授权范围)。
 
 **已有后台管理接口**：
 
@@ -478,7 +480,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:8001/api/user/me
 - 重置密码只接受数据库中最后签发且未使用、未过期的验证码；成功后撤销该用户所有登录 Token，需重新登录。Redis 缓存异常不会使已使用验证码重新生效。
 - `GET /api/user/list` 支持 `page` 和 `size` 参数，`size` 最大 100；仅展示启用且未注销的用户，返回 `id`、`username`、`nickname`。查看邮箱等管理信息使用受 `user:list` 权限控制的 `/admin/users/list`。
 - `DELETE /api/user/delete` 为软删除（标记 `is_deleted=True`），同时清空该用户所有 Token
-- `DELETE /api/user/tokens/expired` 需 `users.is_super=1` 管理员权限
+- 过期 Token 清理使用后台 `POST /admin/users/tokens/cleanup`，要求 `user:cleanup` 权限
 - 免登录路径由 `.env` 的 `AUTH_WHITE_LIST` 统一配置，逗号分隔
 
 ## 抽奖系统

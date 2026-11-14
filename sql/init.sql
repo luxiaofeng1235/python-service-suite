@@ -261,7 +261,14 @@ INSERT INTO `auth_permissions` (`resource`, `action`, `description`) VALUES
 ('permission', 'assign', '分配/移除角色权限'),
 ('user_role',  'list',   '查看用户角色'),
 ('user_role',  'assign', '分配/移除用户角色'),
-('admin',      'create', '创建管理员')
+('admin',      'create', '创建管理员'),
+('admin',      'list',   '查看管理员列表'),
+('admin',      'toggle', '禁用/启用管理员'),
+('cms',        'create', '创建文章/标签'),
+('cms',        'list',   '查看文章/分类/标签列表'),
+('cms',        'read',   '查看文章详情'),
+('cms',        'update', '更新文章/标签及发布状态'),
+('cms',        'delete', '删除文章/标签')
 ON DUPLICATE KEY UPDATE `id` = `id`;
 
 
@@ -273,6 +280,14 @@ ON DUPLICATE KEY UPDATE `id` = `id`;
 
 -- admin 角色：分配所有权限
 INSERT INTO `auth_casbin_rule` (`ptype`, `sub`, `obj`, `act`) VALUES
+('p', 'admin',   'admin',      'create'),
+('p', 'admin',   'admin',      'list'),
+('p', 'admin',   'admin',      'toggle'),
+('p', 'admin',   'cms',        'create'),
+('p', 'admin',   'cms',        'list'),
+('p', 'admin',   'cms',        'read'),
+('p', 'admin',   'cms',        'update'),
+('p', 'admin',   'cms',        'delete'),
 ('p', 'admin',   'permission', 'assign'),
 ('p', 'admin',   'permission', 'create'),
 ('p', 'admin',   'permission', 'delete'),

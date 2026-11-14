@@ -17,3 +17,5 @@ alembic revision --autogenerate -m "change description"
 已有数据库先查看 `alembic current`，备份后执行 `alembic upgrade head`；空数据库可直接完整升级。不要对已有数据的数据库执行 `stamp head` 代替结构迁移。修复迁移无法区分原有表和新建表，因此禁止自动降级，回退需恢复备份。
 
 2026-11-12：新增 `20261112_0001` 商品初始化迁移，补建 `goods_categories`、`goods_brands`、`goods_products`、`goods_skus` 四表及索引，字段与 `sql/code-product.sql` 一致。已有表直接跳过，不修改已有商品数据；仅初始化表结构，不导入演示数据。价格继续保存在 SKU，不新增 SPU 价格或最低价字段。
+
+2026-11-14：新增 `20261114_0001`，补齐 RBAC 权限目录、默认 `admin` / `editor` 角色及其基础策略，与 `sql/init.sql` 保持一致。该迁移会补回默认角色缺失的基础权限，已有描述、自定义权限和管理员角色绑定保持不变；不修改表结构，不自动降级。部署本次权限修复时执行 `alembic upgrade head`。

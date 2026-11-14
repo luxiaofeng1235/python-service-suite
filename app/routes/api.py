@@ -14,7 +14,7 @@ from app.api.controllers import (
     lottery_controller,
     test_controller,
     tools_controller,
-    user_controller,
+    user_controller, ws_controller,
 )
 
 api_router = APIRouter()
@@ -39,3 +39,6 @@ api_router.include_router(lottery_controller.router)
 
 # 测试路由
 api_router.include_router(test_controller.router)
+
+#websocket的路由
+api_router.include_router(ws_controller.router)

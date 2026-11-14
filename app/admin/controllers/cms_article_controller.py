@@ -17,12 +17,10 @@ from app.core.rbac import require_permission
 from app.database import get_session
 from app.schemas.cms import (
     ArticleCreateRequest,
-    ArticleListResponse,
     ArticleResponse,
     ArticleUpdateRequest,
     CategoryListResponse,
     TagCreateRequest,
-    TagListResponse,
     TagResponse,
     TagUpdateRequest,
 )
@@ -37,6 +35,7 @@ router = APIRouter(prefix="/admin/cms", tags=["后台-CMS文章管理"])
     "/categories",
     summary="获取文章分类列表",
     response_model=CategoryListResponse,
+    dependencies=[Depends(require_permission(Perm.CMS_LIST))],
 )
 async def get_categories():
     """获取所有文章分类（从JSON配置加载）"""

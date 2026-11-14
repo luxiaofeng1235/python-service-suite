@@ -10,7 +10,7 @@ RBAC 业务逻辑层
   5. 用户-角色绑定
 """
 
-from sqlalchemy import delete, select, update, tuple_
+from sqlalchemy import delete, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exception import AppException
@@ -223,6 +223,37 @@ class RbacService:
     # ==================== 权限分配（校验权限目录） ====================
 
     @staticmethod
+    async def _ensure_grantable_permissions(
+        db: AsyncSession,
+        operator_id: int,
+        permissions: set[tuple[str, str]],
+    ) -> None:
+        """从数据库核实操作者身份，普通管理员仅可授予自身持有的权限。"""
+        operator = await db.scalar(
+            select(AuthAdmin).where(AuthAdmin.id == operator_id, AuthAdmin.is_active)
+        )
+        if operator is None:
+            raise AppException(msg="操作管理员不存在或已禁用", code=403)
+        if operator.is_super:
+            return
+
+        role_names = select(CasbinRule.obj).where(
+            CasbinRule.ptype == "g",
+            CasbinRule.sub == str(operator_id),
+        )
+        result = await db.execute(
+            select(CasbinRule.obj, CasbinRule.act).where(
+                CasbinRule.ptype == "p",
+                CasbinRule.sub.in_(role_names),
+            )
+        )
+        owned_permissions = {(resource, action) for resource, action in result.all()}
+        missing = permissions - owned_permissions
+        if missing:
+            names = "、".join(f"{resource}:{action}" for resource, action in sorted(missing))
+            raise AppException(msg=f"不能分配自身未持有的权限：{names}", code=403)
+
+    @staticmethod
     async def get_role_permissions(db: AsyncSession, role_id: int) -> list[dict]:
         """
         获取角色的权限列表（含中文描述）
@@ -271,11 +302,13 @@ class RbacService:
         role_id: int,
         resource: str,
         action: str,
+        *,
+        operator_id: int,
     ) -> None:
         """
-        为角色添加一条权限（校验权限目录）
+        为角色添加目录中的权限，并校验操作者是否可以授予该权限。
 
-        策略语义：role_name 可以对 resource 执行 action
+        operator_id 必须由后台鉴权依赖提供，不能使用请求参数中的身份。
         """
         # 校验：该权限必须在 permissions 目录中
         result = await db.execute(
@@ -288,6 +321,10 @@ class RbacService:
             raise AppException(msg=f"权限 '{resource}:{action}' 不在权限目录中，请先添加")
 
         role = await RbacService.get_role_by_id(db, role_id)
+
+        await RbacService._ensure_grantable_permissions(
+            db, operator_id, {(resource, action)},
+        )
 
         # 检查是否已存在
         result = await db.execute(
@@ -360,12 +397,30 @@ class RbacService:
         ]
 
     @staticmethod
-    async def assign_user_role(db: AsyncSession, user_id: int, role_id: int) -> None:
+    async def assign_user_role(
+        db: AsyncSession,
+        user_id: int,
+        role_id: int,
+        *,
+        operator_id: int,
+    ) -> None:
         """
-        为用户分配角色
-        在 casbin_rule 中添加一条 g 关系：user_id → role_name
+        为管理员分配角色，角色的全部权限必须处于操作者的授权范围内。
+
+        operator_id 必须来自后台鉴权依赖；超管可分配任意角色。
         """
         role = await RbacService.get_role_by_id(db, role_id)
+
+        if await db.get(AuthAdmin, user_id) is None:
+            raise AppException(msg="目标管理员不存在")
+        result = await db.execute(
+            select(CasbinRule.obj, CasbinRule.act).where(
+                CasbinRule.ptype == "p",
+                CasbinRule.sub == role.name,
+            )
+        )
+        permissions = {(resource, action) for resource, action in result.all()}
+        await RbacService._ensure_grantable_permissions(db, operator_id, permissions)
 
         result = await db.execute(
             select(CasbinRule).where(
