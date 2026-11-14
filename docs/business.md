@@ -448,10 +448,12 @@ app/services/
     │      └─ 有数据 → 解析 JSON 配置 → 调用引擎
     │
     ├─ ② DB 无数据 → 读取 config/lottery/{key}.json
-    │      └─ 文件存在 → 解析 JSON → 回写 DB（缓存）→ 调用引擎
+    │      └─ 文件存在 → 解析 JSON → 调用引擎
     │
     └─ ③ JSON 文件也不存在 → 抛出配置不存在错误
 ```
+
+本地奖池统一维护在 `config/lottery/`，`sign_reward.json` 沿用原签到奖励示例的概率和金额。默认数据库优先，本地 JSON 兜底；`file://sign_reward` 强制读取文件，`db://sign_reward` 只读取数据库。本地配置不会自动回写数据库。
 
 ### 抽奖模式
 

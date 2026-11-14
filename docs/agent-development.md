@@ -314,7 +314,7 @@ data: {"type":"data","session_id":"11111111-1111-4111-8111-111111111111","agent"
 | `goods_categories` / `goods_brands` | 商品类目与品牌，供查询和索引资料组装 |
 | `goods_products` / `goods_skus` | SPU 商品资料与 SKU 规格、售价、库存 |
 
-`ChatMessageStatus` 定义在 [app/constants/astrology.py](../app/constants/astrology.py)：`0` 生成中、`1` 已完成、`2` 失败、`3` 中断。这是聊天消息状态，与图片和视频作品状态分开使用。
+`ChatMessageStatus` 定义在 [app/constants/chat.py](../app/constants/chat.py)：`0` 生成中、`1` 已完成、`2` 失败、`3` 中断。星座、商品及后续 Agent 共用这组聊天消息状态，与图片和视频作品状态分开使用。
 
 同一个会话同时只允许一个有效执行租约。进程异常导致租约过期后，新请求可恢复会话，并将遗留生成中消息标记为中断。历史重放保留有效工具调用组合并按配置裁剪；异常或断开连接时尝试保存已收到的部分文本并释放执行资源。数据库操作使用短事务，不在等待模型或工具网络请求时持有数据库事务。
 

@@ -1,0 +1,85 @@
+{
+  "mode": "tiered",
+  "level_rewards": {
+    "1": {
+      "odds": [
+        {
+          "prize_id": "sign_cash",
+          "type": "cash",
+          "v": 40,
+          "desc": "现金红包",
+          "money": [
+            {
+              "prize_id": "sign_cash_small",
+              "type": "小额现金",
+              "v": 70,
+              "money": [
+                0.1,
+                0.5
+              ],
+              "desc": "小额现金"
+            },
+            {
+              "prize_id": "sign_cash_large",
+              "type": "大额现金",
+              "v": 30,
+              "money": [
+                0.5,
+                2
+              ],
+              "desc": "大额现金"
+            }
+          ]
+        },
+        {
+          "prize_id": "sign_card",
+          "type": "prop",
+          "v": 30,
+          "props": "sign_card",
+          "desc": "签到卡"
+        },
+        {
+          "prize_id": "sign_score",
+          "type": "score",
+          "v": 30,
+          "money": [
+            5,
+            50
+          ],
+          "desc": "积分"
+        }
+      ]
+    },
+    "2": {
+      "rewards": [
+        {
+          "prize_id": "sign_l2_cash",
+          "type": "cash",
+          "weight": 50,
+          "min_cash": 0.5,
+          "max_cash": 3,
+          "desc": "现金红包"
+        },
+        {
+          "prize_id": "sign_l2_card",
+          "type": "prop",
+          "weight": 30,
+          "props": "sign_card",
+          "desc": "签到卡"
+        },
+        {
+          "prize_id": "sign_l2_score",
+          "type": "score",
+          "weight": 20,
+          "money": [
+            10,
+            100
+          ],
+          "desc": "积分"
+        }
+      ],
+      "min_cash": 0.1,
+      "max_cash": 1
+    }
+  }
+}

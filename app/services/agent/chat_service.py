@@ -1,9 +1,8 @@
 """
 ============================================
-Agent Chat Service - Session ownership and message persistence
+Agent 聊天服务 - 会话归属与消息持久化
 ============================================
-Persists runtime steps in short transactions and keeps the stream contract independent
-of providers, HTTP controllers, and future orchestration frameworks.
+通过短事务保存运行步骤，为各类 Agent 提供统一的会话、消息和流式事件管理。
 """
 
 import asyncio
@@ -20,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.agents.llm.base import LLMMessage, ToolCall
 from app.agents.runtime import AgentRunner, AgentStep
 from app.common.exception import AppException
-from app.constants.astrology import ChatMessageStatus
+from app.constants.chat import ChatMessageStatus
 from app.core.config import settings
 from app.database import async_session
 from app.models.chat_message import ChatMessage

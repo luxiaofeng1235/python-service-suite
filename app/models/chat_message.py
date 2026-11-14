@@ -1,8 +1,8 @@
 """
 ============================================
-Chat Message Model - SQLAlchemy mapping
+聊天消息模型 - SQLAlchemy 数据库表映射
 ============================================
-Stores ordered Agent messages, tool-call history, and streaming completion status.
+保存 Agent 对话消息、工具调用记录及流式消息的执行状态。
 """
 
 from sqlalchemy import (
@@ -18,13 +18,13 @@ from sqlalchemy import (
     text,
 )
 
-from app.constants.astrology import ChatMessageStatus
+from app.constants.chat import ChatMessageStatus
 from app.database import Base
 from app.utils.time_ import TimeUtil
 
 
 class ChatMessage(Base):
-    """Preserve text and tool messages for replaying an Agent conversation."""
+    """映射所有 Agent 共用的聊天消息及工具调用记录。"""
 
     __tablename__ = "chat_messages"
     __table_args__ = (

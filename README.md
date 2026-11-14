@@ -98,7 +98,7 @@ Controller → Service → Model    Controller → Service → Model
 │   ├── models/              # ORM 数据库表映射
 │   ├── schemas/             # 请求校验和响应序列化
 │   ├── templates/           # 服务端 HTML 模板，按模块组织页面
-│   ├── constants/           # 业务常量、状态枚举和静态业务数据
+│   ├── constants/           # 固定业务含义、状态枚举和静态字典
 │   ├── routes/              # 前台、后台路由聚合
 │   ├── setup/               # 应用生命周期、中间件和路由注册
 │   ├── core/                # 配置汇聚、鉴权依赖和核心机制
@@ -108,7 +108,7 @@ Controller → Service → Model    Controller → Service → Model
 │   ├── utils/               # 通用辅助工具
 │   ├── middleware/          # 请求处理、日志、验签等中间件
 │   └── web/                 # 预留 Web 业务模块
-├── config/                  # 配置默认值，支持环境变量覆盖
+├── config/                  # 可调整的运行参数和业务配置
 ├── migrations/              # Alembic 数据库迁移
 │   └── versions/            # 迁移版本脚本
 ├── script/                  # Model / Schema 生成器及模板
@@ -117,6 +117,8 @@ Controller → Service → Model    Controller → Service → Model
 ├── uploads/                 # 本地上传文件和生成资源
 └── logs/                    # 运行日志
 ```
+
+状态数值、协议标识及固定分类字典放在 `app/constants/`；模型、地址、超时、阈值和奖池参数放在 `config/`。运行参数通过 `app.core.config.settings` 校验并支持环境变量覆盖，密钥及部署环境信息放在 `.env`；奖池等本地 JSON 业务配置由对应服务加载。
 
 **新增模块只需四步**：创建 `model`（如需新表）→ 创建 `service` → 创建 `controller` → 在 `routes/api.py` 或 `routes/admin.py` 注册。
 

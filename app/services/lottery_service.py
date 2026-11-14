@@ -17,7 +17,7 @@ from app.core.lottery import draw, draw_batch
 class LotteryConfigLoader:
     """抽奖配置加载器 — DB 优先，JSON 文件兜底"""
 
-    JSON_CONFIG_DIR = Path(__file__).resolve().parents[2] / "constants" / "lottery"
+    JSON_CONFIG_DIR = Path(__file__).resolve().parents[2] / "config" / "lottery"
 
     def __init__(self, db: Optional[AsyncSession] = None):
         self.db = db
@@ -26,8 +26,8 @@ class LotteryConfigLoader:
         """
         加载配置。
         支持 key 格式:
-        - "sign_reward"       → DB → constants/lottery/sign_reward.json
-        - "file://sign_reward" → 强制读取 constants/lottery/sign_reward.json
+        - "sign_reward"       → DB → config/lottery/sign_reward.json
+        - "file://sign_reward" → 强制读取 config/lottery/sign_reward.json
         - "db://sign_reward"  → 强制 DB
         """
         if "://" in key:
@@ -72,7 +72,7 @@ class LotteryConfigLoader:
 
     @staticmethod
     def _from_json_file(key: str) -> Optional[dict]:
-        """从 constants/lottery/{key}.json 加载"""
+        """从 config/lottery/{key}.json 加载本地奖池配置。"""
         if "/" in key or "\\" in key or ".." in key:
             raise AppException(code=10006, msg=f"非法抽奖配置标识: {key}")
 
@@ -101,7 +101,7 @@ class LotteryDrawService:
     ) -> list[dict]:
         """纯抽奖入口，只按奖池概率返回奖品结果，不落库。"""
         opts = LotteryDrawService._sanitize_options(options)
-        #加载配置 根据指定的配置来加载，默认DB->constants
+        # 加载配置，默认数据库优先，本地 config/lottery 配置兜底。
         config = await LotteryDrawService._load_config(db, config_key)
 
         if opts["batch_count"] > 1:
