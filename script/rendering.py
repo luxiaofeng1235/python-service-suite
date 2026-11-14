@@ -8,12 +8,33 @@
 
 import ast
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from script.configuration import CodegenError, GeneratorConfig, output_directory, resolve_names
-from script.metadata import ColumnSpec, GeneratedFile, GenerationPlan, TableSpec
+from script.database_reader import ColumnSpec, TableSpec
+
+
+@dataclass(frozen=True)
+class GeneratedFile:
+    """待生成文件及其需要导出的类名。"""
+
+    path: Path
+    content: str
+    classes: tuple[str, ...]
+    register: bool
+
+
+@dataclass(frozen=True)
+class GenerationPlan:
+    """同一张表的 Model 与 Schema 必须作为一组写入。"""
+
+    table_name: str
+    model_class: str
+    files: tuple[GeneratedFile, ...]
+
 
 TEMPLATE_DIRECTORY = Path(__file__).with_name("templates")
 

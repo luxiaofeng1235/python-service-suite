@@ -7,6 +7,7 @@
 """
 
 import re
+from dataclasses import dataclass
 
 from pydantic import BaseModel
 from sqlalchemy import create_engine, inspect
@@ -16,7 +17,36 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.sql.type_api import TypeEngine
 
 from script.configuration import PROJECT_ROOT, CodegenError, validate_identifier
-from script.metadata import ColumnSpec, TableSpec
+
+
+@dataclass(frozen=True)
+class ColumnSpec:
+    """一个数据库字段及其 Python 映射信息。"""
+
+    name: str
+    model_type: str
+    annotation: str
+    schema_imports: tuple[str, ...]
+    constraints: tuple[str, ...]
+    nullable: bool
+    primary_key: bool
+    autoincrement: bool
+    default: str | None
+    computed: str | None
+    computed_persisted: bool | None
+    comment: str
+
+
+@dataclass(frozen=True)
+class TableSpec:
+    """读取完成的单表结构，表达式均由受控转换器生成。"""
+
+    name: str
+    title: str
+    columns: tuple[ColumnSpec, ...]
+    table_args: tuple[str, ...]
+    model_imports: tuple[str, ...]
+
 
 INTEGER_BITS = {"TINYINT": 8, "SMALLINT": 16, "MEDIUMINT": 24, "INTEGER": 32, "BIGINT": 64}
 TEXT_TYPES = {"CHAR", "VARCHAR", "NCHAR", "NVARCHAR", "TEXT", "TINYTEXT", "MEDIUMTEXT", "LONGTEXT"}

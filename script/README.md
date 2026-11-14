@@ -3,6 +3,8 @@
 配置文件固定默认读取项目根目录的 `generator.yaml`，`script/` 仅保存工具代码与模板。
 数据库连接复用 `.env` 的 `DATABASE_URL`，目前只支持 MySQL 普通表。
 
+工具保留四个功能模块：`codegen.py` 负责 CLI 和文件写入，`configuration.py` 负责配置，`database_reader.py` 负责读表，`rendering.py` 负责渲染。表结构与生成计划的数据类定义在各自使用的模块中，模板放在 `templates/`。
+
 在项目根目录、已安装项目依赖的 Python 环境执行：
 
 ```bash
@@ -27,4 +29,4 @@ python -m script.codegen --config generator.yaml --table demo_articles
 - 开启注册后只向目标目录 `__init__.py` 追加导入。自定义 Model 包需要被应用和 Alembic 环境导入，才能进入共享 `Base.metadata`。
 - `script/.codegen.lock` 防止两个生成进程同时追加导入；进程被强制结束后，确认没有生成器运行再手动清理残留锁和未完成产物。
 
-本次开发按约定未运行测试，也未连接数据库执行生成；待准备好目标表后再验证闭环。
+已通过 `ai_demo_class` 表完成实际预览和正式生成验证；业务校验和接口逻辑仍需开发者补充。

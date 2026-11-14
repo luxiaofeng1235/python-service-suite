@@ -37,16 +37,14 @@ python -m script.codegen --table ai_demo_class
 
 ### 模块分工
 
-`script/` 按职责拆分，文件数量是维护上的选择，不是 Python 或项目规范的强制要求：
+`script/` 保留四个功能模块，数据结构就近定义，文件写入由 CLI 统一协调：
 
 | 文件 | 职责 |
 | --- | --- |
-| `codegen.py` | CLI 入口，协调生成流程 |
+| `codegen.py` | CLI 入口、冲突检查、文件写入和导入注册 |
 | `configuration.py` | 读取 YAML，校验目录和命名 |
-| `database_reader.py` | 读取 MySQL 表结构 |
-| `metadata.py` | 定义模块之间传递的数据结构 |
-| `rendering.py` | 将表结构转换成代码 |
-| `file_writer.py` | 检查冲突、写文件、注册导入 |
+| `database_reader.py` | 读取 MySQL 表结构，定义字段和表的数据结构 |
+| `rendering.py` | 渲染代码，定义待生成文件及生成计划 |
 
 两个代码模板放在 `script/templates/`，包入口和使用说明分别为 `script/__init__.py`、`script/README.md`。工具代码与模板保留在 `script/`，YAML 配置放在项目根目录。
 
