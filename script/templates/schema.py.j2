@@ -5,6 +5,7 @@
 根据 {{ table.name }} 的结构生成基础字段，业务验证及响应字段由开发者完善。
 更新时使用 model_dump(exclude_unset=True)，以区分省略字段与显式传入 null。
 """
+
 {% if standard_imports %}
 {{ standard_imports | join('\n') }}
 
