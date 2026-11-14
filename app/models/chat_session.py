@@ -5,12 +5,12 @@ Chat Session Model - SQLAlchemy mapping
 Stores Agent conversation ownership and titles independently of legacy AI chat logs.
 """
 
-from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, Index, Integer, String, text
 
 from app.database import Base
+from app.utils.time_ import TimeUtil
 
 
 class ChatSession(Base):
@@ -49,15 +49,15 @@ class ChatSession(Base):
     created_at = Column(
         DateTime,
         nullable=False,
-        default=datetime.now,
+        default=TimeUtil.get_date,
         server_default=text("CURRENT_TIMESTAMP"),
         comment="创建时间",
     )
     updated_at = Column(
         DateTime,
         nullable=False,
-        default=datetime.now,
-        onupdate=datetime.now,
+        default=TimeUtil.get_date,
+        onupdate=TimeUtil.get_date,
         server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
         comment="更新时间",
     )

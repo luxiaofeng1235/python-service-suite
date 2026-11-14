@@ -8,7 +8,7 @@ from app.utils.time_ import TimeUtil
 """
 
 import calendar
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from dateutil.parser import isoparse
 
@@ -19,19 +19,24 @@ class TimeUtil:
     # ==================== 当前时间 ====================
 
     @staticmethod
+    def get_date() -> datetime:
+        """返回当前本地日期时间对象，用于数据库 DateTime 字段赋值。"""
+        return datetime.now()
+
+    @staticmethod
     def unix() -> int:
         """当前秒级时间戳"""
-        return int(datetime.now().timestamp())
+        return int(TimeUtil.get_date().timestamp())
 
     @staticmethod
     def datetime_str() -> str:
         """当前时间  YYYY-MM-DD HH:mm:ss"""
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return TimeUtil.get_date().strftime("%Y-%m-%d %H:%M:%S")
 
     @staticmethod
     def date_str() -> str:
         """当前日期  YYYY-MM-DD"""
-        return datetime.now().strftime("%Y-%m-%d")
+        return TimeUtil.get_date().strftime("%Y-%m-%d")
 
     @staticmethod
     def format_datetime(dt: datetime | None, default: str | None = None) -> str | None:
@@ -76,37 +81,37 @@ class TimeUtil:
     @staticmethod
     def today_start_unix() -> int:
         """今天 00:00:00 Unix"""
-        d = date.today()
+        d = TimeUtil.get_date().date()
         return int(datetime(d.year, d.month, d.day).timestamp())
 
     @staticmethod
     def today_end_unix() -> int:
         """今天 23:59:59 Unix"""
-        d = date.today()
+        d = TimeUtil.get_date().date()
         return int(datetime(d.year, d.month, d.day, 23, 59, 59).timestamp())
 
     @staticmethod
     def yesterday_start_unix() -> int:
         """昨天 00:00:00 Unix"""
-        d = date.today() - timedelta(days=1)
+        d = TimeUtil.get_date().date() - timedelta(days=1)
         return int(datetime(d.year, d.month, d.day).timestamp())
 
     @staticmethod
     def tomorrow_date_str() -> str:
         """明天日期  YYYY-MM-DD"""
-        return (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        return (TimeUtil.get_date().date() + timedelta(days=1)).strftime("%Y-%m-%d")
 
     # ==================== 相对时间计算（常用） ====================
 
     @staticmethod
     def ago_day_unix(days: int) -> int:
         """N 天前的 Unix 时间戳"""
-        return int((datetime.now() - timedelta(days=days)).timestamp())
+        return int((TimeUtil.get_date() - timedelta(days=days)).timestamp())
 
     @staticmethod
     def ago_day_range(days: int) -> tuple[int, int]:
         """N 天前那天的 (00:00:00, 23:59:59)"""
-        d = date.today() - timedelta(days=days)
+        d = TimeUtil.get_date().date() - timedelta(days=days)
         start = int(datetime(d.year, d.month, d.day).timestamp())
         end = int(datetime(d.year, d.month, d.day, 23, 59, 59).timestamp())
         return start, end
@@ -116,7 +121,7 @@ class TimeUtil:
         """距今多少自然日"""
         if t <= 0:
             return 0
-        return (date.today() - datetime.fromtimestamp(t).date()).days
+        return (TimeUtil.get_date().date() - datetime.fromtimestamp(t).date()).days
 
     # ==================== 月/周范围 ====================
 
@@ -125,7 +130,7 @@ class TimeUtil:
         """指定月份（1-12）的起止 Unix 时间戳"""
         if month < 1 or month > 12:
             return 0, 0
-        year = date.today().year
+        year = TimeUtil.get_date().date().year
         _, days = calendar.monthrange(year, month)
         start = int(datetime(year, month, 1).timestamp())
         end = int(datetime(year, month, days, 23, 59, 59).timestamp())
@@ -134,7 +139,7 @@ class TimeUtil:
     @staticmethod
     def week_range() -> tuple[int, int]:
         """本周一 00:00:00 ~ 本周日 23:59:59"""
-        today = date.today()
+        today = TimeUtil.get_date().date()
         monday = today - timedelta(days=today.weekday())
         sunday = monday + timedelta(days=6)
         start = int(datetime(monday.year, monday.month, monday.day).timestamp())
@@ -146,7 +151,7 @@ class TimeUtil:
     @staticmethod
     def format_before(t: int) -> str:
         """X分钟前 / X小时前 / X天前 ..."""
-        diff = int(datetime.now().timestamp()) - t
+        diff = int(TimeUtil.get_date().timestamp()) - t
         if diff < 60:
             return "刚刚"
         if diff < 3600:

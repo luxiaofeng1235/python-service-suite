@@ -8,7 +8,6 @@
 
 import json
 from collections.abc import AsyncIterator
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from pydantic import JsonValue
@@ -24,6 +23,7 @@ from app.schemas.agent.goods_data import IndexBatch, ProductDTO
 from app.services.agent.chat_service import AgentChatService
 from app.services.agent.goods_data_service import GoodsDataService
 from app.services.agent.goods_vector_service import GoodsVectorService
+from app.utils.time_ import TimeUtil
 
 MAX_TOOL_RESULT_BYTES = 55000
 MAX_PRODUCT_DESCRIPTION_CHARS = 1000
@@ -162,7 +162,7 @@ class GoodsService:
         result: dict[str, JsonValue] = {
             "ok": True,
             "found": bool(serialized),
-            "queried_at": datetime.now(ZoneInfo(settings.AGENT_TIMEZONE)).isoformat(),
+            "queried_at": TimeUtil.get_date().astimezone(ZoneInfo(settings.AGENT_TIMEZONE)).isoformat(),
             "products": serialized,
             **context,
         }

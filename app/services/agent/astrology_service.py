@@ -6,7 +6,6 @@ Implements trusted tools using backend user identity and short database sessions
 """
 
 from collections.abc import AsyncIterator
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from pydantic import JsonValue
@@ -34,6 +33,7 @@ from app.schemas.agent.astrology import (
 )
 from app.schemas.agent.chat import AgentChatRequest, AgentStreamEvent
 from app.services.agent.chat_service import AgentChatService
+from app.utils.time_ import TimeUtil
 
 
 class AstrologyService:
@@ -154,7 +154,7 @@ class AstrologyService:
         llm: LLMAdapter | None = None,
     ) -> dict[str, JsonValue]:
         """Read a daily fortune or generate and cache explicit AI entertainment."""
-        business_now = datetime.now(ZoneInfo(settings.AGENT_TIMEZONE))
+        business_now = TimeUtil.get_date().astimezone(ZoneInfo(settings.AGENT_TIMEZONE))
         fortune_date = req.fortune_date or business_now.date()
         result: dict[str, JsonValue] = {
             "current_date": business_now.date().isoformat(),
@@ -180,7 +180,7 @@ class AstrologyService:
             HoroscopeCache.aspect == req.aspect,
         )
         row = await db.scalar(stmt)
-        if row is None or (row.expires_at is not None and row.expires_at <= datetime.now()):
+        if row is None or (row.expires_at is not None and row.expires_at <= TimeUtil.get_date()):
             # 工具使用独立会话，先释放读取事务和连接，再等待模型生成。
             await db.rollback()
             generated = await generate_horoscope(constellation, fortune_date, req.aspect, llm=llm)
@@ -218,9 +218,9 @@ class AstrologyService:
                 HoroscopeCache.constellation == req.constellation,
                 HoroscopeCache.fortune_date == req.fortune_date,
                 HoroscopeCache.aspect == req.aspect,
-                HoroscopeCache.expires_at <= datetime.now(),
+                HoroscopeCache.expires_at <= TimeUtil.get_date(),
             )
-            .values(**values, updated_at=datetime.now())
+            .values(**values, updated_at=TimeUtil.get_date())
         )
         await db.commit()
 
@@ -234,7 +234,7 @@ class AstrologyService:
             raw_data=stmt.inserted.raw_data,
             source=stmt.inserted.source,
             expires_at=stmt.inserted.expires_at,
-            updated_at=datetime.now(),
+            updated_at=TimeUtil.get_date(),
         )
         await db.execute(stmt)
         await db.commit()

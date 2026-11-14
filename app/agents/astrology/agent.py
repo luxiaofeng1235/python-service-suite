@@ -6,7 +6,6 @@ Combines shared LLM orchestration with backend-supplied astrology business tools
 """
 
 from collections.abc import Awaitable, Callable
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from pydantic import JsonValue
@@ -16,6 +15,7 @@ from app.agents.llm.base import LLMAdapter
 from app.agents.runtime import AgentTool, FunctionCallingRunner
 from app.core.config import settings
 from app.schemas.agent.astrology import EmptyToolRequest, HoroscopeToolRequest
+from app.utils.time_ import TimeUtil
 
 SYSTEM_PROMPT = (
     "你是星座咨询助手，以简体中文提供清晰、友好的星座知识和娱乐参考。"
@@ -53,7 +53,7 @@ def create_astrology_agent(
 ) -> FunctionCallingRunner:
     """Bind trusted backend tools to the astrology Agent."""
     # 每轮提供真实业务日期，避免模型使用训练知识或历史回答猜测“今天”。
-    business_now = datetime.now(ZoneInfo(settings.AGENT_TIMEZONE))
+    business_now = TimeUtil.get_date().astimezone(ZoneInfo(settings.AGENT_TIMEZONE))
     time_context = (
         f"本轮对话的当前日期为 {business_now.date().isoformat()}，"
         f"业务时区为 {settings.AGENT_TIMEZONE}。"

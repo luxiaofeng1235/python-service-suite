@@ -12,6 +12,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
+from app.utils.time_ import TimeUtil
+
 ZodiacSign = Literal[
     "aries",
     "taurus",
@@ -82,7 +84,7 @@ class AstrologyProfileUpdateRequest(BaseModel):
     @classmethod
     def validate_birthday(cls, value: date | None) -> date | None:
         """出生日期不能晚于今天。"""
-        if value is not None and value > date.today():
+        if value is not None and value > TimeUtil.get_date().date():
             raise ValueError("出生日期不能晚于今天")
         return value
 

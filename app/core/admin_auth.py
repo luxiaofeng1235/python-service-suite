@@ -6,8 +6,6 @@
 从 admin_tokens + auth_admins 表校验 Token，独立于前台用户体系。
 """
 
-from datetime import datetime
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
@@ -17,6 +15,7 @@ from app.core.dependency import bearer_scheme
 from app.database import get_session
 from app.models.admin_token import AdminToken
 from app.models.auth_admin import AuthAdmin
+from app.utils.time_ import TimeUtil
 
 
 async def get_current_admin_user(
@@ -45,7 +44,7 @@ async def get_current_admin_user(
         .where(
             AdminToken.token == credentials.credentials,
             AdminToken.is_active,
-            AdminToken.expires_at > datetime.now(),
+            AdminToken.expires_at > TimeUtil.get_date(),
             AuthAdmin.is_active,
         )
     )

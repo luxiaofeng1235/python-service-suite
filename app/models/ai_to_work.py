@@ -5,12 +5,11 @@ AI Generation Task Model - SQLAlchemy mapping
 Stores generation parameters, task ownership, and cached results from AiLogic.php.
 """
 
-from datetime import datetime
-
 from sqlalchemy import JSON, Column, DateTime, Integer, SmallInteger, String, UniqueConstraint, text
 from sqlalchemy.dialects.mysql import TINYINT
 
 from app.database import Base
+from app.utils.time_ import TimeUtil
 
 
 class AiToWork(Base):
@@ -41,9 +40,9 @@ class AiToWork(Base):
         nullable=True, default=0, server_default=text("0"),
         comment="类型，0生成中，1已生成，2生成失败，3已删除",
     )
-    create_time = Column(DateTime, nullable=True, default=datetime.now)
+    create_time = Column(DateTime, nullable=True, default=TimeUtil.get_date)
     update_time = Column(
-        DateTime, nullable=True, default=datetime.now, onupdate=datetime.now
+        DateTime, nullable=True, default=TimeUtil.get_date, onupdate=TimeUtil.get_date
     )
 
     def __repr__(self) -> str:

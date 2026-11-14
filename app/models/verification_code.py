@@ -5,11 +5,10 @@
 用于存储邮件验证码（密码重置、邮箱验证等场景）
 """
 
-from datetime import datetime
-
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
 
 from app.database import Base
+from app.utils.time_ import TimeUtil
 
 
 class VerificationCode(Base):
@@ -23,7 +22,7 @@ class VerificationCode(Base):
     purpose = Column(String(50), nullable=False, default="password_reset", comment="用途")
     expires_at = Column(DateTime, nullable=False, comment="过期时间")
     used = Column(Boolean, default=False, nullable=False, comment="是否已使用")
-    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
+    created_at = Column(DateTime, default=TimeUtil.get_date, nullable=False, comment="创建时间")
 
     def __repr__(self) -> str:
         return f"<VerificationCode(id={self.id}, email='{self.email}', used={self.used})>"

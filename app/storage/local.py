@@ -7,7 +7,6 @@
 """
 
 import uuid
-from datetime import datetime
 from os import SEEK_END
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from fastapi import UploadFile
 
 from app.common.exception import AppException
 from app.core.config import settings
+from app.utils.time_ import TimeUtil
 
 
 def ensure_upload_dir(sub_dir: str) -> Path:
@@ -66,7 +66,7 @@ async def write_stream(
     """
     # 1. 生成存储路径（按日期分目录，避免单目录文件过多）
     ext = Path(file.filename or "file").suffix.lower()
-    date_str = datetime.now().strftime("%Y/%m")
+    date_str = TimeUtil.get_date().strftime("%Y/%m")
     stored_name = f"{uuid.uuid4().hex}{ext}"
     sub_path = f"{sub_path_prefix}/{date_str}"
     upload_dir = Path(settings.UPLOAD_DIR) / sub_path

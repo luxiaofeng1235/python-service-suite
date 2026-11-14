@@ -6,7 +6,6 @@
 文件 I/O 和格式、大小校验委托给 storage 模块。
 """
 
-from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -27,6 +26,7 @@ from app.storage.validation import (
     validate_image,
     validate_video,
 )
+from app.utils.time_ import TimeUtil
 
 
 class FileService:
@@ -63,7 +63,7 @@ class FileService:
         validate_image(ext, file_size)
 
         # 2. 确定存储路径（按日期分目录，避免单目录文件过多）
-        date_str = datetime.now().strftime("%Y/%m")
+        date_str = TimeUtil.get_date().strftime("%Y/%m")
         stored_name, _, _ = generate_stored_name(original_name)
         sub_path = f"images/{date_str}"
         upload_dir = ensure_upload_dir(sub_path)
@@ -107,7 +107,7 @@ class FileService:
         validate_video(ext, file_size)
 
         # 2. 确定存储路径（按日期分目录，避免单目录文件过多）
-        date_str = datetime.now().strftime("%Y/%m")
+        date_str = TimeUtil.get_date().strftime("%Y/%m")
         stored_name, _, _ = generate_stored_name(original_name)
         sub_path = f"videos/{date_str}"
         upload_dir = ensure_upload_dir(sub_path)
@@ -302,7 +302,7 @@ class FileService:
         OSSStorage.validate_config()
         stored_name, _, _ = generate_stored_name(original_name)
         directory = "images" if file_type == "image" else "videos"
-        object_key = f"uploads/{directory}/{datetime.now():%Y/%m}/{stored_name}"
+        object_key = f"uploads/{directory}/{TimeUtil.get_date():%Y/%m}/{stored_name}"
         if len(OSSStorage.get_url(object_key)) > 500:
             raise AppException(msg="OSS 文件访问地址过长，请检查域名配置")
 
@@ -381,7 +381,7 @@ class FileService:
         # 6. 生成存储路径
         stored_name, _, _ = generate_stored_name(original_name)
         directory = "images" if file_type == "image" else "videos"
-        object_key = f"uploads/{directory}/{datetime.now():%Y/%m}/{stored_name}"
+        object_key = f"uploads/{directory}/{TimeUtil.get_date():%Y/%m}/{stored_name}"
 
         # 7. 预校验 OSS URL 长度
         if len(OSSStorage.get_url(object_key)) > 500:

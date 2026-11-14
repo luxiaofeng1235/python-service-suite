@@ -6,11 +6,10 @@ Stores one optional birth profile per existing frontend user.
 Unknown birth times and locations remain null.
 """
 
-from datetime import datetime
-
 from sqlalchemy import CheckConstraint, Column, Date, DateTime, Integer, Numeric, String, Time, text
 
 from app.database import Base
+from app.utils.time_ import TimeUtil
 
 
 class UserAstrologyProfile(Base):
@@ -54,15 +53,15 @@ class UserAstrologyProfile(Base):
     created_at = Column(
         DateTime,
         nullable=False,
-        default=datetime.now,
+        default=TimeUtil.get_date,
         server_default=text("CURRENT_TIMESTAMP"),
         comment="创建时间",
     )
     updated_at = Column(
         DateTime,
         nullable=False,
-        default=datetime.now,
-        onupdate=datetime.now,
+        default=TimeUtil.get_date,
+        onupdate=TimeUtil.get_date,
         server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
         comment="更新时间",
     )

@@ -5,8 +5,6 @@ Chat Message Model - SQLAlchemy mapping
 Stores ordered Agent messages, tool-call history, and streaming completion status.
 """
 
-from datetime import datetime
-
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -22,6 +20,7 @@ from sqlalchemy import (
 
 from app.constants.astrology import ChatMessageStatus
 from app.database import Base
+from app.utils.time_ import TimeUtil
 
 
 class ChatMessage(Base):
@@ -65,15 +64,15 @@ class ChatMessage(Base):
     created_at = Column(
         DateTime,
         nullable=False,
-        default=datetime.now,
+        default=TimeUtil.get_date,
         server_default=text("CURRENT_TIMESTAMP"),
         comment="创建时间",
     )
     updated_at = Column(
         DateTime,
         nullable=False,
-        default=datetime.now,
-        onupdate=datetime.now,
+        default=TimeUtil.get_date,
+        onupdate=TimeUtil.get_date,
         server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
         comment="更新时间",
     )

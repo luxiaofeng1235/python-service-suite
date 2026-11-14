@@ -6,8 +6,6 @@
 通过 WHITE_LIST 配置白名单路由，无需 Token 即可访问。
 """
 
-from datetime import datetime
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -94,7 +92,7 @@ async def get_current_user(
         .where(
             UserToken.token == credentials.credentials,
             UserToken.is_active,
-            UserToken.expires_at > datetime.now(),
+            UserToken.expires_at > TimeUtil.get_date(),
             User.is_active,
             ~User.is_deleted,
         )

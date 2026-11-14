@@ -4,11 +4,10 @@
 ============================================
 """
 
-from datetime import datetime
-
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
 
 from app.database import Base
+from app.utils.time_ import TimeUtil
 
 
 class Role(Base):
@@ -20,11 +19,11 @@ class Role(Base):
     name = Column(String(50), unique=True, nullable=False, comment="角色名（与 casbin_rule.sub 对应）")
     description = Column(String(255), nullable=True, comment="角色描述")
     is_system = Column(Boolean, default=False, nullable=False, comment="系统内置角色（不可删除）")
-    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
+    created_at = Column(DateTime, default=TimeUtil.get_date, nullable=False, comment="创建时间")
     updated_at = Column(
         DateTime,
-        default=datetime.now,
-        onupdate=datetime.now,
+        default=TimeUtil.get_date,
+        onupdate=TimeUtil.get_date,
         nullable=False,
         comment="更新时间",
     )

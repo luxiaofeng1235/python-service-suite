@@ -9,7 +9,6 @@
 import re
 import unicodedata
 from collections.abc import Sequence
-from datetime import datetime
 from typing import ClassVar
 from zoneinfo import ZoneInfo
 
@@ -28,6 +27,7 @@ from app.schemas.agent.goods_data import (
     ProductDTO,
     SkuDTO,
 )
+from app.utils.time_ import TimeUtil
 
 
 class GoodsDataService:
@@ -140,7 +140,7 @@ class GoodsDataService:
         if brand_id is not None:
             statement = statement.where(GoodsProduct.brand_id == brand_id)
         rows = await GoodsDataService._read_rows(db, statement)
-        queried_at = datetime.now(ZoneInfo(settings.AGENT_TIMEZONE))
+        queried_at = TimeUtil.get_date().astimezone(ZoneInfo(settings.AGENT_TIMEZONE))
         products: dict[int, ProductDTO] = {}
         try:
             for product, brand_name, category_name, sku in rows:

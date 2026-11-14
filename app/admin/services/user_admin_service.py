@@ -5,8 +5,6 @@
 职责：管理员专属的用户管理操作，不依赖前台 UserService。
 """
 
-from datetime import datetime
-
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -163,7 +161,7 @@ class UserAdminService:
         if not user:
             raise AppException(msg="用户不存在或已注销")
 
-        now = datetime.now()
+        now = TimeUtil.get_date()
         user.is_deleted = True
         user.deleted_at = now
 
@@ -194,7 +192,7 @@ class UserAdminService:
         Returns:
             dict: {"deleted": N}
         """
-        result = await db.execute(delete(UserToken).where(UserToken.expires_at <= datetime.now()))
+        result = await db.execute(delete(UserToken).where(UserToken.expires_at <= TimeUtil.get_date()))
         await db.commit()
         return {"deleted": result.rowcount or 0}
 

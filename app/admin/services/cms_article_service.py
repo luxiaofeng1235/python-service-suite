@@ -6,7 +6,6 @@ CMS 文章管理业务服务
 """
 
 import json
-from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import select
@@ -24,6 +23,7 @@ from app.schemas.cms import (
     TagCreateRequest,
     TagUpdateRequest,
 )
+from app.utils.time_ import TimeUtil
 
 
 class CmsArticleService:
@@ -104,7 +104,7 @@ class CmsArticleService:
             tag_ids=req.tag_ids,
             status=req.status,
             view_count=0,
-            published_at=datetime.now() if req.status == 1 else None,
+            published_at=TimeUtil.get_date() if req.status == 1 else None,
         )
         db.add(article)
         await db.commit()
@@ -205,7 +205,7 @@ class CmsArticleService:
         if "status" in update_data:
             if update_data["status"] == 1 and article.status != 1:
                 if article.published_at is None:  # 只首次发布时设，已发布过的重新发布不覆盖
-                    update_data["published_at"] = datetime.now()
+                    update_data["published_at"] = TimeUtil.get_date()
             elif update_data["status"] != 1:
                 update_data["published_at"] = None
 
@@ -257,7 +257,7 @@ class CmsArticleService:
         if article.status == 0:
             # 草稿 → 发布
             article.status = 1
-            article.published_at = datetime.now()
+            article.published_at = TimeUtil.get_date()
         elif article.status == 1:
             # 发布 → 下架
             article.status = 2
@@ -265,7 +265,7 @@ class CmsArticleService:
         else:
             # 下架 → 发布
             article.status = 1
-            article.published_at = datetime.now()
+            article.published_at = TimeUtil.get_date()
 
         await db.commit()
         await db.refresh(article)

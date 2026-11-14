@@ -5,11 +5,10 @@
 主要功能：记录用户上传的图片、视频等文件的元数据信息。
 """
 
-from datetime import datetime
-
 from sqlalchemy import Column, DateTime, Integer, String
 
 from app.database import Base
+from app.utils.time_ import TimeUtil
 
 
 class Attachment(Base):
@@ -33,7 +32,7 @@ class Attachment(Base):
     file_size = Column(Integer, nullable=False, comment="文件大小（字节）")
     mime_type = Column(String(100), nullable=False, comment="MIME 类型")
     file_type = Column(String(20), nullable=False, comment="文件分类：image / video / other")
-    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="上传时间")
+    created_at = Column(DateTime, default=TimeUtil.get_date, nullable=False, comment="上传时间")
 
     def __repr__(self) -> str:
         return (

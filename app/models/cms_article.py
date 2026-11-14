@@ -5,11 +5,10 @@
 存储文章的核心字段，包含标题、内容、状态等。
 """
 
-from datetime import datetime
-
-from sqlalchemy import BigInteger, Column, DateTime, Integer, JSON, SmallInteger, String, Text
+from sqlalchemy import JSON, BigInteger, Column, DateTime, Integer, SmallInteger, String, Text
 
 from app.database import Base
+from app.utils.time_ import TimeUtil
 
 
 class CmsArticle(Base):
@@ -29,11 +28,11 @@ class CmsArticle(Base):
     view_count = Column(Integer, nullable=False, default=0, comment="浏览次数")
     tag_ids = Column(JSON, nullable=True, comment="关联标签ID列表")
     published_at = Column(DateTime, nullable=True, comment="实际发布时间")
-    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
+    created_at = Column(DateTime, default=TimeUtil.get_date, nullable=False, comment="创建时间")
     updated_at = Column(
         DateTime,
-        default=datetime.now,
-        onupdate=datetime.now,
+        default=TimeUtil.get_date,
+        onupdate=TimeUtil.get_date,
         nullable=False,
         comment="更新时间",
     )

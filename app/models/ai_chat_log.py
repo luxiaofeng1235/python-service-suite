@@ -5,11 +5,10 @@ AI 对话日志 ORM 模型
 主要功能：保存 AI 对话上下文，用于 chat_id 续聊和重生成。
 """
 
-from datetime import datetime
-
 from sqlalchemy import JSON, Column, DateTime, Integer
 
 from app.database import Base
+from app.utils.time_ import TimeUtil
 
 
 class AiChatLog(Base):
@@ -21,9 +20,9 @@ class AiChatLog(Base):
     user_id = Column(Integer, nullable=False, default=0, comment="用户ID")
     model_id = Column(Integer, nullable=False, default=0, comment="模型类型")
     chat = Column(JSON, nullable=False, default=list, comment="聊天消息JSON")
-    create_time = Column(DateTime, default=datetime.now, comment="创建时间")
+    create_time = Column(DateTime, default=TimeUtil.get_date, comment="创建时间")
     update_time = Column(
-        DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间"
+        DateTime, default=TimeUtil.get_date, onupdate=TimeUtil.get_date, comment="更新时间"
     )
 
     def __repr__(self) -> str:

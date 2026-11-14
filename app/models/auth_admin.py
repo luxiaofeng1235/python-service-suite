@@ -5,11 +5,10 @@
 独立于 users 表，管理员账号单独管理。
 """
 
-from datetime import datetime
-
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
 
 from app.database import Base
+from app.utils.time_ import TimeUtil
 
 
 class AuthAdmin(Base):
@@ -28,11 +27,11 @@ class AuthAdmin(Base):
     remark = Column(String(500), nullable=True, default="", comment="备注")
     is_super = Column(Boolean, default=False, nullable=False, comment="是否超管")
     is_active = Column(Boolean, default=True, nullable=False, comment="是否启用")
-    created_at = Column(DateTime, default=datetime.now, nullable=False, comment="创建时间")
+    created_at = Column(DateTime, default=TimeUtil.get_date, nullable=False, comment="创建时间")
     updated_at = Column(
         DateTime,
-        default=datetime.now,
-        onupdate=datetime.now,
+        default=TimeUtil.get_date,
+        onupdate=TimeUtil.get_date,
         nullable=False,
         comment="更新时间",
     )

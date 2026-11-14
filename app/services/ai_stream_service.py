@@ -9,7 +9,6 @@ Controllers should only validate input and expose the returned stream.
 import asyncio
 import json
 from collections.abc import AsyncGenerator
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -21,6 +20,7 @@ from app.models.ai_chat_log import AiChatLog
 from app.pkg.logging import app_logger
 from app.schemas.ai import ChatRequest
 from app.services.qwen_ai_service import QwenAIService
+from app.utils.time_ import TimeUtil
 
 
 class AIService:
@@ -120,7 +120,7 @@ class AIService:
                 raise AppException(msg="聊天记录不存在")
             return chat
 
-        now = datetime.now()
+        now = TimeUtil.get_date()
         chat = AiChatLog(
             user_id=user_id,
             model_id=model_id,
@@ -183,5 +183,5 @@ class AIService:
             }
         )
         chat.chat = history
-        chat.update_time = datetime.now()
+        chat.update_time = TimeUtil.get_date()
         await db.flush()

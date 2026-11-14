@@ -5,7 +5,7 @@
 提供管理员登录、退出登录功能，独立于前台用户认证。
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -108,7 +108,7 @@ class AdminAuthService:
 
         # 4. 生成短 Token 并落库（立即提交，否则后续请求查不到）
         token = create_short_token()
-        expires_at = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_at = TimeUtil.get_date() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         db.add(
             AdminToken(
                 admin_id=admin.id,
@@ -126,7 +126,7 @@ class AdminAuthService:
         await db.execute(
             update(AdminToken)
             .where(AdminToken.id == token_id)
-            .values(is_active=False, updated_at=datetime.now())
+            .values(is_active=False, updated_at=TimeUtil.get_date())
         )
         await db.commit()
         return {"message": "退出登录成功"}

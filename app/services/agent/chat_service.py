@@ -9,7 +9,7 @@ of providers, HTTP controllers, and future orchestration frameworks.
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from time import monotonic
 from uuid import uuid4
 
@@ -28,6 +28,7 @@ from app.models.chat_session import ChatSession
 from app.models.user import User
 from app.pkg.logging import app_logger
 from app.schemas.agent.chat import AgentChatRequest, AgentStreamEvent
+from app.utils.time_ import TimeUtil
 
 MAX_MESSAGE_BYTES = 60000
 LEASE_CLEANUP_SECONDS = 60
@@ -136,7 +137,7 @@ class AgentChatService:
         )
         if user is None:
             raise AppException(msg="用户不存在或已停用")
-        now = datetime.now()
+        now = TimeUtil.get_date()
         if req.session_id is not None:
             session = await db.scalar(
                 select(ChatSession)
@@ -339,7 +340,7 @@ class AgentChatService:
                 .values(
                     active_run_id=None,
                     run_expires_at=None,
-                    updated_at=datetime.now(),
+                    updated_at=TimeUtil.get_date(),
                 )
             )
         await db.commit()
@@ -395,7 +396,7 @@ class AgentChatService:
                     .values(
                         active_run_id=None,
                         run_expires_at=None,
-                        updated_at=datetime.now(),
+                        updated_at=TimeUtil.get_date(),
                     )
                 )
                 await db.commit()

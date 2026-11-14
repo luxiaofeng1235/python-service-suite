@@ -10,7 +10,7 @@ import base64
 import secrets
 import string
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from io import BytesIO
 
 from captcha.image import ImageCaptcha
@@ -169,11 +169,11 @@ class UserService:
 
         # 5. 更新登录 IP 和时间
         user.last_login_ip = client_ip
-        user.last_login_at = datetime.now()
+        user.last_login_at = TimeUtil.get_date()
 
         # 6. 生成短 Token 并落库
         token = create_short_token()
-        expires_at = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_at = TimeUtil.get_date() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         db.add(
             UserToken(
                 user_id=user.id,
@@ -193,7 +193,7 @@ class UserService:
         await db.execute(
             update(UserToken)
             .where(UserToken.id == token_id)
-            .values(is_active=False, updated_at=datetime.now())
+            .values(is_active=False, updated_at=TimeUtil.get_date())
         )
         await db.commit()
         return {"message": "退出登录成功"}
@@ -201,7 +201,7 @@ class UserService:
     @staticmethod
     async def cleanup_expired_tokens(db: AsyncSession) -> dict:
         """清理过期 Token"""
-        result = await db.execute(delete(UserToken).where(UserToken.expires_at <= datetime.now()))
+        result = await db.execute(delete(UserToken).where(UserToken.expires_at <= TimeUtil.get_date()))
         await db.commit()
         return {"deleted": result.rowcount or 0}
 
@@ -269,7 +269,7 @@ class UserService:
 
         # 5. 计算过期时间
         expire_minutes = settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-        expires_at = datetime.now() + timedelta(minutes=expire_minutes)
+        expires_at = TimeUtil.get_date() + timedelta(minutes=expire_minutes)
 
         # 6. 数据库是验证码有效性的最终依据，成功提交后才写缓存。
         vc = VerificationCode(
@@ -350,7 +350,7 @@ class UserService:
                 .execution_options(populate_existing=True)
             )
             vc = result.scalar_one_or_none()
-            now = datetime.now()
+            now = TimeUtil.get_date()
             if vc is None or vc.used or vc.expires_at <= now or vc.code != req.code:
                 raise AppException(msg="验证码无效或已过期，请重新申请")
 
@@ -477,7 +477,7 @@ class UserService:
             raise AppException(msg="用户不存在或已注销")
 
         # 2. 软删除标记
-        now = datetime.now()
+        now = TimeUtil.get_date()
         user.is_deleted = True
         user.deleted_at = now
 
