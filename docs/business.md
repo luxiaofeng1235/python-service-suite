@@ -6,6 +6,7 @@
 
 ## 目录
 
+- [代码生成器](#代码生成器)
 - [通用 OSS 上传](#通用-oss-上传)
 - [AI 流式输出](#ai-流式输出)
 - [多模态流式转发](#多模态流式转发)
@@ -15,6 +16,51 @@
 - [LLM / RAG 待开发规划](#llm--rag-待开发规划)
 - [抽奖系统](#抽奖系统)
 - [接口加解密签名](#接口加解密签名)
+
+## 代码生成器
+
+用于从已存在的 MySQL 表生成 SQLAlchemy Model 和 Pydantic Schema。流程为：开发者建表 → 读取根目录 `generator.yaml` → 读取数据库表结构 → 渲染代码 → 检查冲突并写入文件 → 按配置追加包导入。数据库连接复用 `.env` 的 `DATABASE_URL`，只读取结构，不修改表结构或业务数据。
+
+在项目根目录、已安装项目依赖的 Python 环境执行：
+
+```bash
+# 预览代码，连接数据库但不写文件。
+python -m script.codegen --table ai_demo_class --dry-run
+
+# 正式生成 Model 和 Schema。
+python -m script.codegen --table ai_demo_class
+```
+
+默认生成 `app/models/ai_demo_class.py` 和 `app/schemas/ai_demo_class.py`，包含中文文件头、字段说明、数据库约束，以及创建请求、更新请求和响应 Schema。`ai_demo_class` 已通过实际预览和正式生成验证。
+
+生成目录、命名映射、Schema 排除字段和包导入注册均由根目录 `generator.yaml` 配置。生成后由开发者完善业务验证、Service、Controller 和响应结构；保存请求时使用 `req.model_dump(exclude_unset=True)`，让未提交字段沿用数据库默认值。
+
+### 模块分工
+
+`script/` 按职责拆分，文件数量是维护上的选择，不是 Python 或项目规范的强制要求：
+
+| 文件 | 职责 |
+| --- | --- |
+| `codegen.py` | CLI 入口，协调生成流程 |
+| `configuration.py` | 读取 YAML，校验目录和命名 |
+| `database_reader.py` | 读取 MySQL 表结构 |
+| `metadata.py` | 定义模块之间传递的数据结构 |
+| `rendering.py` | 将表结构转换成代码 |
+| `file_writer.py` | 检查冲突、写文件、注册导入 |
+
+两个代码模板放在 `script/templates/`，包入口和使用说明分别为 `script/__init__.py`、`script/README.md`。工具代码与模板保留在 `script/`，YAML 配置放在项目根目录。
+
+### 文件写入保护
+
+CLI 是一次性、顺序执行的工具，无需启动额外进程或后台服务管理写入。当前保留以下保护：
+
+- 正式写入期间创建 `script/.codegen.lock`，阻止同一项目中的多个生成器同时写入，尤其避免同时追加包导入；正常结束或可捕获异常退出时删除锁。预览模式不创建锁。
+- 目标文件、同名类或同表映射已存在时，默认整组跳过；配置 `on_exists: error` 则报错。实际创建文件时也使用排他创建，不覆盖已有文件。
+- 写入失败时尝试清理本次创建的文件、恢复本次追加的导入；清理前检查内容，避免撤销其他人的修改。
+
+该锁只协调生成器的文件写入，不锁数据库，也不暂停 FastAPI 服务。若进程被强制结束，确认没有生成器运行后，再手动清理残留锁和未完成产物。
+
+更多配置和使用边界见 [生成器说明](../script/README.md)。
 
 ## 通用 OSS 上传
 
