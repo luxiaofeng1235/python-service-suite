@@ -1,0 +1,26 @@
+"""
+============================================
+{{ table.title | doc_text }} ORM 模型 - SQLAlchemy 数据库表映射
+============================================
+映射 {{ table.name }} 表字段、默认值及约束，不包含业务逻辑。
+"""
+
+from sqlalchemy import {{ model_imports | join(', ') }}
+from sqlalchemy.dialects import mysql
+
+from {{ base_module }} import {{ base_name }}
+
+
+class {{ class_name }}({{ base_name }}):
+    """{{ table.title | doc_text }}数据库模型。"""
+
+    __tablename__ = {{ table.name | py_repr }}
+    __table_args__ = (
+{% for argument in table.table_args %}        {{ argument }},
+{% endfor %}    )
+
+{{ model_fields | join('\n\n') }}
+
+    def __repr__(self) -> str:
+        """返回主键信息，便于定位数据库记录。"""
+        return f"<{{ class_name }}({{ repr_body }})>"

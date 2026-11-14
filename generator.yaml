@@ -1,0 +1,53 @@
+# ============================================
+# Model / Schema 代码生成器配置
+# ============================================
+# 本文件放在项目根目录；所有输出目录均相对项目根目录解析。
+# 数据库连接复用 .env 的 DATABASE_URL，不在这里重复维护凭据。
+# 只读取现有 MySQL 表结构，不创建表、不修改字段、不读取业务数据。
+
+model:
+  # Model 文件生成目录（相对项目根目录）
+  dir: app/models
+  base_import: app.database.Base
+
+schema:
+  # Schema 文件生成目录（相对项目根目录）
+  dir: app/schemas
+
+# 任一目标文件或映射已存在时，skip 整组跳过，error 报错退出。禁止覆盖。
+on_exists: skip
+
+registration:
+  # 仅追加导入，不改写原有内容；自定义模型包需由应用和迁移入口导入。
+  model: true
+  schema: false
+
+# 命名规则：cms_articles → cms_article.py / CmsArticle
+naming:
+  # 处理常规复数；不规则复数请手动映射。
+  singularize: true
+  # 表名 → 文件名/类名手动映射，优先级最高，例如：
+  # overrides:
+  #   goods_skus:
+  #     file: goods_sku
+  #     class: GoodsSku
+  overrides: {}
+
+# 时间字段、默认值及自动更新规则以数据库结构为准。
+schema_options:
+  create: true
+  update: true
+  response: true
+  # 自增、数据库计算字段始终从请求中排除。
+  request_exclude_fields:
+    - id
+    - created_at
+    - updated_at
+  # 默认排除敏感字段，业务响应字段仍需人工确认。
+  response_exclude_fields:
+    - password
+    - password_hash
+    - token
+    - access_token
+    - refresh_token
+    - secret_key

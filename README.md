@@ -111,6 +111,7 @@ Controller → Service → Model    Controller → Service → Model
 ├── config/                  # 配置默认值，支持环境变量覆盖
 ├── migrations/              # Alembic 数据库迁移
 │   └── versions/            # 迁移版本脚本
+├── script/                  # Model / Schema 生成器及模板
 ├── sql/                     # 初始化和补充 SQL 脚本
 ├── public/                  # 公开静态资源、水印素材
 ├── uploads/                 # 本地上传文件和生成资源
@@ -556,6 +557,17 @@ logger.info("用户注册成功: email={}", email)
 - 响应头返回 `X-Trace-Id` 和 `X-Process-Time`
 - query 参数 `password/token/access_token/authorization/code` 自动脱敏
 - 未捕获异常自动记录堆栈
+
+## Model / Schema 生成器
+
+先在 MySQL 创建业务表，再通过 CLI 生成 Model 和基础请求、响应 Schema。配置统一放在项目根目录 `generator.yaml`，输出目录和特殊命名均可配置，已有文件默认整组跳过。生成代码包含中文文件头、类说明及字段说明，业务验证和响应结构由开发者继续完善。
+
+```bash
+python -m script.codegen --table demo_articles --dry-run
+python -m script.codegen --table demo_articles
+```
+
+使用方式及边界见 [生成器说明](script/README.md)。
 
 ## 数据库迁移
 

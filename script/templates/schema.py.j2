@@ -1,0 +1,40 @@
+"""
+============================================
+{{ table.title | doc_text }}数据模型 - 参数校验与响应序列化
+============================================
+根据 {{ table.name }} 的结构生成基础字段，业务验证及响应字段由开发者完善。
+更新时使用 model_dump(exclude_unset=True)，以区分省略字段与显式传入 null。
+"""
+{% if standard_imports %}
+{{ standard_imports | join('\n') }}
+
+{% endif %}
+{{ pydantic_import }}
+{% if write_enabled %}
+
+
+class _{{ class_name }}WriteRequest(BaseModel):
+    """校验请求中显式提交的空值，不改变省略字段的数据库默认行为。"""
+
+    @model_validator(mode="after")
+    def validate_nonnullable_fields(self) -> Self:
+        """数据库非空字段可按规则省略，但不能明确提交 null。"""
+        for name in {{ nonnullable | py_repr }}:
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"字段 {name} 不能为空")
+        return self
+{% endif %}
+{% for name, title, fields in classes %}
+
+
+class {{ name }}({% if write_enabled and not name.endswith('Response') %}_{{ class_name }}WriteRequest{% else %}BaseModel{% endif %}):
+    """{{ table.title | doc_text }}{{ title }}。"""
+{% if fields %}
+
+{{ fields | join('\n') }}
+{% endif %}
+{% if name.endswith('Response') %}
+
+    model_config = {"from_attributes": True}
+{% endif %}
+{% endfor %}
