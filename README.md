@@ -216,6 +216,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 
 Docker Compose 启动 FastAPI 和 Redis；MySQL 使用宿主机上已运行的实例，不会作为容器启动。应用容器内监听 `8000`，默认从宿主机 `18000` 端口访问，Redis 默认映射到宿主机 `16379`。
 
+WebSocket 连接由当前应用进程管理，单播和广播仅覆盖该进程内的连接。当前 Docker 默认运行一个 Uvicorn 应用进程；使用 WebSocket 时保持单 worker、单副本部署。扩展为多 worker 或多副本前，需要接入 Redis Pub/Sub 或独立 WebSocket 网关完成跨进程消息转发；仅配置 Redis 连接不会自动启用此能力。
+
 应用服务名为 `omnicore`，镜像名为 `omnicore-platform`，Redis 容器名为 `omnicore-redis`。从旧命名部署升级时，先执行 `docker compose down --remove-orphans`，再按下方步骤重新构建并启动；保留现有数据卷。
 
 ### 前置条件

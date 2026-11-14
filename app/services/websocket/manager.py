@@ -4,6 +4,7 @@ WebSocket 连接管理服务 - 单播与广播
 ============================================
 按设备标识管理当前进程内的连接，提供文本发送、超时控制和断线清理。
 不绑定鉴权或具体业务，同一设备标识重新连接时替换旧连接。
+多 worker 或多副本之间的消息转发需要额外接入 Redis 等通信机制。
 """
 
 import asyncio
@@ -49,12 +50,16 @@ class ConnectionManager:
                 raise
         return connection_id
 
-    async def disconnect(self, ws: WebSocket) -> None:
-        """移除指定连接，可重复调用；旧连接退出时保留同设备的新连接。"""
+    async def disconnect(self, ws: WebSocket, *, notify: bool = False) -> None:
+        """移除连接；仅实际移除有效连接且启用通知时，广播一次离线消息。"""
+        removed = False
         for client_id, connection in list(self.active_connections.items()):
             if connection is ws:
                 self.active_connections.pop(client_id, None)
+                removed = True
         self._send_locks.pop(ws, None)
+        if removed and notify:
+            await self.broadcast("客户端已离线")
 
     async def send_personal_message(self, client_id: str, message: str) -> bool:
         """向指定设备发送文本；连接不存在或发送失败时返回 False。"""

@@ -33,5 +33,4 @@ async def websocket_endpoint(
     except WebSocketDisconnect:
         pass
     finally:
-        await manager.disconnect(ws)
-        await manager.broadcast("客户端已离线")
+        await manager.disconnect(ws, notify=True)
