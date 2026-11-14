@@ -14,10 +14,6 @@ class ConnectionManager:
     def __init__(self) -> None:
         self.conns: Set[WebSocket] = set()
 
-    def __init__(self)->None:
-        #Set 比 list更加适合增删，+广播，且remote不受影响
-        self.conns  = Set[WebSocket]()
-
     async  def connect(self, ws: WebSocket)->None:
         await ws.accept()
         self.conns.add(ws)
