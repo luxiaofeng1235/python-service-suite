@@ -3,5 +3,5 @@
 前台 API 业务逻辑层
 ============================================
 仅前台 API 使用的 Service。
-共享 Service（如 UserService）仍在 app/services 下。
+跨模块复用的公共服务（如 FileService）放在 app/services 下。
 """

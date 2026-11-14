@@ -6,14 +6,14 @@
 业务逻辑全部委托给 FileService。
 """
 
-from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.services.file_service import FileService
 from app.common.pagination import PageParams
 from app.common.response import Response
 from app.database import get_session
 from app.schemas.file import AttachmentResponse, OSSUploadResponse
+from app.services.file_service import FileService
 
 router = APIRouter(prefix="/api/file", tags=["文件管理"])
 

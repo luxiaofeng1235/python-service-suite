@@ -9,7 +9,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_serializer
 
-from app.api.services.file_service import FileService
+from app.services.file_service import FileService
 
 
 class AttachmentResponse(BaseModel):

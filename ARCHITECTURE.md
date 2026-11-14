@@ -48,7 +48,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 app/admin/
 ├── controllers/          # 后台控制器，prefix="/admin/xxx"
-├── services/             # 后台业务逻辑（可复用前台 service，也可写独立的）
+├── services/             # 后台专用业务逻辑，跨模块能力复用 app/services
 ├── schemas/              # 后台专属请求/响应模型（可选）
 └── routes.py             # 聚合 admin_router
 ```
@@ -60,7 +60,8 @@ app/admin/
 | `setup/routes.py` | 增加 `app.include_router(admin_router)`，共两行 |
 | `core/dependency.py` | 已有 `get_current_admin`，不动，后台直接复用 |
 | `controllers/*` | **不动** — 前台接口维持现有路径不变 |
-| `services/*` | **不动** — 后台若需相同逻辑，在 admin service 里调 `UserService.xxx()` 复用 |
+| `app/api/services/*` | 前台专用业务，如用户注册、登录和账户操作 |
+| `app/services/*` | 跨模块公共能力，如附件服务，供前台和后台共同调用 |
 
 ### 2.3 当前 controller 里已有管理员接口怎么处理
 

@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.services.auth_service import AdminAuthService
-from app.api.services.file_service import FileService
 from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.admin_auth import get_current_admin_user
@@ -18,6 +17,7 @@ from app.core.permissions import Perm
 from app.core.rbac import require_permission
 from app.database import get_session
 from app.schemas.auth_admin import AdminProfileUpdateRequest
+from app.services.file_service import FileService
 
 router = APIRouter(prefix="/admin/admins", tags=["后台-管理员管理"])
 

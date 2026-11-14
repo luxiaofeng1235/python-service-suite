@@ -75,7 +75,7 @@ Controller → Service → Model    Controller → Service → Model
 | **Route** | 路由聚合 | `app/routes/api.py` | `app/routes/admin.py` |
 
 **关键约定**：
-- 前台 (`app/api/`) 和后台 (`app/admin/`) 完全隔离，各用各的 controller + service
+- 前台 (`app/api/`) 和后台 (`app/admin/`) 各自维护专用 Controller 与 Service；跨模块能力通过 `app/services/` 复用
 - 业务逻辑只放在 Service 层，Controller 不做任何数据操作
 - 后台 RBAC 使用独立的 `auth_admins` + `admin_tokens` 表，与前台 `users` 体系无关
 
@@ -290,7 +290,7 @@ make clean           # 清理缓存/tmp/log
 
 ## 通用 OSS 上传
 
-调用流程：`file_controller.py → api/services/file_service.py` 校验附件 → `storage/oss.py` 上传文件流 → 保存 `attachment` → 返回附件地址与元数据。入库失败时回滚，并尝试删除本次上传的 OSS 文件。
+调用流程：`file_controller.py → services/file_service.py` 校验附件 → `storage/oss.py` 上传文件流 → 保存 `attachment` → 返回附件地址与元数据。入库失败时回滚，并尝试删除本次上传的 OSS 文件。
 
 详细说明见 [通用 OSS 上传](docs/business.md#通用-oss-上传)。
 

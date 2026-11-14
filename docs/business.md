@@ -62,7 +62,7 @@ CLI 是一次性、顺序执行的工具，无需启动额外进程或后台服�
 
 ## 通用 OSS 上传
 
-调用流程：`file_controller.py → api/services/file_service.py` 校验附件 → `storage/oss.py` 上传文件流 → 保存 `attachment` → 返回附件地址与元数据。入库失败时回滚，并尝试删除本次上传的 OSS 文件。
+调用流程：`file_controller.py → services/file_service.py` 校验附件 → `storage/oss.py` 上传文件流 → 保存 `attachment` → 返回附件地址与元数据。入库失败时回滚，并尝试删除本次上传的 OSS 文件。
 
 - 统一接口：`POST /api/file/upload/oss`，根据文件扩展名自动识别图片或视频。
 - 公共接口，无需 Token、`sign` 或 `timestamp`，通过 `multipart/form-data` 的 `file` 字段直接上传；与现有公共上传一致，`user_id=0`、`owner_type=user`、`owner_id=0`。

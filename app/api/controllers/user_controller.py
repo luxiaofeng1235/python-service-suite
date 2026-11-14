@@ -8,6 +8,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.services.user_service import UserService
 from app.common.pagination import PageParams
 from app.common.response import Response
 from app.core.dependency import get_current_user
@@ -18,7 +19,6 @@ from app.schemas.user import (
     UserLoginRequest,
     UserRegisterRequest,
 )
-from app.services.user_service import UserService
 
 # ==================== 路由定义 ====================
 router = APIRouter(prefix="/api/user", tags=["用户管理"])
