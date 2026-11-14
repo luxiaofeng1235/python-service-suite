@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     PORT: int = 8000
     """服务监听端口"""
 
+    # ==================== WebSocket ====================
+    WEBSOCKET_SEND_TIMEOUT: float = Field(10.0, gt=0)
+    """单条消息发送及连接关闭的超时时间（秒）"""
+
     # ==================== 数据库 ====================
     DATABASE_URL: str = "sqlite+aiosqlite:///./app.db"
     """数据库连接字符串（通过 .env 配置生产库）"""
