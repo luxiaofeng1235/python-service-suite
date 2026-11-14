@@ -233,5 +233,57 @@ def test_existing_controller_still_supports_text_round_trip() -> None:
                 assert second.receive_text().endswith(":你好")
                 second.send_text("收到")
                 assert first.receive_text().endswith(":收到")
-            assert first.receive_text() == "a client left th chat"
+            assert first.receive_text() == "客户端已离线"
+    assert manager.active_connections == {}
+
+
+def test_controller_personal_messages_do_not_reach_third_client() -> None:
+    """三个客户端在线时验证双向单播不泄漏给第三方，普通文本仍广播。"""
+    app = FastAPI()
+    app.include_router(router)
+    with TestClient(app) as client:
+        with (
+            client.websocket_connect("/common/ws/chat?client_id=A") as first,
+            client.websocket_connect("/common/ws/chat?client_id=B") as second,
+            client.websocket_connect("/common/ws/chat?client_id=C") as third,
+        ):
+            first.send_json({"type": "personal", "to": "B", "message": "你好"})
+            assert second.receive_text() == "A:你好"
+            second.send_json({"type": "personal", "to": "A", "message": "收到"})
+            assert first.receive_text() == "B:收到"
+
+            # 同一发送方的后续广播作为标记；C 的首条消息必须是广播。
+            first.send_text("广播检查")
+            assert second.receive_text() == "A:广播检查"
+            assert third.receive_text() == "A:广播检查"
+
+            first.send_json({"type": "broadcast", "message": "群发"})
+            assert second.receive_text() == "A:群发"
+            assert third.receive_text() == "A:群发"
+    assert manager.active_connections == {}
+
+
+@pytest.mark.parametrize(
+    ("message", "error"),
+    [
+        ('{"type":"personal","to":"offline","message":"私密"}', "接收方不在线或消息发送失败"),
+        ('{"type":"personal","message":"私密"}', "单播消息必须提供接收方 to"),
+        ('{"type":"personal","to":"B","message":1}', "消息需包含有效的 type 和文本 message"),
+        ('{"type":"personal","to":"B","message":"私密"', "消息格式错误，请发送有效的 JSON"),
+        ('{"type":"broadcast","to":"B","message":"私密"}', "广播消息不应提供接收方 to"),
+    ],
+)
+def test_controller_message_errors_are_only_returned_to_sender(message: str, error: str) -> None:
+    """无效单播和离线投递只反馈给发送方，且不影响后续消息。"""
+    app = FastAPI()
+    app.include_router(router)
+    with TestClient(app) as client:
+        with (
+            client.websocket_connect("/common/ws/chat?client_id=A") as first,
+            client.websocket_connect("/common/ws/chat?client_id=B") as second,
+        ):
+            first.send_text(message)
+            assert first.receive_text() == error
+            first.send_text("后续广播")
+            assert second.receive_text() == "A:后续广播"
     assert manager.active_connections == {}

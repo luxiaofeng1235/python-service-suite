@@ -7,6 +7,7 @@ WebSocket 连接管理服务 - 单播与广播
 """
 
 import asyncio
+import json
 
 from fastapi import WebSocket
 
@@ -72,6 +73,37 @@ class ConnectionManager:
                 if ws is not exclude
             )
         )
+
+    async def dispatch_message(self, ws: WebSocket, client_id: str, message: str) -> bool:
+        """普通文本广播；JSON 按 type 分发，单播通过 to 指定接收方。"""
+        if self.active_connections.get(client_id) is not ws:
+            return False
+        if not message.lstrip().startswith("{"):
+            await self.broadcast(f"{client_id}:{message}", exclude=ws)
+            return True
+
+        try:
+            payload = json.loads(message)
+        except json.JSONDecodeError:
+            return await self._send_message(client_id, ws, "消息格式错误，请发送有效的 JSON")
+
+        message_type = payload.get("type")
+        content = payload.get("message")
+        if message_type not in ("personal", "broadcast") or not isinstance(content, str):
+            return await self._send_message(client_id, ws, "消息需包含有效的 type 和文本 message")
+
+        if message_type == "personal":
+            target = payload.get("to")
+            if not isinstance(target, str) or not target.strip():
+                return await self._send_message(client_id, ws, "单播消息必须提供接收方 to")
+            if not await self.send_personal_message(target, f"{client_id}:{content}"):
+                return await self._send_message(client_id, ws, "接收方不在线或消息发送失败")
+            return True
+
+        if payload.get("to") is not None:
+            return await self._send_message(client_id, ws, "广播消息不应提供接收方 to")
+        await self.broadcast(f"{client_id}:{content}", exclude=ws)
+        return True
 
     async def _send_message(self, client_id: str, ws: WebSocket, message: str) -> bool:
         """同一连接串行发送，发送超时或异常时清理并尝试关闭连接。"""
