@@ -19,7 +19,8 @@ from app.schemas.agent.goods_data import ProductDTO
 
 SEARCH_TOOL_NAME = "tool_semantic_product_search"
 PRODUCT_TOOL_NAME = "tool_check_sku_stock_and_price"
-GOODS_TOOL_NAMES = frozenset({SEARCH_TOOL_NAME, PRODUCT_TOOL_NAME})
+PRICE_TOOL_NAME = "tool_search_products_by_price"
+GOODS_TOOL_NAMES = frozenset({SEARCH_TOOL_NAME, PRODUCT_TOOL_NAME, PRICE_TOOL_NAME})
 MAX_INTRODUCTION_BYTES = 2000
 MAX_NARRATIVE_BYTES = 12000
 MAX_FACT_TEXT_BYTES = 40000
@@ -95,8 +96,8 @@ class GoodsRunner:
                     if step.tool_name in GOODS_TOOL_NAMES:
                         result = self._read_result(step.message) if step.success else None
                         found = self._read_products(result) if result is not None else []
-                        # 后续失败、无匹配或下架结果会作废先前事实，不能退回旧售价库存。
-                        if not found or step.tool_name == SEARCH_TOOL_NAME:
+                        # 语义检索和价格筛选都开启新查询；后续失败、无匹配或下架结果会作废先前事实。
+                        if not found or step.tool_name in (SEARCH_TOOL_NAME, PRICE_TOOL_NAME):
                             products.clear()
                         if result is None:
                             outcomes.clear()

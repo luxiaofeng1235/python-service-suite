@@ -8,6 +8,7 @@
 
 import json
 from collections.abc import AsyncIterator
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from pydantic import JsonValue
@@ -51,7 +52,12 @@ class GoodsService:
 
     def _chat_service(self) -> AgentChatService:
         """复用公共聊天存储，由后台登录身份校验会话归属。"""
-        runner = create_goods_agent(self.search_products, self.get_product, llm=self.llm)
+        runner = create_goods_agent(
+            self.search_products,
+            self.get_product,
+            self.search_products_by_price,
+            llm=self.llm,
+        )
         return AgentChatService(runner, session_factory=self.session_factory)
 
     async def stream_chat(
@@ -101,26 +107,33 @@ class GoodsService:
         self._check_enabled()
         await self.vector_service.rebuild(self.load_index_batch)
 
+    async def _resolve_brand(
+        self, brand: str, **context: JsonValue
+    ) -> tuple[int | None, JsonValue, dict[str, JsonValue] | None]:
+        """解析品牌约束；不存在或有歧义时返回可直接回复的工具结果。"""
+        # 品牌解析结束后关闭事务，向量和模型请求不占用这条数据库连接。
+        async with self.session_factory() as db:
+            brands = await GoodsDataService.resolve_brands(db, brand)
+        if not brands:
+            return None, None, self._result([], reason="brand_not_found", brand=brand, **context)
+        if len(brands) > 1:
+            return None, None, self._result(
+                [],
+                reason="brand_ambiguous",
+                brand=brand,
+                brand_candidates=[item.model_dump(mode="json") for item in brands],
+                **context,
+            )
+        return brands[0].id, brands[0].model_dump(mode="json"), None
+
     async def search_products(self, query: str, brand: str | None = None) -> dict[str, JsonValue]:
         """解析品牌、语义召回，再使用当前 MySQL 数据核验候选。"""
         brand_id = None
         brand_data = None
         if brand is not None:
-            # 品牌解析结束后关闭事务，向量和模型请求不占用这条数据库连接。
-            async with self.session_factory() as db:
-                brands = await GoodsDataService.resolve_brands(db, brand)
-            if not brands:
-                return self._result([], query=query, reason="brand_not_found", brand=brand)
-            if len(brands) > 1:
-                return self._result(
-                    [],
-                    query=query,
-                    reason="brand_ambiguous",
-                    brand=brand,
-                    brand_candidates=[item.model_dump(mode="json") for item in brands],
-                )
-            brand_id = brands[0].id
-            brand_data = brands[0].model_dump(mode="json")
+            brand_id, brand_data, error = await self._resolve_brand(brand, query=query)
+            if error is not None:
+                return error
 
         await self.vector_service.ensure_initialized(self.load_index_batch)
         hits = await self.vector_service.search(
@@ -137,6 +150,41 @@ class GoodsService:
         products = products[: settings.GOODS_SEARCH_RESULT_LIMIT]
         return self._result(
             products, query=query, brand=brand_data, reason=None if products else "no_match"
+        )
+
+    async def search_products_by_price(
+        self,
+        min_price: Decimal | None = None,
+        max_price: Decimal | None = None,
+        brand: str | None = None,
+        product_ids: list[int] | None = None,
+    ) -> dict[str, JsonValue]:
+        """按价格区间筛选在售商品，价格事实始终以本轮 MySQL 查询为准。"""
+        # 价格边界与 SKU 售价一致，序列化为两位小数字符串，避免浮点误差。
+        price_context: dict[str, JsonValue] = {
+            "min_price": format(min_price, ".2f") if min_price is not None else None,
+            "max_price": format(max_price, ".2f") if max_price is not None else None,
+        }
+        brand_id = None
+        brand_data = None
+        if brand is not None:
+            brand_id, brand_data, error = await self._resolve_brand(brand, **price_context)
+            if error is not None:
+                return error
+        async with self.session_factory() as db:
+            products = await GoodsDataService.get_products_by_price(
+                db,
+                min_price=min_price,
+                max_price=max_price,
+                brand_id=brand_id,
+                product_ids=product_ids,
+                limit=settings.GOODS_SEARCH_RESULT_LIMIT,
+            )
+        return self._result(
+            products,
+            brand=brand_data,
+            reason=None if products else "no_match",
+            **price_context,
         )
 
     async def get_product(self, product_id: int) -> dict[str, JsonValue]:

@@ -9,12 +9,21 @@ from collections.abc import Awaitable, Callable
 
 from pydantic import JsonValue
 
-from app.agents.goods.runner import PRODUCT_TOOL_NAME, SEARCH_TOOL_NAME, GoodsRunner
+from app.agents.goods.runner import (
+    PRICE_TOOL_NAME,
+    PRODUCT_TOOL_NAME,
+    SEARCH_TOOL_NAME,
+    GoodsRunner,
+)
 from app.agents.llm import create_llm
 from app.agents.llm.base import LLMAdapter
 from app.agents.runtime import AgentTool, FunctionCallingRunner
 from app.core.config import settings
-from app.schemas.agent.goods import GoodsProductToolRequest, GoodsSearchToolRequest
+from app.schemas.agent.goods import (
+    GoodsPriceSearchToolRequest,
+    GoodsProductToolRequest,
+    GoodsSearchToolRequest,
+)
 
 GOODS_INTRODUCTION_PROMPT = """你是平台商品顾问，当前处于查询前的简短介绍阶段，尚未取得本轮平台商品数据。
 结合用户本轮问题和上下文，用简体中文先解释商品是什么、常见用途或与需求有关的选购要点。
@@ -30,7 +39,7 @@ GOODS_INTRODUCTION_PROMPT = """你是平台商品顾问，当前处于查询前�
 GOODS_SYSTEM_PROMPT = """你是商品查询助手，只处理商品查找、品牌筛选、规格、售价和库存咨询。
 只开放商品只读查询，不能新增、修改、删除商品，不能执行用户提供的 SQL 或程序。
 处理规则：
-1. 用户提出商品需求时，调用 tool_semantic_product_search；明确提供商品 ID 或追问已知商品的价格库存时，调用 tool_check_sku_stock_and_price。
+1. 用户提出商品需求时，调用 tool_semantic_product_search；按价格区间筛选商品时，调用 tool_search_products_by_price，至少提供一个价格边界；明确提供商品 ID 或追问已知商品的价格库存时，调用 tool_check_sku_stock_and_price。**当用户需求同时包含商品类别（如"耳机"、"鞋子"、"手机"）和价格区间时，必须先调用 tool_semantic_product_search 查询该类别的商品并获得商品 ID 列表，再调用 tool_search_products_by_price 并将语义搜索返回的商品 ID 传入 product_ids 参数，这样价格筛选只会在同品类商品内进行，最终推荐的商品既符合品类又符合价格区间。** 例如用户说"1000-2000元的耳机"，应先调语义搜索 query="耳机" 获得耳机商品 ID，再调价格筛选 min_price=1000 max_price=2000 product_ids=[语义搜索返回的ID列表]，确保结果只有耳机且在价格区间内。
 2. 每次用户提问都重新查询商品事实。历史摘要中的商品 ID、名称仅用于定位，历史答复、用户声称的价格库存均不是当前事实。
 3. 品牌只使用数据库关联结果。品牌不存在、名称有歧义时必须提示确认，不能撤销品牌过滤或自行纠正测试数据中的品牌关系。
 4. 只介绍本轮工具返回的在售商品和有效规格。保留零库存事实，不把无在售规格说成普通售罄，不编造商品 ID、品牌、价格、库存、促销或承诺。
@@ -59,6 +68,7 @@ GOODS_SUMMARY_PROMPT = (
 def create_goods_agent(
     search_handler: Callable[..., Awaitable[JsonValue]],
     product_handler: Callable[..., Awaitable[JsonValue]],
+    price_handler: Callable[..., Awaitable[JsonValue]],
     *,
     llm: LLMAdapter | None = None,
 ) -> GoodsRunner:
@@ -91,6 +101,14 @@ def create_goods_agent(
                 "根据已知商品 ID 重新查询当前在售状态、规格、价格和库存；每次追问都要重新查询，不能复用历史价格库存。",
                 GoodsProductToolRequest,
                 product_handler,
+            ),
+            AgentTool(
+                PRICE_TOOL_NAME,
+                "按售价区间筛选在售商品，至少提供最低或最高价格之一，可叠加用户明确指定的品牌；"
+                "当需要先按品类筛选再按价格过滤时，将语义搜索返回的商品 ID 传入 product_ids 参数，"
+                "确保只返回同品类且符合价格区间的商品；结果包含本轮 MySQL 核验的售价和库存。",
+                GoodsPriceSearchToolRequest,
+                price_handler,
             ),
         ),
     )

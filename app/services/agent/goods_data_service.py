@@ -9,11 +9,13 @@
 import re
 import unicodedata
 from collections.abc import Sequence
+from datetime import datetime
+from decimal import Decimal
 from typing import ClassVar
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
-from sqlalchemy import Row, Select, and_, select
+from sqlalchemy import Row, Select, and_, func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -141,45 +143,94 @@ class GoodsDataService:
             statement = statement.where(GoodsProduct.brand_id == brand_id)
         rows = await GoodsDataService._read_rows(db, statement)
         queried_at = TimeUtil.get_date().astimezone(ZoneInfo(settings.AGENT_TIMEZONE))
-        products: dict[int, ProductDTO] = {}
-        try:
-            for product, brand_name, category_name, sku in rows:
-                GoodsDataService._validate_related_names(brand_name, category_name)
-                if product.id not in products:
-                    products[product.id] = ProductDTO(
-                        product_id=product.id,
-                        name=product.name,
-                        brand_id=product.brand_id,
-                        brand_name=brand_name,
-                        category_id=product.category_id,
-                        category_name=category_name,
-                        cover_image=product.cover_image or "",
-                        description=(product.description or "")[
-                            : GoodsDataService.MAX_PRODUCT_DESCRIPTION_CHARS
-                        ],
-                        spec_type=product.spec_type,
-                        availability="no_active_skus",
-                        queried_at=queried_at,
-                    )
-                result = products[product.id]
-                if sku is not None:
-                    result.skus.append(
-                        SkuDTO(
-                            sku_id=sku.id,
-                            sku_code=sku.sku_code,
-                            spec_name=sku.spec_name,
-                            price=sku.price,
-                            stock=sku.stock,
-                        )
-                    )
-            for result in products.values():
-                if result.skus:
-                    result.availability = (
-                        "in_stock" if any(sku.stock > 0 for sku in result.skus) else "out_of_stock"
-                    )
-        except ValidationError as exc:
-            raise AppException(msg="商品或规格数据异常，请联系管理员") from exc
-        return [products[product_id] for product_id in ids if product_id in products]
+        return GoodsDataService._assemble_products(rows, ids, queried_at)
+
+    @staticmethod
+    async def get_products_by_price(
+        db: AsyncSession,
+        *,
+        min_price: Decimal | None,
+        max_price: Decimal | None,
+        brand_id: int | None = None,
+        product_ids: list[int] | None = None,
+        limit: int,
+    ) -> list[ProductDTO]:
+        """
+        按在售 SKU 售价区间筛选上架商品，只返回命中区间的规格。
+
+        参数:
+            db: 数据库会话。
+            min_price: 最低售价（含边界），与 max_price 至少提供一个。
+            max_price: 最高售价（含边界）。
+            brand_id: 可选品牌约束，必须为正整数。
+            product_ids: 可选商品 ID 范围限定，用于在语义搜索结果内按价格筛选。
+            limit: 最多返回的商品数量。
+
+        返回:
+            按命中规格最低售价升序排列的商品事实列表。
+
+        异常:
+            AppException: 价格区间、数量或品牌参数非法，或商品数据查询失败。
+        """
+        GoodsDataService._validate_price_range(min_price, max_price)
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= GoodsDataService.MAX_PRODUCT_IDS
+        ):
+            raise AppException(
+                msg=f"价格筛选数量必须在 1 到 {GoodsDataService.MAX_PRODUCT_IDS} 之间"
+            )
+        if brand_id is not None and (
+            isinstance(brand_id, bool) or not isinstance(brand_id, int) or brand_id <= 0
+        ):
+            raise AppException(msg="品牌 ID 必须为正整数")
+        if product_ids is not None:
+            if not product_ids or any(
+                not isinstance(item, int) or isinstance(item, bool) or item <= 0
+                for item in product_ids
+            ):
+                raise AppException(msg="商品 ID 范围必须为正整数列表")
+
+        sku_conditions = [GoodsSku.status == 1]
+        if min_price is not None:
+            sku_conditions.append(GoodsSku.price >= min_price)
+        if max_price is not None:
+            sku_conditions.append(GoodsSku.price <= max_price)
+        # 先按命中规格的最低售价选出候选商品，保证结果顺序确定且受数量限制。
+        lowest_price = func.min(GoodsSku.price).label("lowest_price")
+        id_statement = (
+            select(GoodsSku.product_id, lowest_price)
+            .join(GoodsProduct, GoodsProduct.id == GoodsSku.product_id)
+            .where(GoodsProduct.status == 1, *sku_conditions)
+            .group_by(GoodsSku.product_id)
+            .order_by(lowest_price.asc(), GoodsSku.product_id.asc())
+            .limit(limit)
+        )
+        if brand_id is not None:
+            id_statement = id_statement.where(GoodsProduct.brand_id == brand_id)
+        # 如果指定了商品 ID 范围，只在这些商品内筛选价格。
+        if product_ids is not None:
+            id_statement = id_statement.where(GoodsSku.product_id.in_(product_ids))
+        ids = [row[0] for row in await GoodsDataService._read_rows(db, id_statement)]
+        if not ids:
+            return []
+        statement = (
+            select(GoodsProduct, GoodsBrand.name, GoodsCategory.name, GoodsSku)
+            .outerjoin(GoodsBrand, GoodsBrand.id == GoodsProduct.brand_id)
+            .outerjoin(GoodsCategory, GoodsCategory.id == GoodsProduct.category_id)
+            # 规格关联只保留命中价格区间的在售 SKU，返回事实与筛选条件一致。
+            .outerjoin(
+                GoodsSku,
+                and_(GoodsSku.product_id == GoodsProduct.id, *sku_conditions),
+            )
+            .where(GoodsProduct.id.in_(ids), GoodsProduct.status == 1)
+            .order_by(GoodsProduct.id.asc(), GoodsSku.id.asc())
+            .execution_options(populate_existing=True)
+        )
+        rows = await GoodsDataService._read_rows(db, statement)
+        queried_at = TimeUtil.get_date().astimezone(ZoneInfo(settings.AGENT_TIMEZONE))
+        return GoodsDataService._assemble_products(rows, ids, queried_at)
 
     @staticmethod
     async def get_product(db: AsyncSession, product_id: int) -> ProductDTO | None:
@@ -238,6 +289,53 @@ class GoodsDataService:
         return documents
 
     @staticmethod
+    def _assemble_products(
+        rows: Sequence[Row],
+        ids: list[int],
+        queried_at: datetime,
+    ) -> list[ProductDTO]:
+        """按关联查询行组装商品事实，保持输入 ID 顺序并计算可售状态。"""
+        products: dict[int, ProductDTO] = {}
+        try:
+            for product, brand_name, category_name, sku in rows:
+                GoodsDataService._validate_related_names(brand_name, category_name)
+                if product.id not in products:
+                    products[product.id] = ProductDTO(
+                        product_id=product.id,
+                        name=product.name,
+                        brand_id=product.brand_id,
+                        brand_name=brand_name,
+                        category_id=product.category_id,
+                        category_name=category_name,
+                        cover_image=product.cover_image or "",
+                        description=(product.description or "")[
+                            : GoodsDataService.MAX_PRODUCT_DESCRIPTION_CHARS
+                        ],
+                        spec_type=product.spec_type,
+                        availability="no_active_skus",
+                        queried_at=queried_at,
+                    )
+                result = products[product.id]
+                if sku is not None:
+                    result.skus.append(
+                        SkuDTO(
+                            sku_id=sku.id,
+                            sku_code=sku.sku_code,
+                            spec_name=sku.spec_name,
+                            price=sku.price,
+                            stock=sku.stock,
+                        )
+                    )
+            for result in products.values():
+                if result.skus:
+                    result.availability = (
+                        "in_stock" if any(sku.stock > 0 for sku in result.skus) else "out_of_stock"
+                    )
+        except ValidationError as exc:
+            raise AppException(msg="商品或规格数据异常，请联系管理员") from exc
+        return [products[product_id] for product_id in ids if product_id in products]
+
+    @staticmethod
     def _category_path(
         category_id: int,
         categories: dict[int, tuple[str, int | None]],
@@ -267,6 +365,17 @@ class GoodsDataService:
         ):
             raise AppException(msg="商品 ID 必须为正整数")
         return list(dict.fromkeys(product_ids))
+
+    @staticmethod
+    def _validate_price_range(min_price: Decimal | None, max_price: Decimal | None) -> None:
+        """价格边界必须为非负 Decimal，至少提供一个且下限不高于上限。"""
+        for value in (min_price, max_price):
+            if value is not None and (not isinstance(value, Decimal) or value < 0):
+                raise AppException(msg="价格边界必须为非负数值")
+        if min_price is None and max_price is None:
+            raise AppException(msg="至少提供最低价格或最高价格")
+        if min_price is not None and max_price is not None and min_price > max_price:
+            raise AppException(msg="最低价格不能高于最高价格")
 
     @staticmethod
     def _normalize_brand(name: str) -> str:
