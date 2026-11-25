@@ -1,9 +1,10 @@
 """
-百度图片抓取 + OSS 转存 + 入库
-三步走：
+百度图片抓取 + OSS 转存 + 入库 + 更新索引
+四步走：
   1. Playwright 抓取百度图片直链
   2. 通过 /api/file/upload/oss 转存到 OSS
   3. 更新数据库
+  4. 更新向量索引（让新图片在语义搜索中生效）
 """
 
 import asyncio
@@ -134,7 +135,7 @@ async def upload_to_oss(image_url: str) -> str | None:
 
 
 async def process_brands():
-    """Step 1+2+3: 品牌图片抓取 → OSS → 入库"""
+    """Step 1+2+3: 品牌图片抓取 → OSS → 入库（品牌图片不在向量索引中，无需更新索引）"""
     from sqlalchemy import text
     from app.database import async_session
 
@@ -146,7 +147,7 @@ async def process_brands():
 
     if not brands:
         print("✅ 品牌图片已全部补全，无需处理")
-        return
+        return []
 
     print(f"\n{'='*50}")
     print(f"📦 品牌图片补全: {len(brands)} 个")
@@ -185,10 +186,11 @@ async def process_brands():
         success += 1
 
     print(f"\n📦 品牌完成: {success}/{len(brands)} 成功")
+    return []  # 品牌图片不在向量索引中，无需更新索引
 
 
 async def process_products():
-    """Step 1+2+3: 商品图片抓取 → OSS → 入库"""
+    """Step 1+2+3+4: 商品图片抓取 → OSS → 入库 → 更新索引"""
     from sqlalchemy import text
     from app.database import async_session
 
@@ -200,13 +202,14 @@ async def process_products():
 
     if not products:
         print("✅ 商品图片已全部补全，无需处理")
-        return
+        return []
 
     print(f"\n{'='*50}")
     print(f"📦 商品图片补全: {len(products)} 个")
     print(f"{'='*50}")
 
     success = 0
+    updated_product_ids: list[int] = []
     for product_id, name in products:
         print(f"\n[{product_id}] {name}")
 
@@ -238,8 +241,32 @@ async def process_products():
             await db.commit()
         print(f"  ✅ 入库成功")
         success += 1
+        updated_product_ids.append(product_id)
 
     print(f"\n📦 商品完成: {success}/{len(products)} 成功")
+    return updated_product_ids
+
+
+async def refresh_index(product_ids: list[int]):
+    """Step 4: 更新向量索引，让新图片的商品在语义搜索中生效"""
+    if not product_ids:
+        print("\n📦 无需更新索引（没有商品图片变更）")
+        return
+
+    print(f"\n{'='*50}")
+    print(f"📦 更新向量索引: {len(product_ids)} 个商品")
+    print(f"{'='*50}")
+
+    from app.services.agent.goods_service import GoodsService
+
+    service = GoodsService()
+    try:
+        await service.refresh_index(product_ids)
+        print(f"✅ 索引更新完成，{len(product_ids)} 个商品已同步")
+    except Exception as e:
+        print(f"❌ 索引更新失败: {e}")
+    finally:
+        await service.vector_service.aclose()
 
 
 async def main():
@@ -247,8 +274,11 @@ async def main():
     print(f"   API: {API_BASE}")
     print(f"   Chrome: {CHROME_PATH}")
 
-    await process_brands()
-    await process_products()
+    await process_brands()  # 品牌图片不在向量索引中
+    updated_ids = await process_products()
+
+    # Step 4: 更新向量索引（只更新商品图片变更的）
+    await refresh_index(updated_ids)
 
     print(f"\n{'='*50}")
     print("🎉 全部完成!")
