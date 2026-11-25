@@ -2,7 +2,7 @@
 
 [返回项目 README](../README.md)
 
-本文以已实现的星座和商品 Agent 为例，说明接口、模型、工具和业务服务如何协作，以及后续新增 Agent 的开发步骤。两者共用原生 Function Calling、千问适配层和会话底座；商品 Agent 在工具内部增加 Chroma 语义召回与 MySQL 实时查询。当前未接入 LangChain / LangGraph，其他业务 Agent 可沿用这套分层扩展。
+本文以已实现的星座和商品 Agent 为例，说明接口、模型、工具和业务服务如何协作，以及后续新增 Agent 的开发步骤。两者共用原生 Function Calling、千问适配层和会话底座；商品 Agent 在工具内部增加 Chroma 语义召回与 MySQL 实时查询，并具备**自主任务规划能力**，可分析复杂需求并生成分步执行计划。当前未接入 LangChain / LangGraph，其他业务 Agent 可沿用这套分层扩展。
 
 ## 1. 分层与代码入口
 
@@ -173,6 +173,47 @@ MySQL 过滤商品上架和 SKU 在售状态，组装品牌、类目、`cover_im
 
 结构化商品事件由后端序列化查询结果产生，**封面地址无需模型生成，也不靠提示词约定返回**。它与开场和推荐文字属于同一次 HTTP/SSE 响应。开场不提供具体平台售价、库存或推荐清单；具体商品事实仍须经过本轮工具查询。
 
+### 任务规划能力（新增）
+
+商品 Agent 具备自主任务规划能力，可分析复杂需求并生成分步执行计划。
+
+**触发条件：**
+- 用户需求包含多个品类（如"帐篷和睡袋"）
+- 用户需求包含组合、搭配、对比等复杂意图（如"帮我配一台电脑"、"哪个更好"）
+- 简单查询（如"推荐一款充电宝"）不触发规划，直接走工具决策
+
+**执行流程：**
+```text
+用户：帮我搭配一套户外露营装备
+  → 检测到复杂需求，触发任务规划
+  → 调用 LLM 生成分步计划（JSON 数组）
+  → 计划示例：
+      [
+        {"tool": "tool_semantic_product_search", "args": {"query": "帐篷"}, "reason": "搜索帐篷"},
+        {"tool": "tool_semantic_product_search", "args": {"query": "睡袋"}, "reason": "搜索睡袋"},
+        {"tool": "tool_semantic_product_search", "args": {"query": "防潮垫"}, "reason": "搜索防潮垫"}
+      ]
+  → 计划注入决策阶段，模型按计划逐步执行工具调用
+  → 汇总所有结果，返回完整推荐
+```
+
+**关键实现：**
+- 规划阶段使用 LLM 适配器的 `stream` 方法直接生成规划文本，不使用 `FunctionCallingRunner`
+- 规划结果解析为 JSON 数组，校验工具名称和参数格式
+- 规划失败时自动降级为直接决策模式，不影响基础功能
+- 规划上下文作为额外消息注入决策阶段，引导模型按计划执行
+
+**配置参数：**
+- `AGENT_MAX_TOOL_ROUNDS = 8`：支持复杂规划的多轮工具调用（原为 4）
+- `AGENT_MAX_TOOL_CALLS = 6`：支持单轮多工具调用（原为 4）
+- `MAX_PLAN_STEPS = 5`：单次规划最多步骤数
+
+**代码入口：**
+- [GoodsRunner._should_use_planning()](../app/agents/goods/runner.py)：判断是否需要规划
+- [GoodsRunner._generate_plan()](../app/agents/goods/runner.py)：调用 LLM 生成规划
+- [GoodsRunner._parse_plan()](../app/agents/goods/runner.py)：解析和校验规划结果
+- [planning_runner](../app/agents/goods/agent.py)：规划运行器配置
+
 ### 数据变动后的索引维护
 
 当前没有自动轮询 MySQL 或变更捕获。内部调用 `GoodsService.refresh_index(product_ids)` 可同步指定商品，`rebuild_index()` 可完整重建；只维护向量，不修改商品表。
@@ -331,8 +372,8 @@ data: {"type":"data","session_id":"11111111-1111-4111-8111-111111111111","agent"
 | `GOODS_AGENT_MODEL` | `qwen-flash` | 商品知识开场、工具决策和推荐总结使用的模型 |
 | `AGENT_ENABLE_SEARCH` | `True` | 星座编排模型的千问联网搜索开关，商品 Agent 显式关闭 |
 | `AGENT_TIMEZONE` | `Asia/Shanghai` | 当前业务日期 |
-| `AGENT_MAX_TOOL_ROUNDS` | `4` | 最大工具调用轮数，其后仅总结 |
-| `AGENT_MAX_TOOL_CALLS` | `4` | 每轮工具调用数量限制 |
+| `AGENT_MAX_TOOL_ROUNDS` | `8` | 最大工具调用轮数，支持复杂任务规划（原为 4） |
+| `AGENT_MAX_TOOL_CALLS` | `6` | 每轮工具调用数量限制，支持单轮多工具调用（原为 4） |
 | `AGENT_MAX_HISTORY_MESSAGES` | `60` | 历史读取消息数量上限 |
 | `AGENT_MAX_HISTORY_CHARS` | `24000` | 历史上下文字数上限 |
 | `AGENT_TOOL_TIMEOUT` | `30.0` 秒 | 单次工具执行及运势生成超时 |

@@ -129,4 +129,17 @@ def create_goods_agent(
         tools=(),
         max_tool_rounds=0,
     )
-    return GoodsRunner(decision, summary, introduction_runner=introduction)
+    # 任务规划运行器：分析复杂需求，生成分步执行计划
+    planning = FunctionCallingRunner(
+        name="goods_planning",
+        system_prompt="你是商品查询任务规划助手。分析用户需求，分解为具体的工具调用步骤。只输出 JSON 数组，不要其他文字。",
+        llm=adapter,
+        tools=(),
+        max_tool_rounds=0,
+    )
+    return GoodsRunner(
+        decision,
+        summary,
+        introduction_runner=introduction,
+        planning_runner=planning,
+    )

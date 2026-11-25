@@ -1,9 +1,9 @@
 """
 ============================================
-商品执行包装器 - 商品知识开场、平台查询与结果输出
+商品执行包装器 - 任务规划、平台查询与结果输出
 ============================================
-先流式介绍一般商品知识，再复用公共工具循环查询平台，取得本轮事实后展示推荐。
-历史只保留商品定位信息，价格和库存使用后端依据本轮查询生成的事实片段。
+支持任务规划模式：先分析用户需求生成分步执行计划，再按计划逐步查询平台商品，
+最终汇总推荐结果。规划失败时降级为原有直接决策模式。
 """
 
 import json
@@ -15,6 +15,7 @@ from pydantic import JsonValue, ValidationError
 from app.agents.llm.base import LLMMessage
 from app.agents.runtime import AgentStep, FunctionCallingRunner
 from app.common.exception import AppException
+from app.pkg.logging import app_logger
 from app.schemas.agent.goods_data import ProductDTO
 
 SEARCH_TOOL_NAME = "tool_semantic_product_search"
@@ -26,6 +27,10 @@ MAX_NARRATIVE_BYTES = 12000
 MAX_FACT_TEXT_BYTES = 40000
 MAX_SUMMARY_DESCRIPTION_CHARS = 500
 MAX_SUMMARY_SPECIFICATIONS = 10
+# 任务规划相关常量
+MAX_PLAN_STEPS = 5
+MAX_PLAN_PARSE_RETRIES = 2
+PLANNING_TIMEOUT_SECONDS = 30
 
 
 class GoodsRunner:
@@ -39,16 +44,199 @@ class GoodsRunner:
         summary_runner: FunctionCallingRunner,
         *,
         introduction_runner: FunctionCallingRunner | None = None,
+        planning_runner: FunctionCallingRunner | None = None,
     ):
-        """组合现有运行器，各阶段共用模型、工具协议和聊天消息生命周期。"""
+        """
+        组合现有运行器，各阶段共用模型、工具协议和聊天消息生命周期。
+
+        参数:
+            decision_runner: 工具决策运行器。
+            summary_runner: 结果汇总运行器。
+            introduction_runner: 可选的开场知识运行器。
+            planning_runner: 可选的任务规划运行器，用于分析需求生成分步计划。
+        """
         self.introduction_runner = introduction_runner
         self.decision_runner = decision_runner
         self.summary_runner = summary_runner
+        self.planning_runner = planning_runner
+
+    # ==================== 任务规划相关方法 ====================
+
+    @staticmethod
+    def _should_use_planning(user_message: str) -> bool:
+        """
+        判断是否需要启用任务规划。
+
+        复杂需求特征：包含多个品类、多步操作、或明确的组合需求。
+
+        参数:
+            user_message: 用户输入消息。
+
+        返回:
+            是否需要启用任务规划。
+        """
+        # 简单查询关键词（直接走原有决策流程）
+        simple_patterns = [
+            "推荐", "有什么", "多少钱", "价格", "库存",
+            "帮我找", "搜一下", "查一下",
+        ]
+        # 复杂需求关键词（需要规划）
+        complex_patterns = [
+            "配一台", "组合", "搭配", "一套",
+            "分别", "每个", "各种", "多个",
+            "比较", "对比", "哪个好",
+        ]
+        
+        has_complex = any(pattern in user_message for pattern in complex_patterns)
+        has_multiple_categories = user_message.count("和") + user_message.count("以及") + user_message.count("还有") >= 1
+        
+        if has_complex or has_multiple_categories:
+            app_logger.info("检测到复杂需求，启用任务规划: {}", user_message[:50])
+            return True
+        return False
+
+    async def _generate_plan(self, history: list[LLMMessage]) -> list[dict] | None:
+        """
+        调用 LLM 生成执行计划。
+
+        参数:
+            history: 聊天历史。
+
+        返回:
+            执行计划列表，失败返回 None。
+        """
+        if self.planning_runner is None:
+            app_logger.warning("未配置规划运行器，跳过任务规划")
+            return None
+
+        plan_prompt_content = """请分析用户需求，分解为具体的工具调用步骤。
+
+可用工具：
+1. tool_semantic_product_search - 语义搜索商品，参数: query(搜索词), brand(品牌名,可选), limit(数量,可选)
+2. tool_search_products_by_price - 按价格筛选，参数: min_price(最低价), max_price(最高价), brand(品牌), product_ids(限定商品ID列表)
+3. tool_check_sku_stock_and_price - 查询商品详情，参数: product_ids(商品ID列表)
+
+输出要求：
+- 输出 JSON 数组，每个元素包含: {"tool": "工具名", "args": {参数}, "reason": "原因"}
+- 最多 """ + str(MAX_PLAN_STEPS) + """ 个步骤
+- 如果需求简单（单一品类查询），直接输出空数组 []
+- 只输出 JSON，不要其他文字
+
+示例：
+用户需求: "帮我配一台5000元的游戏电脑"
+输出: [
+  {"tool": "tool_semantic_product_search", "args": {"query": "游戏CPU"}, "reason": "搜索CPU"},
+  {"tool": "tool_semantic_product_search", "args": {"query": "游戏显卡"}, "reason": "搜索显卡"},
+  {"tool": "tool_semantic_product_search", "args": {"query": "内存条"}, "reason": "搜索内存"}
+]
+"""
+
+        try:
+            # 直接使用 LLM 适配器生成规划，不使用 FunctionCallingRunner
+            # 获取 LLM 适配器
+            llm_adapter = self.planning_runner.llm if hasattr(self.planning_runner, 'llm') else None
+            if llm_adapter is None:
+                app_logger.warning("无法获取 LLM 适配器，跳过任务规划")
+                return None
+
+            app_logger.info("开始调用 LLM 生成规划...")
+
+            # 构建消息列表（使用 LLMMessage 格式）
+            plan_messages = []
+            for msg in history:
+                plan_messages.append(LLMMessage(role=msg.role, content=msg.content or ""))
+            plan_messages.append(LLMMessage(role="user", content=plan_prompt_content))
+
+            # 调用 LLM stream 方法生成文本（不传工具，纯文本生成）
+            plan_text = ""
+            async for chunk in llm_adapter.stream(plan_messages, []):
+                if chunk.content:
+                    plan_text += chunk.content
+            
+            raw_plan = plan_text.strip()
+            app_logger.info("规划原始输出长度: {}, 内容: {}", len(raw_plan), raw_plan[:500] if raw_plan else "(空)")
+
+            if not raw_plan:
+                app_logger.warning("规划输出为空，降级为直接决策")
+                return None
+
+            result = self._parse_plan(raw_plan)
+            app_logger.info("规划解析结果: {}", "成功" if result else "失败")
+            return result
+
+        except KeyError as exc:
+            app_logger.warning("任务规划 KeyError: {} - 降级为直接决策", exc)
+            return None
+        except Exception as exc:
+            app_logger.warning("任务规划失败: {} - {} - 降级为直接决策", type(exc).__name__, exc)
+            return None
+
+    @staticmethod
+    def _parse_plan(raw_plan: str) -> list[dict] | None:
+        """
+        解析 LLM 输出的执行计划。
+
+        参数:
+            raw_plan: LLM 原始输出文本。
+
+        返回:
+            解析后的计划列表，格式无效返回 None。
+        """
+        if not raw_plan or raw_plan == "[]":
+            return None
+
+        # 尝试提取 JSON 部分
+        json_start = raw_plan.find("[")
+        json_end = raw_plan.rfind("]") + 1
+        if json_start == -1 or json_end == 0:
+            app_logger.warning("规划输出无有效 JSON: {}", raw_plan[:100])
+            return None
+
+        try:
+            plan = json.loads(raw_plan[json_start:json_end])
+        except json.JSONDecodeError as exc:
+            app_logger.warning("规划 JSON 解析失败: {}", exc)
+            return None
+
+        # 校验计划结构
+        if not isinstance(plan, list):
+            return None
+        if len(plan) > MAX_PLAN_STEPS:
+            app_logger.warning("规划步骤过多({}>)，截断为{}", len(plan), MAX_PLAN_STEPS)
+            plan = plan[:MAX_PLAN_STEPS]
+
+        # 校验每个步骤
+        valid_steps = []
+        for step in plan:
+            if not isinstance(step, dict):
+                continue
+            tool = step.get("tool")
+            args = step.get("args") or {}  # 容错：args 可能为 None
+            reason = step.get("reason") or ""  # 容错：reason 可能为 None
+            if tool not in GOODS_TOOL_NAMES:
+                app_logger.warning("规划包含无效工具: {}", tool)
+                continue
+            if not isinstance(args, dict):
+                continue
+            valid_steps.append({"tool": tool, "args": args, "reason": reason})
+
+        if not valid_steps:
+            return None
+
+        app_logger.info("任务规划成功，共{}步: {}", len(valid_steps), 
+                       [s["tool"] for s in valid_steps])
+        return valid_steps
 
     async def run(self, history: list[LLMMessage]) -> AsyncIterator[AgentStep]:
-        """先解释商品，再查询并推荐；整轮只发送一次 done。"""
+        """
+        执行商品查询流程：开场介绍 → 任务规划（可选）→ 工具决策 → 结果汇总。
+        
+        整轮只发送一次 done 事件。规划失败时降级为直接决策模式。
+        """
         clean_history = self._clean_history(history)
         introduction_usage: dict[str, JsonValue] = {}
+        
+        # ==================== 第一阶段：开场介绍 ====================
         if self.introduction_runner is not None:
             introduction = self.introduction_runner.run(clean_history)
             introduction_bytes = 0
@@ -76,11 +264,45 @@ class GoodsRunner:
             finally:
                 await introduction.aclose()
 
+        # ==================== 第二阶段：任务规划（可选）====================
+        planning_usage: dict[str, JsonValue] = {}
+        plan_context: LLMMessage | None = None
+        
+        # 提取用户最新消息判断是否需要规划
+        user_messages = [m for m in clean_history if m.role == "user"]
+        if user_messages and self.planning_runner is not None:
+            latest_user_msg = user_messages[-1].content or ""
+            if self._should_use_planning(latest_user_msg):
+                app_logger.info("开始任务规划...")
+                try:
+                    plan = await self._generate_plan(clean_history)
+                    if plan:
+                        # 将规划结果转为上下文消息
+                        plan_summary = json.dumps(
+                            [{"step": i+1, "tool": s.get("tool", ""), "reason": s.get("reason", "")}
+                             for i, s in enumerate(plan)],
+                            ensure_ascii=False
+                        )
+                        plan_context = LLMMessage(
+                            role="user",
+                            content=f"【执行计划】请按以下步骤依次查询：\n{plan_summary}\n请逐步执行以上计划。"
+                        )
+                        app_logger.info("任务规划完成，注入决策阶段")
+                except Exception as exc:
+                    app_logger.warning("任务规划异常，降级为直接决策: {}", exc)
+                    plan_context = None
+
+        # 构建决策阶段的输入历史
+        decision_history = clean_history
+        if plan_context:
+            decision_history = [*clean_history, plan_context]
+
+        # ==================== 第三阶段：工具决策 ====================
         products: dict[int, ProductDTO] = {}
         outcomes: list[dict[str, JsonValue]] = []
         decision_usage: dict[str, JsonValue] = {}
         pending_assistant = False
-        stream = self.decision_runner.run(clean_history)
+        stream = self.decision_runner.run(decision_history)
         try:
             async for step in stream:
                 if step.type == "model_start":
@@ -109,7 +331,9 @@ class GoodsRunner:
                 elif step.type == "tool_start":
                     yield step
                 elif step.type == "done":
+                    # 累计各阶段用量
                     decision_usage = self._merge_usage(introduction_usage, step.usage)
+                    decision_usage = self._merge_usage(planning_usage, decision_usage)
                 # delta 和 reasoning 不流出查询决策阶段。
         finally:
             await stream.aclose()
