@@ -132,30 +132,61 @@ class GoodsService:
                 since = datetime.now() - timedelta(hours=24)
                 app_logger.info("未找到上次同步时间，默认从 24 小时前开始同步")
         
-        # 获取变更的商品 ID
-        async with self.session_factory() as db:
-            changed_ids = await GoodsDataService.get_changed_products(db, since=since)
+        # 分批获取并同步变更的商品，避免大量变更时丢失数据
+        total_synced = 0
+        batch_size = 1000
+        current_since = since
         
-        if not changed_ids:
+        while True:
+            # 获取一批变更的商品 ID
+            async with self.session_factory() as db:
+                changed_ids = await GoodsDataService.get_changed_products(
+                    db, since=current_since, limit=batch_size
+                )
+            
+            if not changed_ids:
+                break
+            
+            app_logger.info("检测到 {} 个变更商品，开始增量同步（since={}）", len(changed_ids), current_since)
+            
+            # 获取这些商品的索引文档
+            async with self.session_factory() as db:
+                documents = await GoodsDataService.get_index_documents(db, changed_ids)
+            
+            if not documents:
+                app_logger.warning("变更商品中没有可索引的上架商品")
+                break
+            
+            # 增量同步到 ChromaDB，并保存同步时间
+            sync_time = datetime.now()
+            synced_count = await self.vector_service.sync_incremental(documents, sync_time)
+            total_synced += synced_count
+            app_logger.info("本批同步完成，同步了 {} 个商品", synced_count)
+            
+            # 如果本批不足 batch_size，说明已经同步完所有变更
+            if len(changed_ids) < batch_size:
+                break
+            
+            # 更新 current_since 为本批最后一个商品的 updated_at，继续下一批
+            # 由于 get_changed_products 按 updated_at 排序，取本批最后一个 ID 对应的 updated_at
+            async with self.session_factory() as db:
+                from sqlalchemy import text as sql_text
+                result = await db.execute(
+                    sql_text("SELECT updated_at FROM goods_products WHERE id = :id"),
+                    {"id": changed_ids[-1]}
+                )
+                row = result.fetchone()
+                if row:
+                    current_since = row[0]
+                else:
+                    break
+        
+        if total_synced > 0:
+            app_logger.info("增量同步全部完成，共同步了 {} 个商品", total_synced)
+        else:
             app_logger.debug("没有需要同步的变更商品")
-            return 0
         
-        app_logger.info("检测到 {} 个变更商品，开始增量同步（since={}）", len(changed_ids), since)
-        
-        # 获取这些商品的索引文档
-        async with self.session_factory() as db:
-            documents = await GoodsDataService.get_index_documents(db, changed_ids)
-        
-        if not documents:
-            app_logger.warning("变更商品中没有可索引的上架商品")
-            return 0
-        
-        # 增量同步到 ChromaDB，并保存同步时间
-        sync_time = datetime.now()
-        synced_count = await self.vector_service.sync_incremental(documents, sync_time)
-        app_logger.info("增量同步完成，同步了 {} 个商品，同步时间={}", synced_count, sync_time)
-        
-        return synced_count
+        return total_synced
 
     async def _resolve_brand(
         self, brand: str, **context: JsonValue
