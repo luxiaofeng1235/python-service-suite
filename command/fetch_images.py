@@ -11,6 +11,7 @@ import asyncio
 import json
 import re
 import sys
+from pathlib import Path
 from urllib.parse import unquote
 
 import httpx
@@ -18,8 +19,35 @@ from playwright.async_api import async_playwright
 
 # ─── 配置 ───
 API_BASE = "http://127.0.0.1:8001"
-CHROME_PATH = "/home/andy/.cache/ms-playwright/chromium-1161/chrome-linux64/chrome"
 BAIDU_SEARCH_URL = "https://image.baidu.com/search/index?tn=baiduimage&word={keyword}"
+
+
+def find_chrome_path() -> str | None:
+    """自动查找可用的 Chrome/Chromium 路径"""
+    cache_dirs = [
+        Path.home() / ".cache" / "ms-playwright",
+        Path("/ms-playwright"),
+    ]
+    for cache_dir in cache_dirs:
+        if not cache_dir.exists():
+            continue
+        chromium_dirs = sorted(
+            cache_dir.glob("chromium-*"),
+            key=lambda p: p.name,
+            reverse=True,
+        )
+        for chromium_dir in chromium_dirs:
+            candidates = [
+                chromium_dir / "chrome-linux64" / "chrome",
+                chromium_dir / "chrome-linux" / "chrome",
+            ]
+            for chrome_path in candidates:
+                if chrome_path.exists():
+                    return str(chrome_path)
+    return None
+
+
+CHROME_PATH = find_chrome_path()
 
 # 允许的直链域名（百度 CDN）
 ALLOWED_DOMAINS = [
