@@ -17,6 +17,7 @@ import uuid
 from collections.abc import AsyncIterator, Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
@@ -93,30 +94,57 @@ class GoodsVectorService:
             await self._run_sync(self._open)
             await self._build(load_batch)
 
-    async def sync_incremental(self, documents: Sequence[IndexDocument]) -> int:
+    async def sync_incremental(self, documents: Sequence[IndexDocument], last_sync_time: datetime | None = None) -> int:
         """
         增量同步商品到索引，返回同步的商品数量。
 
         参数:
             documents: 需要同步的商品索引文档列表。
+            last_sync_time: 本次同步时间，同步完成后会保存到 collection metadata。
 
         返回:
             成功同步的商品数量。
         """
         if not documents:
             return 0
-        
+
         await self._run_sync(self._open)
         if self._active is None:
             raise AppException(msg="索引尚未初始化，无法增量同步")
-        
+
+        # 将 last_sync_time 转换为 ISO 格式字符串
+        last_sync_time_str = last_sync_time.isoformat() if last_sync_time else None
+
         async with self._maintenance_lock:
-            async with self._copy_for_update() as collection:
+            async with self._copy_for_update(new_last_sync_time=last_sync_time_str) as collection:
                 await self._upsert_documents(collection, documents)
                 count = await self._run_sync(collection.count)
-                app_logger.info("增量同步完成，当前索引商品数量={}", count)
-        
+                app_logger.info("增量同步完成，当前索引商品数量={}，同步时间={}", count, last_sync_time)
+
         return len(documents)
+
+    async def get_last_sync_time(self) -> datetime | None:
+        """
+        从 collection metadata 中读取上次同步时间。
+
+        返回:
+            上次同步时间，如果不存在则返回 None。
+        """
+        await self._run_sync(self._open)
+        if self._active is None:
+            return None
+
+        try:
+            collection = self._active
+            # collection.metadata 是 collection 级元数据，不是 document 级
+            metadata = collection.metadata or {}
+            last_sync_str = metadata.get("last_sync_time")
+            if last_sync_str:
+                return datetime.fromisoformat(last_sync_str)
+        except Exception as exc:
+            app_logger.warning("读取上次同步时间失败: {}", exc)
+
+        return None
 
     async def search(
         self,
@@ -186,17 +214,20 @@ class GoodsVectorService:
             self._client = None
 
     @asynccontextmanager
-    async def _copy_for_update(self) -> AsyncIterator["Collection"]:
+    async def _copy_for_update(self, new_last_sync_time: str | None = None) -> AsyncIterator["Collection"]:
         """复制已有向量后维护新代，失败时不暴露半批覆盖，也不重新向量化旧商品。"""
         source = self._require_active()
         abandoned = threading.Event()
         try:
             async with asyncio.timeout(settings.GOODS_INDEX_TIMEOUT):
+                # 如果有新的 last_sync_time，使用它；否则保留旧的
+                last_sync_time = new_last_sync_time or (source.metadata or {}).get("last_sync_time")
+                
                 target = await self._run_sync(self._create_generation)
                 await self._run_sync(self._copy_generation, source, target, abandoned)
                 yield target
                 count = await self._run_sync(target.count)
-                await self._run_sync(self._publish, target, count, abandoned)
+                await self._run_sync(self._publish, target, count, abandoned, last_sync_time)
                 self._active = target
         except TimeoutError as exc:
             raise AppException(msg="商品索引同步超时，请稍后重试") from exc
@@ -337,6 +368,7 @@ class GoodsVectorService:
         collection: "Collection",
         expected_count: int,
         abandoned: threading.Event,
+        last_sync_time: str | None = None,
     ) -> None:
         """核验数量并提交完成标记；半成品永远不具备可加载的标记。"""
         if self._closed or abandoned.is_set():
@@ -345,13 +377,17 @@ class GoodsVectorService:
             raise AppException(msg="商品索引数量不一致，请重新初始化")
         if abandoned.is_set():
             raise AppException(msg="商品索引构建已结束，本次结果未发布")
-        collection.modify(
-            metadata={
-                **(collection.metadata or {}),
-                "ready": True,
-                "indexed_count": expected_count,
-            }
-        )
+        
+        # 构建新的 metadata，保留 last_sync_time
+        new_metadata = {
+            **(collection.metadata or {}),
+            "ready": True,
+            "indexed_count": expected_count,
+        }
+        if last_sync_time is not None:
+            new_metadata["last_sync_time"] = last_sync_time
+        
+        collection.modify(metadata=new_metadata)
 
     @staticmethod
     def _copy_generation(

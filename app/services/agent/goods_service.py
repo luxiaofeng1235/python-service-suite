@@ -8,7 +8,7 @@
 
 import json
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -109,12 +109,12 @@ class GoodsService:
         self._check_enabled()
         await self.vector_service.rebuild(self.load_index_batch)
 
-    async def sync_changed_products(self, since: datetime) -> int:
+    async def sync_changed_products(self, since: datetime | None = None) -> int:
         """
         增量同步变更的商品到索引。
 
         参数:
-            since: 查询此时间之后变更的商品。
+            since: 查询此时间之后变更的商品。如果为 None，则从 collection metadata 中读取上次同步时间。
 
         返回:
             成功同步的商品数量。
@@ -124,6 +124,14 @@ class GoodsService:
         # 确保索引已初始化
         await self.vector_service.ensure_initialized(self.load_index_batch)
         
+        # 如果没有指定 since，从 collection metadata 中读取上次同步时间
+        if since is None:
+            since = await self.vector_service.get_last_sync_time()
+            if since is None:
+                # 如果还没有同步过，默认从 24 小时前开始
+                since = datetime.now() - timedelta(hours=24)
+                app_logger.info("未找到上次同步时间，默认从 24 小时前开始同步")
+        
         # 获取变更的商品 ID
         async with self.session_factory() as db:
             changed_ids = await GoodsDataService.get_changed_products(db, since=since)
@@ -132,7 +140,7 @@ class GoodsService:
             app_logger.debug("没有需要同步的变更商品")
             return 0
         
-        app_logger.info("检测到 {} 个变更商品，开始增量同步", len(changed_ids))
+        app_logger.info("检测到 {} 个变更商品，开始增量同步（since={}）", len(changed_ids), since)
         
         # 获取这些商品的索引文档
         async with self.session_factory() as db:
@@ -142,9 +150,10 @@ class GoodsService:
             app_logger.warning("变更商品中没有可索引的上架商品")
             return 0
         
-        # 增量同步到 ChromaDB
-        synced_count = await self.vector_service.sync_incremental(documents)
-        app_logger.info("增量同步完成，同步了 {} 个商品", synced_count)
+        # 增量同步到 ChromaDB，并保存同步时间
+        sync_time = datetime.now()
+        synced_count = await self.vector_service.sync_incremental(documents, sync_time)
+        app_logger.info("增量同步完成，同步了 {} 个商品，同步时间={}", synced_count, sync_time)
         
         return synced_count
 

@@ -7,7 +7,6 @@
 """
 
 import asyncio
-from datetime import datetime, timedelta
 
 from fastapi import FastAPI
 
@@ -40,17 +39,15 @@ async def start_goods_agent(app: FastAPI) -> None:
 
     async def periodic_sync() -> None:
         """定期增量同步变更的商品到索引。"""
-        # 首次同步从 1 小时前开始，避免遗漏
-        last_sync_time = datetime.now() - timedelta(hours=1)
         sync_interval = 300  # 5 分钟同步一次
         
         while True:
             try:
                 await asyncio.sleep(sync_interval)
-                synced_count = await service.sync_changed_products(last_sync_time)
+                # 不传入 since 参数，让 sync_changed_products 从 collection metadata 中读取上次同步时间
+                synced_count = await service.sync_changed_products()
                 if synced_count > 0:
                     app_logger.info("定期同步完成，同步了 {} 个商品", synced_count)
-                last_sync_time = datetime.now()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
