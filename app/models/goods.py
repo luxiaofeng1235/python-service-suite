@@ -90,7 +90,7 @@ class GoodsBrand(Base):
         comment="品牌ID",
     )
     name = Column(String(100), nullable=False, server_default="", comment="品牌名称")
-    image = Column(String(255), nullable=False, server_default="", comment="品牌Logo图片")
+    image = Column(String(1000), nullable=False, server_default="", comment="品牌Logo图片")
     initial = Column(CHAR(1), nullable=False, server_default="", comment="品牌首字母")
     is_recommend = Column(
         SmallInteger().with_variant(TINYINT(unsigned=True), "mysql"),
@@ -150,7 +150,7 @@ class GoodsProduct(Base):
         nullable=False,
         comment="关联商品品牌ID，对应goods_brands.id",
     )
-    cover_image = Column(String(255), nullable=True, server_default="", comment="商品主图")
+    cover_image = Column(String(1000), nullable=True, server_default="", comment="商品主图")
     description = Column(Text, nullable=True, comment="商品详细描述与卖点 (供Agent检索)")
     status = Column(
         SmallInteger().with_variant(TINYINT(), "mysql"),
