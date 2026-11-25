@@ -7,6 +7,7 @@
 """
 
 import asyncio
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI
 
@@ -19,6 +20,7 @@ async def start_goods_agent(app: FastAPI) -> None:
     """注册共享服务；首次搜索可等待索引，超出工具预算时提示重试。"""
     app.state.goods_service = None
     app.state.goods_index_task = None
+    app.state.goods_sync_task = None
     if not settings.GOODS_AGENT_ENABLED:
         return
     service = GoodsService()
@@ -36,21 +38,48 @@ async def start_goods_agent(app: FastAPI) -> None:
                 type(exc).__name__,
             )
 
+    async def periodic_sync() -> None:
+        """定期增量同步变更的商品到索引。"""
+        # 首次同步从 1 小时前开始，避免遗漏
+        last_sync_time = datetime.now() - timedelta(hours=1)
+        sync_interval = 300  # 5 分钟同步一次
+        
+        while True:
+            try:
+                await asyncio.sleep(sync_interval)
+                synced_count = await service.sync_changed_products(last_sync_time)
+                if synced_count > 0:
+                    app_logger.info("定期同步完成，同步了 {} 个商品", synced_count)
+                last_sync_time = datetime.now()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                app_logger.warning(
+                    "定期同步失败，异常类型={}，将在下次重试",
+                    type(exc).__name__,
+                )
+
     app.state.goods_index_task = asyncio.create_task(initialize(), name="goods-index-initialize")
+    app.state.goods_sync_task = asyncio.create_task(periodic_sync(), name="goods-sync-periodic")
 
 
 async def stop_goods_agent(app: FastAPI) -> None:
     """按依赖顺序关闭初始化任务和向量库，再由应用关闭数据库连接池。"""
-    task = getattr(app.state, "goods_index_task", None)
+    index_task = getattr(app.state, "goods_index_task", None)
+    sync_task = getattr(app.state, "goods_sync_task", None)
     service = getattr(app.state, "goods_service", None)
     try:
         try:
-            if task is not None:
-                task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
+            if index_task is not None:
+                index_task.cancel()
+            if sync_task is not None:
+                sync_task.cancel()
+            if index_task is not None or sync_task is not None:
+                await asyncio.gather(index_task, sync_task, return_exceptions=True)
         finally:
             if service is not None:
                 await service.vector_service.aclose()
     finally:
         app.state.goods_service = None
         app.state.goods_index_task = None
+        app.state.goods_sync_task = None

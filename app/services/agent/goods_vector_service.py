@@ -93,6 +93,31 @@ class GoodsVectorService:
             await self._run_sync(self._open)
             await self._build(load_batch)
 
+    async def sync_incremental(self, documents: Sequence[IndexDocument]) -> int:
+        """
+        增量同步商品到索引，返回同步的商品数量。
+
+        参数:
+            documents: 需要同步的商品索引文档列表。
+
+        返回:
+            成功同步的商品数量。
+        """
+        if not documents:
+            return 0
+        
+        await self._run_sync(self._open)
+        if self._active is None:
+            raise AppException(msg="索引尚未初始化，无法增量同步")
+        
+        async with self._maintenance_lock:
+            async with self._copy_for_update() as collection:
+                await self._upsert_documents(collection, documents)
+                count = await self._run_sync(collection.count)
+                app_logger.info("增量同步完成，当前索引商品数量={}", count)
+        
+        return len(documents)
+
     async def search(
         self,
         query: str,

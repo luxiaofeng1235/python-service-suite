@@ -8,6 +8,7 @@
 
 import json
 from collections.abc import AsyncIterator
+from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -19,6 +20,7 @@ from app.agents.llm.base import LLMAdapter
 from app.common.exception import AppException
 from app.core.config import settings
 from app.database import async_session
+from app.pkg.logging import app_logger
 from app.schemas.agent.chat import AgentChatRequest, AgentStreamEvent
 from app.schemas.agent.goods_data import IndexBatch, ProductDTO
 from app.services.agent.chat_service import AgentChatService
@@ -106,6 +108,45 @@ class GoodsService:
         """内部完整重建索引，失败时由向量服务保留原来的完整代。"""
         self._check_enabled()
         await self.vector_service.rebuild(self.load_index_batch)
+
+    async def sync_changed_products(self, since: datetime) -> int:
+        """
+        增量同步变更的商品到索引。
+
+        参数:
+            since: 查询此时间之后变更的商品。
+
+        返回:
+            成功同步的商品数量。
+        """
+        self._check_enabled()
+        
+        # 确保索引已初始化
+        await self.vector_service.ensure_initialized(self.load_index_batch)
+        
+        # 获取变更的商品 ID
+        async with self.session_factory() as db:
+            changed_ids = await GoodsDataService.get_changed_products(db, since=since)
+        
+        if not changed_ids:
+            app_logger.debug("没有需要同步的变更商品")
+            return 0
+        
+        app_logger.info("检测到 {} 个变更商品，开始增量同步", len(changed_ids))
+        
+        # 获取这些商品的索引文档
+        async with self.session_factory() as db:
+            documents = await GoodsDataService.get_index_documents(db, changed_ids)
+        
+        if not documents:
+            app_logger.warning("变更商品中没有可索引的上架商品")
+            return 0
+        
+        # 增量同步到 ChromaDB
+        synced_count = await self.vector_service.sync_incremental(documents)
+        app_logger.info("增量同步完成，同步了 {} 个商品", synced_count)
+        
+        return synced_count
 
     async def _resolve_brand(
         self, brand: str, **context: JsonValue

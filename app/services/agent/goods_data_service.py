@@ -77,6 +77,38 @@ class GoodsDataService:
         )
 
     @staticmethod
+    async def get_changed_products(
+        db: AsyncSession,
+        *,
+        since: datetime,
+        limit: int = 1000,
+    ) -> list[int]:
+        """
+        获取指定时间后变更的商品 ID 列表。
+
+        参数:
+            db: 数据库会话。
+            since: 查询此时间之后变更的商品。
+            limit: 最多返回的商品数量。
+
+        返回:
+            变更的商品 ID 列表。
+        """
+        if not isinstance(since, datetime):
+            raise AppException(msg="同步时间参数类型错误")
+        if not isinstance(limit, int) or not 1 <= limit <= 10000:
+            raise AppException(msg="同步数量必须在 1 到 10000 之间")
+        
+        rows = await GoodsDataService._read_rows(
+            db,
+            select(GoodsProduct.id)
+            .where(GoodsProduct.updated_at > since)
+            .order_by(GoodsProduct.updated_at.asc())
+            .limit(limit),
+        )
+        return [row[0] for row in rows]
+
+    @staticmethod
     async def get_index_documents(
         db: AsyncSession,
         product_ids: list[int],
