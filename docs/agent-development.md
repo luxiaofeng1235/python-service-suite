@@ -157,11 +157,25 @@ Function Calling 的含义是：模型提出函数名称和 JSON 参数，后端
 | 工具 | 输入 | 后端处理 |
 |------|------|----------|
 | `tool_semantic_product_search` | `query`、可选 `brand` | 解析品牌 → 查询向量 → Chroma Top-K 与品牌过滤 → 按商品 ID 回查 MySQL |
+| `tool_search_products_by_price` | `min_price`/`max_price`（至少一个）、可选 `brand`、可选 `product_ids` | 按价格区间筛选在售商品；传入 `product_ids` 时只在该范围内筛选，确保品类匹配 |
 | `tool_check_sku_stock_and_price` | `product_id` | 直接查询 MySQL 当前商品及 SKU，不经过向量召回 |
 
 默认召回 10 个候选，按余弦距离阈值 `0.65` 过滤，再经 MySQL 核验后最多返回 3 个商品。距离越小越相似，阈值需要结合真实商品和问句校准。未知或歧义品牌会要求确认，不静默去掉品牌条件。
 
 MySQL 过滤商品上架和 SKU 在售状态，组装品牌、类目、`cover_image`、规格、售价、库存与 `queried_at`。`spec_type=1` 为单规格、`2` 为多规格；价格来自 SKU，返回两位小数字符串。零库存规格保留并标记缺货，无在售 SKU 的商品不作为搜索推荐。
+
+**品类+价格组合查询流程（2026-11-25 新增）：**
+
+当用户需求同时包含品类和价格区间时（如"1000-2000元的耳机"），系统提示词要求模型分两步调用：
+
+1. 先调用 `tool_semantic_product_search`（`query="耳机"`），获取该品类的商品 ID 列表
+2. 再调用 `tool_search_products_by_price`，将上一步的商品 ID 传入 `product_ids` 参数，同时设置价格区间
+
+这样确保价格筛选只在同品类内进行，避免"搜耳机返回跑鞋"的品类不匹配问题。
+
+**纯价格查询规则（2026-11-25 新增）：**
+
+当用户只提到价格区间而完全没有提到品类时（如"1000元以上有什么"），模型直接调用 `tool_search_products_by_price` 进行纯价格筛选，不传 `product_ids`，不再追问用户想要什么品类。
 
 ### 查询、结构化数据与文字输出
 
@@ -216,11 +230,26 @@ MySQL 过滤商品上架和 SKU 在售状态，组装品牌、类目、`cover_im
 
 ### 数据变动后的索引维护
 
-当前没有自动轮询 MySQL 或变更捕获。内部调用 `GoodsService.refresh_index(product_ids)` 可同步指定商品，`rebuild_index()` 可完整重建；只维护向量，不修改商品表。
+商品索引有两种更新机制，互不冲突，数据最终一致：
+
+| 机制 | 触发方式 | 用途 |
+|------|----------|------|
+| `refresh_index(product_ids)` | 脚本/手动调用 | 指定商品 ID 精确更新（如图片抓取脚本更新封面后） |
+| `sync_changed_products(since)` | 后台任务每 5 分钟 | 基于 `updated_at` 时间增量同步 |
+
+**增量同步架构（2026-11-25 重构）：**
+
+- `sync_changed_products(since=None)` — `since` 参数可选，不传时自动从 ChromaDB collection metadata 读取 `last_sync_time`；仅首次启动（从未同步过）才默认从 24 小时前开始
+- 分批同步：每批 1000 个商品，循环处理直到所有变更同步完成，避免大量变更时丢数据
+- `sync_incremental(documents, last_sync_time)` — 增量 upsert 到 ChromaDB，同步完成后将 `last_sync_time` 保存到 collection metadata
+- `get_last_sync_time()` — 从 collection metadata 读取上次同步时间，持久化存储，重启不丢失
+- 后台定时任务（`app/setup/agents.py`）每 300 秒调用一次 `sync_changed_products()`，不传参数，由 Service 自动从 metadata 读取同步位点
+
+脚本（如 `fetch_images.py`）直接更新指定商品的向量，不依赖 `updated_at`；脚本更新后 `updated_at` 也会变，下次后台同步也会覆盖，两者互补。
 
 商品名称、描述、品牌、类目发生变化，或重新导入商品数据后，需要显式同步。品牌和类目变化应覆盖关联商品。价格、库存或 `cover_image` 变化无需重建向量，下次查询直接读取 MySQL。空库生成的完整空索引也会被复用，因此后续导入数据仍要触发同步。
 
-后端检索参数见 [config/goods.py](../config/goods.py)，部署所需表结构及公共配置见下文“会话、数据与配置”。
+后端检索参数见 [config/goods.py](../config/goods.py)，部署所需表结构及公共配置见下文"会话、数据与配置"。
 
 ## 5. 接口与 SSE 协议
 
