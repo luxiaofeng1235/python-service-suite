@@ -94,7 +94,13 @@ Controller → Service → Model    Controller → Service → Model
 │   ├── admin/               # 后台管理模块
 │   │   ├── controllers/     # 后台接口控制器
 │   │   └── services/        # 后台业务逻辑
+│   ├── agents/              # Agent 定义与编排（星座、商品 Function Calling）
+│   │   ├── astrology/       # 星座提示词、工具注册、运势生成
+│   │   ├── goods/           # 商品知识开场、工具注册、任务规划、推荐输出
+│   │   ├── llm/             # LLM 适配层、Embedding、统一消息与流式协议
+│   │   └── runtime.py       # FunctionCallingRunner 公共编排运行器
 │   ├── services/            # 跨模块复用的公共服务
+│   │   └── agent/           # Agent 业务服务（会话、消息、商品数据、向量索引）
 │   ├── models/              # ORM 数据库表映射
 │   ├── schemas/             # 请求校验和响应序列化
 │   ├── templates/           # 服务端 HTML 模板，按模块组织页面
@@ -108,7 +114,10 @@ Controller → Service → Model    Controller → Service → Model
 │   ├── utils/               # 通用辅助工具
 │   ├── middleware/          # 请求处理、日志、验签等中间件
 │   └── web/                 # 预留 Web 业务模块
+├── command/                 # 通用 CLI 脚本（图片抓取、数据同步等运维工具）
 ├── config/                  # 可调整的运行参数和业务配置
+├── data/                    # ChromaDB 向量索引等运行时持久化数据
+├── docs/                    # 业务流程与 Agent 开发文档
 ├── migrations/              # Alembic 数据库迁移
 │   └── versions/            # 迁移版本脚本
 ├── script/                  # Model / Schema 生成器及模板
