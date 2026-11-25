@@ -83,3 +83,4 @@ temp/
 .atomcode/local/
 data/
 !docs/goods_agent.md
+.qwen/

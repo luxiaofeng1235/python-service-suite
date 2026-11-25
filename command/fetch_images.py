@@ -100,6 +100,10 @@ def is_valid_image_url(url: str) -> bool:
 
 async def scrape_baidu_image(keyword: str) -> str | None:
     """用 Playwright 从百度图片搜索抓取一张合规的直链 URL"""
+    if CHROME_PATH is None:
+        print("  ❌ 未找到可用的 Chrome/Chromium，请运行: playwright install chromium")
+        return None
+    
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             executable_path=CHROME_PATH,
