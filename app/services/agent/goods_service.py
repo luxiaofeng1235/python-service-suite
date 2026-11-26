@@ -7,6 +7,7 @@
 """
 
 import json
+import re
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -52,22 +53,48 @@ class GoodsService:
         if not settings.GOODS_AGENT_ENABLED:
             raise AppException(msg="商品 Agent 未启用")
 
-    def _chat_service(self) -> AgentChatService:
+    def _chat_service(self, user_message: str = "") -> AgentChatService:
         """复用公共聊天存储，由后台登录身份校验会话归属。"""
+        price_handler = self._guard_price_handler(user_message)
         runner = create_goods_agent(
             self.search_products,
             self.get_product,
-            self.search_products_by_price,
+            price_handler,
             llm=self.llm,
         )
         return AgentChatService(runner, session_factory=self.session_factory)
+
+    def _guard_price_handler(self, user_message: str):
+        """
+        代码层硬约束：预算场景下强制去掉 max_price/min_price。
+
+        无论模型传了什么参数，只要用户消息含预算关键词，
+        价格工具不做价格过滤，由总结阶段检查总价超支。
+        """
+        has_budget = bool(re.search(r"预算|总共不超过|以内搭配|以内组合", user_message))
+        original = self.search_products_by_price
+
+        async def guarded(
+            min_price=None, max_price=None, brand=None, product_ids=None, **kwargs
+        ):
+            if has_budget:
+                if max_price is not None or min_price is not None:
+                    app_logger.info("代码 guard：检测到预算约束，强制去掉价格过滤参数")
+                min_price = Decimal("0")
+                max_price = None
+            return await original(
+                min_price=min_price, max_price=max_price,
+                brand=brand, product_ids=product_ids, **kwargs,
+            )
+
+        return guarded
 
     async def stream_chat(
         self, req: AgentChatRequest, user_id: int
     ) -> AsyncIterator[AgentStreamEvent]:
         """按现有事件协议执行一次商品查询，退出时关闭底层生成器。"""
         self._check_enabled()
-        stream = self._chat_service().stream_chat(req, user_id)
+        stream = self._chat_service(req.message).stream_chat(req, user_id)
         try:
             async for event in stream:
                 yield event
