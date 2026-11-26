@@ -1,8 +1,8 @@
 """
 ============================================
-Function Calling Runtime - Framework-independent execution
+Function Calling 运行时 - 框架无关的工具调用执行器
 ============================================
-Runs bounded tool loops and emits internal steps for business services to persist.
+执行有界工具循环，发射内部步骤供业务服务持久化。
 """
 
 import asyncio
@@ -21,7 +21,7 @@ from app.pkg.logging import app_logger
 
 @dataclass(frozen=True)
 class AgentTool:
-    """Bind a validated function schema to a backend business function."""
+    """将经过校验的函数 Schema 绑定到后端业务函数。"""
 
     name: str
     description: str
@@ -29,7 +29,7 @@ class AgentTool:
     handler: Callable[..., Awaitable[JsonValue]]
 
     def schema(self) -> dict[str, JsonValue]:
-        """Export the compatible API function description."""
+        """导出兼容 OpenAI API 的函数描述。"""
         return {
             "type": "function",
             "function": {
