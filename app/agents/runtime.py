@@ -57,17 +57,17 @@ class AgentStep:
 
 
 class AgentRunner(Protocol):
-    """Allow a future framework runner to preserve the same persistence boundary."""
+    """允许未来框架运行器保持相同的持久化边界。"""
 
     name: str
 
     def run(self, history: list[LLMMessage]) -> AsyncIterator[AgentStep]:
-        """Run one user turn and emit application lifecycle steps."""
+        """执行一轮用户对话并发射应用生命周期步骤。"""
         ...
 
 
 class FunctionCallingRunner:
-    """Execute native Function Calling with bounded sequential tool invocations."""
+    """执行原生 Function Calling，有界顺序工具调用。"""
 
     def __init__(
         self,
@@ -91,7 +91,7 @@ class FunctionCallingRunner:
             raise ValueError("Agent 工具调用轮数不能为负数")
 
     async def run(self, history: list[LLMMessage]) -> AsyncIterator[AgentStep]:
-        """Collect complete tool arguments before validating and executing them."""
+        """收齐完整工具参数后再校验和执行。"""
         messages = [LLMMessage(role="system", content=self.system_prompt), *history]
         total_usage: dict[str, JsonValue] = {}
         for round_index in range(self.max_tool_rounds + 1):
@@ -174,7 +174,7 @@ class FunctionCallingRunner:
 
     @staticmethod
     def _complete_calls(fragments: dict[int, dict[str, str]]) -> list[ToolCall]:
-        """Validate tool-call identifiers and function envelopes."""
+        """校验工具调用标识和函数封装完整性。"""
         try:
             calls = [
                 ToolCall(
@@ -190,7 +190,7 @@ class FunctionCallingRunner:
         return calls
 
     async def _execute(self, call: ToolCall) -> tuple[JsonValue, bool]:
-        """Run only registered functions with validated arguments and a timeout."""
+        """只执行已注册函数，参数经校验并受超时约束。"""
         tool = self.tools.get(call.function.name)
         if tool is None:
             return {"ok": False, "error": "该工具未开放"}, False
