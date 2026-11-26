@@ -208,7 +208,11 @@ class GoodsService:
         return brands[0].id, brands[0].model_dump(mode="json"), None
 
     async def search_products(self, query: str, brand: str | None = None) -> dict[str, JsonValue]:
-        """解析品牌、语义召回，再使用当前 MySQL 数据核验候选。"""
+        """
+        混合检索：向量搜索 + 关键词搜索，使用 RRF 融合排序。
+
+        向量搜索擅长语义理解，关键词搜索擅长精确匹配，两者结合提升召回质量。
+        """
         brand_id = None
         brand_data = None
         if brand is not None:
@@ -216,16 +220,56 @@ class GoodsService:
             if error is not None:
                 return error
 
+        # 并发执行向量搜索和关键词搜索
         await self.vector_service.ensure_initialized(self.load_index_batch)
-        hits = await self.vector_service.search(
-            query, brand_id=brand_id, top_k=settings.GOODS_SEARCH_TOP_K
-        )
-        if not hits:
-            return self._result([], query=query, brand=brand_data, reason="no_match")
-        async with self.session_factory() as db:
-            products = await GoodsDataService.get_products(
-                db, [hit.product_id for hit in hits], brand_id=brand_id
+
+        async def vector_search():
+            hits = await self.vector_service.search(
+                query, brand_id=brand_id, top_k=settings.GOODS_SEARCH_TOP_K * 2
             )
+            return [hit.product_id for hit in hits]
+
+        async def keyword_search():
+            async with self.session_factory() as db:
+                products = await GoodsDataService.keyword_search(
+                    db, query, brand_id=brand_id, limit=settings.GOODS_SEARCH_TOP_K * 2
+                )
+            return [p.product_id for p in products]
+
+        # 并发执行两种搜索
+        import asyncio
+        vector_ids, keyword_ids = await asyncio.gather(
+            vector_search(), keyword_search(), return_exceptions=True
+        )
+        # 处理异常
+        if isinstance(vector_ids, Exception):
+            vector_ids = []
+        if isinstance(keyword_ids, Exception):
+            keyword_ids = []
+
+        # RRF (Reciprocal Rank Fusion) 融合排序
+        # 公式: score = sum(1 / (k + rank_i))，k 通常取 60
+        K = 60
+        product_scores: dict[int, float] = {}
+
+        for rank, pid in enumerate(vector_ids):
+            if isinstance(pid, int):
+                product_scores[pid] = product_scores.get(pid, 0) + 1.0 / (K + rank + 1)
+
+        for rank, pid in enumerate(keyword_ids):
+            if isinstance(pid, int):
+                product_scores[pid] = product_scores.get(pid, 0) + 1.0 / (K + rank + 1)
+
+        # 按融合分数排序
+        sorted_ids = [pid for pid, _ in sorted(product_scores.items(), key=lambda x: -x[1])]
+        sorted_ids = sorted_ids[: settings.GOODS_SEARCH_TOP_K]
+
+        if not sorted_ids:
+            return self._result([], query=query, brand=brand_data, reason="no_match")
+
+        async with self.session_factory() as db:
+            products = await GoodsDataService.get_products(db, sorted_ids, brand_id=brand_id)
+
         # 下架商品已由数据服务排除；没有在售规格的商品不作为推荐候选。
         products = [product for product in products if product.availability != "no_active_skus"]
         products = products[: settings.GOODS_SEARCH_RESULT_LIMIT]

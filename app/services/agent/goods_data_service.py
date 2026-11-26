@@ -178,6 +178,71 @@ class GoodsDataService:
         return GoodsDataService._assemble_products(rows, ids, queried_at)
 
     @staticmethod
+    async def keyword_search(
+        db: AsyncSession,
+        query: str,
+        *,
+        brand_id: int | None = None,
+        limit: int = 10,
+    ) -> list[ProductDTO]:
+        """
+        关键词搜索商品，支持商品名称、品牌、类目的模糊匹配。
+
+        用于与向量搜索结合，实现混合检索。
+
+        参数:
+            db: 数据库会话。
+            query: 搜索关键词。
+            brand_id: 可选品牌约束。
+            limit: 最多返回的商品数量。
+
+        返回:
+            匹配的商品列表，按相关性排序。
+        """
+        if not isinstance(query, str) or not query.strip():
+            return []
+        if limit <= 0 or limit > 100:
+            raise AppException(msg="关键词搜索数量必须在 1 到 100 之间")
+
+        # 构建关键词匹配条件（名称、品牌、类目包含关键词）
+        keyword = f"%{query.strip()}%"
+        conditions = [
+            GoodsProduct.status == 1,
+            (
+                GoodsProduct.name.like(keyword)
+                | GoodsBrand.name.like(keyword)
+                | GoodsCategory.name.like(keyword)
+            ),
+        ]
+        if brand_id is not None:
+            conditions.append(GoodsProduct.brand_id == brand_id)
+
+        statement = (
+            select(GoodsProduct, GoodsBrand.name, GoodsCategory.name, GoodsSku)
+            .outerjoin(GoodsBrand, GoodsBrand.id == GoodsProduct.brand_id)
+            .outerjoin(GoodsCategory, GoodsCategory.id == GoodsProduct.category_id)
+            .outerjoin(
+                GoodsSku,
+                and_(GoodsSku.product_id == GoodsProduct.id, GoodsSku.status == 1),
+            )
+            .where(*conditions)
+            .order_by(GoodsProduct.id.asc(), GoodsSku.id.asc())
+            .limit(limit * 3)  # 多读一些，后面去重
+            .execution_options(populate_existing=True)
+        )
+        rows = await GoodsDataService._read_rows(db, statement)
+        queried_at = TimeUtil.get_date().astimezone(ZoneInfo(settings.AGENT_TIMEZONE))
+        products = GoodsDataService._assemble_products(rows, [], queried_at)
+        # 按 SKU 最低价格排序，返回前 limit 个
+        products_with_price = []
+        for p in products:
+            if p.skus:
+                min_price = min(float(sku.price) for sku in p.skus)
+                products_with_price.append((p, min_price))
+        products_with_price.sort(key=lambda x: x[1])
+        return [p for p, _ in products_with_price[:limit]]
+
+    @staticmethod
     async def get_products_by_price(
         db: AsyncSession,
         *,
@@ -416,10 +481,53 @@ class GoodsDataService:
 
     @staticmethod
     def _brand_names(name: str) -> set[str]:
-        """从品牌全名提取主名称及括号中的明确别名。"""
+        """
+        从品牌名称中提取所有可能的别名。
+
+        支持格式：
+        - "Nike (耐克)" → {"nike", "耐克"}
+        - "苹果 Apple" → {"苹果", "apple"}
+        - "华为（HUAWEI）" → {"华为", "huawei"}
+
+        参数:
+            name: 品牌名称。
+
+        返回:
+            所有可能的品牌别名集合（已规范化）。
+        """
+        if not name:
+            return set()
+
         normalized = GoodsDataService._normalize_brand(name)
-        parts = re.findall(r"[^()]+", normalized)
-        return {normalized, *parts}
+        parts: set[str] = {normalized}
+
+        # 提取括号内的别名（支持中英文括号）
+        import re
+        bracket_patterns = [
+            r"^([^（(]+)[（(]([^）)]+)[）)]",  # 匹配 "中文(英文)" 或 "中文（英文）"
+        ]
+        for pattern in bracket_patterns:
+            matches = re.findall(pattern, name)
+            for before_bracket, inside_bracket in matches:
+                # 添加括号前的部分
+                before_alias = GoodsDataService._normalize_brand(before_bracket)
+                if before_alias:
+                    parts.add(before_alias)
+                # 添加括号内的部分
+                inside_alias = GoodsDataService._normalize_brand(inside_bracket)
+                if inside_alias:
+                    parts.add(inside_alias)
+
+        # 提取空格分隔的多语言名称
+        # 例如 "苹果 Apple" → {"苹果", "apple"}
+        space_parts = name.split()
+        if len(space_parts) > 1:
+            for part in space_parts:
+                alias = GoodsDataService._normalize_brand(part)
+                if alias:
+                    parts.add(alias)
+
+        return parts
 
     @staticmethod
     def _validate_related_names(brand_name: str | None, category_name: str | None) -> None:
