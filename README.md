@@ -78,6 +78,7 @@ Controller → Service → Model    Controller → Service → Model
 - 前台 (`app/api/`) 和后台 (`app/admin/`) 各自维护专用 Controller 与 Service；跨模块能力通过 `app/services/` 复用
 - 业务逻辑只放在 Service 层，Controller 不做任何数据操作
 - 后台 RBAC 使用独立的 `auth_admins` + `admin_tokens` 表，与前台 `users` 体系无关
+- 修改接口或底层业务逻辑时，默认不在项目根目录新建 `tests/` 目录或临时测试文件；需要实际接口联调时，由用户明确提出后再执行
 
 ---
 
