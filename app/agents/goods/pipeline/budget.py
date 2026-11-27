@@ -10,6 +10,22 @@ import re
 
 from app.schemas.agent.goods_data import ProductDTO
 
+_PRICE_RANGE_PATTERN = re.compile(
+    r"(?<!\d)(\d+(?:\.\d+)?)\s*(?:元|块)?\s*(?:-|–|—|~|～|到|至)\s*"
+    r"(\d+(?:\.\d+)?)\s*(?:元|块)?"
+)
+_BUDGET_RANGE_PATTERN = re.compile(
+    r"(?:总预算|预算|总共|一共|总价|控制在)[^\d]{0,12}"
+    r"(\d+(?:\.\d+)?)\s*(?:元|块)?\s*(?:-|–|—|~|～|到|至)\s*"
+    r"(\d+(?:\.\d+)?)"
+)
+_PRICE_LIMIT_PATTERN = re.compile(
+    r"\d+(?:\.\d+)?\s*(?:元|块(?:钱)?)?\s*(?:以上|以下|以内|左右)"
+)
+_EXPLICIT_BUDGET_PATTERN = re.compile(
+    r"预算|总共|一共|总价|以内搭配|以内组合|配一台|配一套|组合购买"
+)
+
 
 class BudgetGuard:
     """预算约束提取与超支警告生成。"""
@@ -24,16 +40,33 @@ class BudgetGuard:
         for message in reversed(history):
             if message.role == "user" and message.content:
                 content = message.content
+                budget_range = _BUDGET_RANGE_PATTERN.search(content)
+                if budget_range:
+                    try:
+                        return float(budget_range.group(2))
+                    except (ValueError, IndexError):
+                        pass
+
+                # 普通商品价格条件不代表总预算，避免总结阶段产生错误提醒。
+                has_explicit_budget = bool(_EXPLICIT_BUDGET_PATTERN.search(content))
+                price_limit = _PRICE_LIMIT_PATTERN.search(content)
+                if not has_explicit_budget and price_limit:
+                    trailing_content = content[price_limit.end() :].strip(" ，。.!！?？")
+                    is_lower_bound = "以上" in price_limit.group()
+                    if trailing_content or is_lower_bound:
+                        return None
+
+                content_without_price_ranges = _PRICE_RANGE_PATTERN.sub("", content)
                 patterns = [
-                    r"预算[^\d]*(\d+)",
-                    r"(\d+)\s*元",
-                    r"不超过[^\d]*(\d+)",
-                    r"(\d+)\s*以内",
-                    r"(\d+)\s*以下",
-                    r"(\d+)\s*左右",
+                    r"(?:总预算|预算)[^\d]*(\d+(?:\.\d+)?)",
+                    r"不超过[^\d]*(\d+(?:\.\d+)?)",
+                    r"(\d+(?:\.\d+)?)\s*以内",
+                    r"(\d+(?:\.\d+)?)\s*以下",
+                    r"(\d+(?:\.\d+)?)\s*左右",
+                    r"(\d+(?:\.\d+)?)\s*(?:元|块)",
                 ]
                 for pattern in patterns:
-                    match = re.search(pattern, content)
+                    match = re.search(pattern, content_without_price_ranges)
                     if match:
                         try:
                             return float(match.group(1))
