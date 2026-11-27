@@ -31,6 +31,14 @@ from app.utils.time_ import TimeUtil
 
 MAX_TOOL_RESULT_BYTES = 55000
 MAX_PRODUCT_DESCRIPTION_CHARS = 1000
+_BUDGET_PRICE_RANGE_PATTERN = re.compile(
+    r"(?:总预算|预算|总共|一共|总价|控制在)[^\d]{0,12}"
+    r"\d+(?:\.\d+)?\s*(?:元|块)?\s*(?:-|–|—|~|～|到|至)\s*\d+"
+)
+_PRICE_FILTER_PATTERN = re.compile(
+    r"\d+(?:\.\d+)?\s*(?:元|块)?\s*"
+    r"(?:(?:-|–|—|~|～|到|至)\s*\d+|以上|以下|以内|左右)"
+)
 
 
 class GoodsService:
@@ -66,18 +74,20 @@ class GoodsService:
 
     def _guard_price_handler(self, user_message: str):
         """
-        代码层硬约束：预算场景下强制去掉 max_price/min_price。
+        总预算没有单品价格条件时，强制去掉价格工具的筛选参数。
 
-        无论模型传了什么参数，只要用户消息含预算关键词，
-        价格工具不做价格过滤，由总结阶段检查总价超支。
+        商品价格区间继续用于筛选，总预算只由总结阶段检查超支。
         """
         has_budget = bool(re.search(r"预算|总共不超过|以内搭配|以内组合", user_message))
+        price_filter_message = _BUDGET_PRICE_RANGE_PATTERN.sub("", user_message)
+        has_price_filter = bool(_PRICE_FILTER_PATTERN.search(price_filter_message))
+        should_clear_price_filter = has_budget and not has_price_filter
         original = self.search_products_by_price
 
         async def guarded(
             min_price=None, max_price=None, brand=None, product_ids=None, **kwargs
         ):
-            if has_budget:
+            if should_clear_price_filter:
                 if max_price is not None or min_price is not None:
                     app_logger.info("代码 guard：检测到预算约束，强制去掉价格过滤参数")
                 min_price = Decimal("0")
